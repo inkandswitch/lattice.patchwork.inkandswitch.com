@@ -181,37 +181,70 @@ export default function LatticexTerminalTool(handle, element) {
 			status === "ended" ? "that program ended. to share another:" : "nothing's shared here yet. run:"
 	}
 
+	// ephemeral messages can arrive out of order: a change that comes early
+	// waits here for the ones before it, and only a gap that stays a gap asks
+	// for the whole screen again
+	const early = new Map()
+	let gapTimer = null
+
+	function apply(message) {
+		for (const [y, runs] of Object.entries(message.lines)) screen.lines[y] = runs
+		Object.assign(screen, {
+			seq: message.seq,
+			cursor: message.cursor,
+			title: message.title,
+			modes: message.modes,
+			readonly: message.readonly,
+		})
+	}
+
+	function catchUp(behind) {
+		while (early.has(screen.seq + 1)) {
+			apply(early.get(screen.seq + 1))
+			early.delete(screen.seq)
+		}
+		for (const seq of early.keys()) if (seq <= screen.seq) early.delete(seq)
+		clearTimeout(gapTimer)
+		gapTimer = null
+		if (early.size || behind > screen.seq) {
+			gapTimer = setTimeout(() => {
+				gapTimer = null
+				hello()
+			}, 400)
+		}
+	}
+
+	function onScreen(message) {
+		if (message.host !== screen?.host) {
+			if (!message.full) return hello()
+			// a new latticex: it counts what's typed from 1 again
+			typedCount = 0
+			early.clear()
+		} else if (message.seq <= screen.seq) {
+			return
+		}
+		if (message.full) {
+			screen = {...message, lines: Array.from({length: message.rows}, (_, y) => message.lines[y] ?? [])}
+		} else if (message.seq === screen.seq + 1) {
+			apply(message)
+		} else {
+			early.set(message.seq, message)
+		}
+		catchUp()
+		lastHeard = Date.now()
+		setStatus("live")
+		draw()
+	}
+
 	function onMessage({message}) {
 		if (!message || typeof message !== "object") return
 		if (message.latticex === "screen") {
-			const fresh = message.host !== screen?.host
-			if (!message.full && (fresh || message.seq !== screen.seq + 1)) {
-				// missed something: ask for the whole screen again
-				if (Date.now() - lastHello > 300) hello()
-				return
-			}
-			if (message.full) {
-				screen = {...message, lines: Array.from({length: message.rows}, (_, y) => message.lines[y] ?? [])}
-			} else {
-				for (const [y, runs] of Object.entries(message.lines)) screen.lines[y] = runs
-				Object.assign(screen, {
-					seq: message.seq,
-					cursor: message.cursor,
-					title: message.title,
-					modes: message.modes,
-					readonly: message.readonly,
-				})
-			}
-			lastHeard = Date.now()
-			setStatus("live")
-			draw()
+			onScreen(message)
 		} else if (message.latticex === "alive") {
-			if (message.host !== screen?.host || message.seq !== screen.seq) {
-				if (Date.now() - lastHello > 300) hello()
-				return
-			}
+			if (message.host !== screen?.host) return hello()
 			lastHeard = Date.now()
 			if (status !== "live") setStatus("live")
+			if (message.seq > screen.seq && !gapTimer) catchUp(message.seq)
 		} else if (message.latticex === "exit" && message.host === screen?.host) {
 			exitStatus = message.status
 			setStatus("ended")
@@ -304,9 +337,20 @@ export default function LatticexTerminalTool(handle, element) {
 
 	// ── typing ───────────────────────────────────────────────────────────
 
+	// numbered, so latticex can type them in order however they arrive. keys
+	// pressed close together go as one message
+	const viewer = crypto.randomUUID()
+	let typedCount = 0
+	let typing = []
+	let typingTimer = null
 	function send(input) {
 		if (status !== "live" || screen?.readonly) return
-		handle.broadcast({latticex: "keys", input: [input]})
+		typing.push(input)
+		typingTimer ??= setTimeout(() => {
+			typingTimer = null
+			handle.broadcast({latticex: "keys", from: viewer, n: ++typedCount, input: typing})
+			typing = []
+		}, 8)
 	}
 
 	function onKeyDown(event) {
@@ -351,6 +395,8 @@ export default function LatticexTerminalTool(handle, element) {
 	return () => {
 		handle.off("ephemeral-message", onMessage)
 		clearInterval(ticker)
+		clearTimeout(gapTimer)
+		clearTimeout(typingTimer)
 		if (frameRequest) cancelAnimationFrame(frameRequest)
 		resizeObserver.disconnect()
 		schemeQuery.removeEventListener("change", draw)
