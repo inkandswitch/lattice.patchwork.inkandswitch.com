@@ -20,6 +20,22 @@ export function moduleWorker(url) {
   return new Worker(URL.createObjectURL(blob), { type: "module" });
 }
 
+// an automerge url in some text: the url itself, or a patchwork link's
+// #doc=automerge:<id> (or the older #doc=<id>)
+export function urlFromText(text) {
+  const trimmed = text.trim();
+  if (isValidAutomergeUrl(trimmed)) return trimmed;
+  const doc = trimmed.match(/#(?:.*&)?doc=([^&\s]+)/)?.[1];
+  if (!doc) return null;
+  const url = doc.startsWith("automerge:") ? doc : `automerge:${doc}`;
+  return isValidAutomergeUrl(url) ? url : null;
+}
+
+// a link to a doc on this site, as patchwork's router reads them
+export function shareUrl(url) {
+  return `${location.origin}/#doc=${url}`;
+}
+
 // a string in a doc can be a plain string or an ImmutableString (pushwork
 // writes links that way); read them the same
 function asString(value) {

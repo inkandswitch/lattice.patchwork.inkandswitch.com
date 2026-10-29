@@ -3,16 +3,40 @@ import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { nestProviders, frameProviders, projectProviders } from "./providers.js";
-import { folderLink } from "./files.js";
+import { folderLink, folderTitle, shareUrl, urlFromText } from "./files.js";
 import { mountWorkspace } from "./workspace.js";
+import { CommentsInspector } from "./comments.js";
+import { Inspector } from "./inspector.js";
 import { Resizer, remember, remembered, sidebarState } from "./sidebars.js";
 
-const STYLESHEET = new URL("./shell.css", import.meta.url).href;
+// frame.css too, for its menus, before any workspace has brought it
+const STYLESHEETS = ["./frame.css", "./shell.css"].map(
+  (path) => new URL(path, import.meta.url).href,
+);
 
 // where this frame came from, when it isn't the site it's running in: a
 // dev server's, given as ?lattice-frame= (see src/main.ts)
 const FRAME_ORIGIN = new URL(import.meta.url).origin;
 const DEV_FRAME = FRAME_ORIGIN === location.origin ? null : FRAME_ORIGIN;
+
+// a dev frame has no vite client in this page to reload it when it changes,
+// so it asks the dev server, which answers when it has (see vite/frame.ts)
+async function reloadOnChange() {
+  const changes = new URL("__changes", import.meta.url);
+  let seen = null;
+  for (;;) {
+    try {
+      if (seen != null) changes.searchParams.set("since", seen);
+      const { version } = await (await fetch(changes, { cache: "no-store" })).json();
+      if (seen != null && version !== seen) return location.reload();
+      seen = version;
+    } catch {
+      // the dev server's away: try again in a moment
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+  }
+}
+if (DEV_FRAME) reloadOnChange();
 
 // a sidebar toggle's icon: a window with a column filled, `at` from its left
 function sidebarIcon(at) {
@@ -32,10 +56,13 @@ export default function LatticeFrameTool(handle, element) {
   const repo = element.repo;
   const accountUrl = handle.url;
 
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = STYLESHEET;
-  element.append(link);
+  const links = STYLESHEETS.map((href) => {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = href;
+    return link;
+  });
+  element.append(...links);
 
   // ── /home: the account's root folder, and the projects in it ────────────
 
@@ -129,6 +156,33 @@ export default function LatticeFrameTool(handle, element) {
 
   const [renaming, setRenaming] = createSignal(null);
 
+  // a folder from anywhere (someone else's project, say), by its url: it goes
+  // in home under its own title. says what was wrong, or nothing
+  async function addFolder(text) {
+    const url = urlFromText(text);
+    if (!url) return "that isn't an automerge url";
+    if (projects().some((project) => project.url === url)) {
+      choose(url);
+      return null;
+    }
+    let doc;
+    try {
+      const found = repo.find(url);
+      const later = new Promise((_, reject) => setTimeout(reject, 15000));
+      doc = (await Promise.race([found, later])).doc();
+    } catch {
+      return "couldn't find that doc";
+    }
+    const type = String(doc?.["@patchwork"]?.type ?? "");
+    if (type !== "folder") return `that's ${type ? `a ${type}` : "not a folder"}`;
+    homeHandle.change((home) => {
+      home.docs ??= [];
+      home.docs.push({ name: folderTitle(doc), type: "folder", url });
+    });
+    choose(url);
+    return null;
+  }
+
   async function newProject() {
     const project = await repo.create2({
       "@patchwork": { type: "folder" },
@@ -196,19 +250,39 @@ export default function LatticeFrameTool(handle, element) {
       area.className = "lattice-workspace";
       const inspector = document.createElement("aside");
       inspector.className = "lattice-inspector";
-      inspector.innerHTML = `<header class="lattice-inspector-heading">drafts</header>`;
       inner.append(area, inspector);
-      // made in the page, so it's under the project's providers as it mounts
-      const drafts = document.createElement("patchwork-view");
-      drafts.className = "lattice-inspector-panel";
-      drafts.setAttribute("component", "drafts");
-      inspector.append(drafts);
 
-      unmount = mountWorkspace({ workspace, folder }, area, {
+      // what the workspace is showing, for the inspectors
+      const [showing, setShowing] = createSignal([]);
+      let openInWorkspace = null;
+      const unmountWorkspace = mountWorkspace({ workspace, folder }, area, {
         repo: projectRepo,
         baseRepo: repo,
         files,
+        onShowing: setShowing,
+        onOpen: (open) => (openInWorkspace = open),
       });
+      const unmountInspector = render(
+        () => html`<${Inspector}
+          sections=${[
+            { id: "drafts", name: "drafts", render: () => html`<${Drafts} />` },
+            {
+              id: "comments",
+              name: "comments",
+              render: () => html`<${CommentsInspector}
+                element=${inspector}
+                showing=${showing}
+                open=${(url) => openInWorkspace?.(url)}
+              />`,
+            },
+          ]}
+        />`,
+        inspector,
+      );
+      unmount = () => {
+        unmountInspector();
+        unmountWorkspace();
+      };
     });
 
     return () => {
@@ -216,6 +290,15 @@ export default function LatticeFrameTool(handle, element) {
       unmount?.();
       providers?.remove();
     };
+  }
+
+  // the drafts package's own panel. made in the page (solid puts it there in
+  // the same task), so it's under the project's providers as it mounts
+  function Drafts() {
+    const drafts = document.createElement("patchwork-view");
+    drafts.className = "lattice-inspector-panel";
+    drafts.setAttribute("component", "drafts");
+    return drafts;
   }
 
   // ── the pieces ─────────────────────────────────────────────────────────
@@ -274,9 +357,10 @@ export default function LatticeFrameTool(handle, element) {
         : html`<button
             class="lattice-tree-item"
             aria-current=${() => (currentUrl() === project.url ? "page" : undefined)}
-            title="double click to rename"
+            title="double click to rename · right click for its links"
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
+            onContextMenu=${(event) => openProjectMenu(event, project)}
           >
             ${project.name}
           </button>`;
@@ -289,6 +373,97 @@ export default function LatticeFrameTool(handle, element) {
     </span>`;
   }
 
+  // home's +: a new project, or a folder from anywhere by its url
+  let homeMenu;
+  const [adding, setAdding] = createSignal(false);
+  const [addProblem, setAddProblem] = createSignal(null);
+
+  function openHomeMenu(event) {
+    setAddProblem(null);
+    const rect = event.currentTarget.getBoundingClientRect();
+    homeMenu.style.top = `${rect.bottom + 4}px`;
+    homeMenu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 280))}px`;
+    homeMenu.showPopover();
+  }
+
+  async function onAddFolder(event) {
+    event.preventDefault();
+    const input = event.currentTarget.elements.url;
+    setAdding(true);
+    const problem = await addFolder(input.value);
+    setAdding(false);
+    setAddProblem(problem);
+    if (problem) return input.focus();
+    input.value = "";
+    homeMenu.hidePopover();
+  }
+
+  // right click on a project
+  let projectMenu;
+  const [menuProject, setMenuProject] = createSignal(null);
+
+  function openProjectMenu(event, project) {
+    event.preventDefault();
+    setMenuProject(project);
+    projectMenu.style.top = `${Math.min(event.clientY, innerHeight - 100)}px`;
+    projectMenu.style.left = `${Math.min(event.clientX, innerWidth - 220)}px`;
+    projectMenu.showPopover();
+  }
+
+  function copyFromMenu(text) {
+    navigator.clipboard?.writeText(text);
+    projectMenu.hidePopover();
+  }
+
+  function ProjectMenu() {
+    return html`<div
+      class="knitoutjs-menu lattice-context-menu"
+      popover="auto"
+      ref=${(el) => (projectMenu = el)}
+    >
+      <button
+        class="knitoutjs-menu-item"
+        onClick=${() => copyFromMenu(shareUrl(menuProject().url))}
+      >
+        copy share url
+        <small>a link to it on this site</small>
+      </button>
+      <button class="knitoutjs-menu-item" onClick=${() => copyFromMenu(menuProject().url)}>
+        copy automerge url
+        <small>${() => menuProject()?.url.slice(0, 20)}…</small>
+      </button>
+    </div>`;
+  }
+
+  function HomeMenu() {
+    return html`<div class="knitoutjs-menu" popover="auto" ref=${(el) => (homeMenu = el)}>
+      <button
+        class="knitoutjs-menu-item"
+        onClick=${() => {
+          homeMenu.hidePopover();
+          newProject();
+        }}
+      >
+        new project
+        <small>an empty folder in home</small>
+      </button>
+      <div class="knitoutjs-menu-heading">a folder from anywhere</div>
+      <form class="knitoutjs-menu-url" onSubmit=${onAddFolder}>
+        <input
+          name="url"
+          placeholder="automerge:… url"
+          aria-label="a folder's automerge url"
+          autocomplete="off"
+          disabled=${adding}
+          onInput=${() => setAddProblem(null)}
+        />
+      </form>
+      <p class="knitoutjs-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
+        ${() => addProblem() ?? (adding() ? "finding it…" : "or a patchwork link to one")}
+      </p>
+    </div>`;
+  }
+
   function Sidebar() {
     return html`<nav
       class="lattice-sidebar"
@@ -296,10 +471,16 @@ export default function LatticeFrameTool(handle, element) {
       style=${() => ({ width: `${folders.width()}px` })}
     >
       <${Resizer} sidebar=${folders} />
+      <${HomeMenu} />
+      <${ProjectMenu} />
       <div class="lattice-sidebar-content">
       <div class="lattice-tree-heading">
         <span>home</span>
-        <button class="lattice-icon-button" title="new project" onClick=${() => newProject()}>
+        <button
+          class="lattice-icon-button"
+          title="a new project, or a folder by its url"
+          onClick=${openHomeMenu}
+        >
           +
         </button>
       </div>
@@ -364,6 +545,6 @@ export default function LatticeFrameTool(handle, element) {
     homeHandle?.off("change", readHome);
     dispose?.();
     providers.remove();
-    link.remove();
+    for (const link of links) link.remove();
   };
 }

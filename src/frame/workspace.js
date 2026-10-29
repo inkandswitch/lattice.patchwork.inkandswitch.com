@@ -14,6 +14,7 @@ import {
   folderUrls,
   folderLink,
   folderTitle,
+  urlFromText,
 } from "./files.js";
 import {
   findNode,
@@ -57,14 +58,6 @@ function isOurDrag(dataTransfer) {
   );
 }
 
-function urlFromText(text) {
-  const trimmed = text.trim();
-  if (isValidAutomergeUrl(trimmed)) return trimmed;
-  // patchwork links carry the document id as #doc=<id>
-  const id = trimmed.match(/#doc=([^&\s]+)/)?.[1];
-  return id && isValidAutomergeUrl(`automerge:${id}`) ? `automerge:${id}` : null;
-}
-
 // [{url, name?}], read the same way the sidebar reads its own drops
 function droppedDocs(dataTransfer) {
   try {
@@ -106,9 +99,15 @@ function zoneAt(event, rect, band) {
  * the project's draft overlay, so what's done here goes into whichever draft
  * is checked out; `baseRepo` doesn't, for docs that mustn't be forked into a
  * draft (a terminal: latticex is on the original). `files` is the files
- * column's sidebar state (sidebars.js), which the frame's top bar toggles
+ * column's sidebar state (sidebars.js), which the frame's top bar toggles.
+ * `onShowing` hears the docs the panes are showing ({ url, name }, one per
+ * pane), for the inspectors; `onOpen` gets a way to bring a doc forward
  */
-export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo, files }) {
+export function mountWorkspace(
+  { workspace, folder },
+  element,
+  { repo, baseRepo, files, onShowing, onOpen },
+) {
   let root;
   let menu;
 
@@ -297,6 +296,20 @@ export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo,
     return host;
   }
 
+  // say a pane's doc is mounted (or not) as a <patchwork-view> would, so the
+  // project's providers know what's open: comments watches those docs for
+  // threads, and drafts lists them. from the workspace's element, which is
+  // still in the page when a pane's own has already gone
+  function announce(type, host) {
+    element.dispatchEvent(
+      new CustomEvent(type, {
+        detail: { url: host.url, toolId: `lattice:${host.tool}` },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   async function mountTool(host) {
     const tool = TOOLS[host.tool];
     try {
@@ -306,6 +319,8 @@ export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo,
       ]);
       if (host.dead) return;
       host.cleanup = module.default(docHandle, host.el, toolContext);
+      host.announced = true;
+      announce("patchwork:mounted", host);
     } catch (error) {
       if (host.dead) return;
       host.el.classList.add("knitoutjs-tool-broken");
@@ -317,6 +332,7 @@ export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo,
     if (host.dead) return;
     host.dead = true;
     host.cleanup?.();
+    if (host.announced) announce("patchwork:unmounted", host);
     host.el.remove();
     if (hosts.get(id) === host) hosts.delete(id);
   }
@@ -1064,9 +1080,25 @@ export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo,
     </nav>`;
   }
 
-  const dispose = render(
-    () =>
-      html`<link rel="stylesheet" href=${STYLESHEET} />
+  onOpen?.(open);
+
+  // what each pane is showing: its active panel's doc
+  function showing(node, docs = []) {
+    if (!node) return docs;
+    if (node.type === "split") {
+      for (const child of node.children) showing(child, docs);
+    } else {
+      const panel = node.panels.find((panel) => panel.id === node.active) ?? node.panels[0];
+      if (panel && !docs.some((doc) => doc.url === panel.url)) {
+        docs.push({ url: panel.url, name: docInfo(panel.url).name });
+      }
+    }
+    return docs;
+  }
+
+  const dispose = render(() => {
+    createEffect(() => onShowing?.(showing(layout.root)));
+    return html`<link rel="stylesheet" href=${STYLESHEET} />
         <div class="knitoutjs-editor-tool lattice-project">
         <${Show} when=${files.open}><${Files} /><//>
         <div
@@ -1097,9 +1129,8 @@ export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo,
           <//>
           <${Menu} />
         </div>
-        </div>`,
-    element,
-  );
+        </div>`;
+  }, element);
 
   function cleanup() {
     workspace.off("change", readLayout);

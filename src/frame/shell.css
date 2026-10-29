@@ -227,6 +227,14 @@
 		color: var(--lattice-muted);
 	}
 
+	& .knitoutjs-menu.lattice-context-menu {
+		width: 300px;
+	}
+
+	& .knitoutjs-menu-hint[data-problem] {
+		color: var(--studio-danger-text, #e45649);
+	}
+
 	& .lattice-button {
 		padding: 4px 12px;
 		border: 1px solid var(--lattice-rule);
@@ -347,14 +355,113 @@
 		display: none;
 	}
 
-	& .lattice-inspector-heading {
+	/* each inspector folds away under its heading; open ones share the height */
+	& .lattice-inspector-section {
+		display: flex;
 		flex: none;
-		padding: 8px 12px 4px;
+		flex-direction: column;
+		min-height: 0;
+		border-bottom: 1px solid var(--lattice-rule);
+
+		&[data-open] {
+			flex: 1 1 0;
+		}
+	}
+
+	/* where a dragged heading would go */
+	& .lattice-inspector-section[data-drop="before"] {
+		box-shadow: inset 0 2px var(--studio-primary, #007aff);
+	}
+	& .lattice-inspector-section[data-drop="after"] {
+		box-shadow: inset 0 -2px var(--studio-primary, #007aff);
+	}
+
+	& .lattice-inspector-heading {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 12px 6px;
+		border: none;
+		background: none;
 		color: var(--lattice-muted);
 		font-size: 11px;
 		font-weight: 600;
 		letter-spacing: 0.04em;
+		text-align: left;
 		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	& .lattice-inspector-chevron {
+		display: inline-block;
+		transition: transform var(--studio-transition-fast, 0.1s ease);
+	}
+	& [data-open] > .lattice-inspector-heading .lattice-inspector-chevron {
+		transform: rotate(90deg);
+	}
+
+	& .lattice-inspector-body {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+
+		&[hidden] {
+			display: none;
+		}
+	}
+
+	& .lattice-inspector-empty {
+		margin: 4px 12px;
+		color: var(--lattice-muted);
+	}
+
+	/* comments, grouped by the doc they're on */
+	& .lattice-comments {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		padding: 0 8px 8px;
+	}
+
+	& .lattice-comments-doc {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+
+	& .lattice-comments-doc-name {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 2px 4px;
+		border: none;
+		border-radius: var(--studio-radius-sm, 4px);
+		background: none;
+		font-family: var(--lattice-path-family);
+		font-size: 12px;
+		font-weight: 600;
+		text-align: left;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--studio-chrome-fill-offset-20, #0001);
+		}
+	}
+
+	& .lattice-comments-count {
+		color: var(--lattice-muted);
+		font-weight: 400;
+	}
+
+	& .lattice-comment-thread {
+		display: block;
+		border-radius: var(--studio-radius, 6px);
+		background: var(--studio-fill, #fff);
+		box-shadow: var(--studio-shadow-sm, none);
+		overflow: hidden;
 	}
 
 	& .lattice-inspector-panel {

@@ -6,3 +6,4 @@ playright-report/
 # Local Netlify folder
 .netlify
 test-results/
+*.swp
