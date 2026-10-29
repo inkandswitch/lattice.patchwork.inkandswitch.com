@@ -1,11 +1,12 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
-import { Prec } from "@codemirror/state";
+import { Prec, Transaction } from "@codemirror/state";
 import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { knitoutEditorIntegration, showError } from "./cm-knitout.js";
-import { docColour, fileExtension } from "./files.js";
+import { docColour, docText, fileExtension } from "./files.js";
 import { runInto } from "./run.js";
+import { builderOf, setBuild } from "./builds.js";
 
 const AUTO_RUN_DELAY = 600;
 
@@ -39,13 +40,15 @@ function identifierFor(name) {
  * - project: { files() → [{url, name, extension}], createFile(name) → url }
  * - hover(url | null): light up the panes showing a doc
  * - open(url, element, edge): show a doc beside this one (or bring it forward)
+ * - openIfClosed(url, element, edge): show a doc beside this one, unless it's
+ *   showing somewhere already
  * - editableCopy(url, element): copy a generated .k as text you can edit
  *
- * a .js file gets a run bar: it writes its knitout into a .k file. docs
+ * a .js file gets a build bar: it writes its knitout into a .k file. docs
  * dropped onto its code become imports (the frame asks `element.dropInto`)
  */
 export default function KnitoutEditorTool(handle, element, context) {
-  const { repo, events, project, hover, open, editableCopy } = context;
+  const { repo, events, project, hover, open, openIfClosed, editableCopy } = context;
   const isJs = fileExtension(handle.doc()) === "js";
 
   let view = null;
@@ -80,14 +83,27 @@ export default function KnitoutEditorTool(handle, element, context) {
         Prec.high(
           keymap.of([{ key: "Mod-Enter", run: () => (run.now(), true) }]),
         ),
+        // only your own edits autobuild: other people's arrive as
+        // transactions with no user event, and their own editor builds them
+        EditorView.updateListener.of((update) => {
+          if (
+            update.transactions.some((tr) =>
+              tr.docChanged && tr.annotation(Transaction.userEvent)
+            )
+          ) {
+            run.edited();
+          }
+        }),
       );
     }
   }
   element.addEventListener(EXTENSIONS_EVENT, onExtensions);
 
-  // run the pattern into its target .k: by hand, or after every pause in
-  // typing when autorun is on. autorun is remembered in this browser, for each
-  // .js (not in the doc, so two people don't both autorun into one .k)
+  // build the pattern into its target .k: by hand, or after every pause in
+  // your typing when autobuild is on. autobuild is remembered in this browser, for
+  // each .js (not in the doc, so two people don't both autobuild into one .k).
+  // how it's going is shared with the frame (builds.js), for the panes
+  // showing the .k
   function createRunner() {
     const [target, setTarget] = createSignal(handle.doc()?.knitoutTarget);
     const autorunKey = `knitoutjs:autorun:${handle.url}`;
@@ -103,12 +119,17 @@ export default function KnitoutEditorTool(handle, element, context) {
 
     function setAuto(on) {
       setAutoSignal(on);
+      setBuild(handle.url, { auto: on });
       try {
         if (on) localStorage.setItem(autorunKey, "on");
         else localStorage.removeItem(autorunKey);
       } catch {}
     }
-    const [status, setStatus] = createSignal({ state: "idle" });
+    const [status, setStatusSignal] = createSignal({ state: "idle" });
+    const setStatus = (next) => {
+      setStatusSignal(next);
+      setBuild(handle.url, { line: undefined, message: undefined, ...next });
+    };
     const running = () => status().state === "running";
     let timer;
     let current;
@@ -119,16 +140,24 @@ export default function KnitoutEditorTool(handle, element, context) {
       if (status().state === "error" && status().line != null) {
         setStatus({ state: "idle" });
       }
-      if (auto()) {
-        clearTimeout(timer);
-        timer = setTimeout(now, AUTO_RUN_DELAY);
-      }
     };
+
+    function edited() {
+      if (!auto()) return;
+      clearTimeout(timer);
+      timer = setTimeout(now, AUTO_RUN_DELAY);
+    }
     handle.on("change", onChange);
+    const builder = { now: () => now(), goToLine: (line) => goToLine(line) };
+    setBuild(handle.url, { state: "idle", auto: auto(), builder });
     onCleanup(() => {
       clearTimeout(timer);
       current?.abort();
       handle.off("change", onChange);
+      // another editor showing this .js may have taken over since
+      if (builderOf(handle.url) === builder) {
+        setBuild(handle.url, { state: "idle", line: undefined, message: undefined, builder: undefined });
+      }
     });
 
     // a new run takes over from one still going. a generated .k is read
@@ -149,6 +178,9 @@ export default function KnitoutEditorTool(handle, element, context) {
         });
         return;
       }
+      // a .k with nothing in it yet is new: once there's knitout in it, it
+      // opens beside this, if it isn't open already
+      const fresh = !docText(kHandle.doc()).trim();
       current?.abort();
       const run = (current = new AbortController());
       setStatus({ state: "running" });
@@ -168,10 +200,11 @@ export default function KnitoutEditorTool(handle, element, context) {
         if (view && error.line != null) showError(view, error);
       } else {
         if (view) showError(view, null);
+        if (fresh) openIfClosed(url, element, "right");
         const lines = result.knitout.split("\n").length;
         setStatus({
           state: "ok",
-          message: `ran in ${
+          message: `built in ${
             Math.round(result.ms)
           }ms · ${lines.toLocaleString()} lines`,
         });
@@ -219,6 +252,7 @@ export default function KnitoutEditorTool(handle, element, context) {
       status,
       running,
       now,
+      edited,
       stop,
       keep,
       goToLine,
@@ -227,7 +261,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     };
   }
 
-  function RunBar() {
+  function BuildBar() {
     const kFiles = createMemo(() =>
       project.files().filter((file) => file.extension === "k")
     );
@@ -249,22 +283,22 @@ export default function KnitoutEditorTool(handle, element, context) {
         data-running=${() => (run.running() ? "" : undefined)}
         title=${() =>
       run.running()
-        ? "stop this run"
-        : "run the pattern: it writes its knitout into the .k file chosen on the right (⌘↵)"}
+        ? "stop this build"
+        : "build the pattern: it writes its knitout into the .k file chosen on the right (⌘↵)"}
         onClick=${() => (run.running() ? run.stop() : run.now())}
       >
-        ${() => (run.running() ? "stop" : "run")}
+        ${() => (run.running() ? "stop" : "build")}
       </button>
       <label
         class="knitoutjs-auto"
-        title="run again by itself whenever you stop typing for a moment. this browser remembers it for this file"
+        title="build again by itself whenever you stop typing for a moment. this browser remembers it for this file"
       >
         <input
           type="checkbox"
           checked=${run.auto}
           onChange=${(event) => run.setAuto(event.currentTarget.checked)}
         />
-        autorun
+        autobuild
       </label>
       <span class="knitoutjs-status" data-state=${() => run.status().state}>
         <${Show} when=${() => run.status().line != null}>
@@ -273,12 +307,12 @@ export default function KnitoutEditorTool(handle, element, context) {
             title="go to this line"
             onClick=${() => run.goToLine(run.status().line)}
           >
-            line ${() => run.status().line}:
+            ⚠ line ${() => run.status().line}:
           </button>
         <//>
         ${() =>
       run.status().state === "running"
-        ? "running…"
+        ? "building…"
         : (run.status().message ?? "")}
       </span>
       <${Show} when=${() => run.status().state === "ask"}>
@@ -301,7 +335,7 @@ export default function KnitoutEditorTool(handle, element, context) {
         onPointerEnter=${() => hover(run.target())}
         onPointerLeave=${() => hover(null)}
       >
-        <span class="knitoutjs-target-label">into</span>
+        <span class="knitoutjs-target-label">writes to →</span>
         <span class="knitoutjs-swatch"></span>
         <select onChange=${onPick}>
           <option value="" disabled selected=${() => !run.target()}>
@@ -348,7 +382,7 @@ export default function KnitoutEditorTool(handle, element, context) {
           <span>
                 read only: ${() =>
                   writer() ?? "a pattern"} writes this file each
-                time it runs
+                time it's built
               </span>
           <button
             class="knitoutjs-button"
@@ -367,7 +401,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     return html`
       <div class="knitoutjs-editor">
         <${Show} when=${isJs}>
-          <${RunBar} />
+          <${BuildBar} />
           <//>
           <${ReadOnlyNote} />
           <patchwork-view attr:doc-url=${handle
@@ -400,7 +434,10 @@ export default function KnitoutEditorTool(handle, element, context) {
           : `const ${id} = await repo.find("${url}")\n`;
       }),
     );
-    view.dispatch({ changes: { from: at, insert: lines.join("") } });
+    view.dispatch({
+      changes: { from: at, insert: lines.join("") },
+      userEvent: "input.drop",
+    });
     view.focus();
   }
 

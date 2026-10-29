@@ -10,6 +10,16 @@ export function docText(doc) {
   return String(content);
 }
 
+// a short fingerprint of some text (fnv-1a): a .k keeps one of the code it
+// was built from, so anyone can see when that code has changed since
+export function textHash(text) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash = Math.imul(hash ^ text.charCodeAt(i), 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
+
 // a module worker, from a script that may be on another origin: a dev
 // server's frame (?lattice-frame=). a worker can't be started from another
 // origin's script, but a blob of this origin's can import it (with cors)
@@ -54,9 +64,9 @@ export function folderTitle(doc) {
 }
 
 // the entry a folder keeps for a doc: what patchwork's folder tool writes
-export function folderLink(url, doc) {
+export function folderLink(url, doc, title) {
   return {
-    name: asString(doc?.name ?? doc?.title) || shortUrl(url),
+    name: asString(doc?.name ?? doc?.title ?? title) || shortUrl(url),
     type: asString(doc?.["@patchwork"]?.type) || "file",
     url,
   };
@@ -76,16 +86,16 @@ export function fileExtension(doc) {
 export const TOOLS = {
   visualizer: {
     id: "visualizer",
-    name: "view",
+    name: "visualiser",
     title: "draw the stitches this .k makes",
-    // where it sits in a pane's edit | view switch
+    // where it sits in a tab's tool menu
     position: 2,
     extensions: ["k"],
     load: () => import("./visualizer.js"),
   },
   editor: {
     id: "editor",
-    name: "edit",
+    name: "text",
     title: "see the file's text (and change it, if it isn't generated)",
     position: 1,
     extensions: ["js", "k"],

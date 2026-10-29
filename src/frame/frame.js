@@ -24,15 +24,20 @@ const DEV_FRAME = FRAME_ORIGIN === location.origin ? null : FRAME_ORIGIN;
 async function reloadOnChange() {
   const changes = new URL("__changes", import.meta.url);
   let seen = null;
+  let wait = 2000;
   for (;;) {
     try {
       if (seen != null) changes.searchParams.set("since", seen);
       const { version } = await (await fetch(changes, { cache: "no-store" })).json();
       if (seen != null && version !== seen) return location.reload();
       seen = version;
+      wait = 2000;
     } catch {
-      // the dev server's away: try again in a moment
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      // the dev server's away (a stopped tunnel answers with cloudflare's own
+      // error page, which the browser reports as a cors error): ask less and
+      // less often. if it comes back with a new version, the page reloads
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      wait = Math.min(wait * 2, 60_000);
     }
   }
 }
@@ -320,7 +325,7 @@ export default function LatticeFrameTool(handle, element) {
       <${Toggle} sidebar=${folders} name="folders" at=${2.5} />
       <${Toggle} sidebar=${files} name="files" at=${5.5} />
       <span class="lattice-breadcrumb">
-        home${() => (current() ? ` › ${current().name}` : "")}
+        projects${() => (current() ? ` › ${current().name}` : "")}
       </span>
       <span class="lattice-spacer"></span>
       ${DEV_FRAME &&
@@ -445,7 +450,7 @@ export default function LatticeFrameTool(handle, element) {
         }}
       >
         new project
-        <small>an empty folder in home</small>
+        <small>an empty folder in projects</small>
       </button>
       <div class="knitoutjs-menu-heading">a folder from anywhere</div>
       <form class="knitoutjs-menu-url" onSubmit=${onAddFolder}>
@@ -475,7 +480,7 @@ export default function LatticeFrameTool(handle, element) {
       <${ProjectMenu} />
       <div class="lattice-sidebar-content">
       <div class="lattice-tree-heading">
-        <span>home</span>
+        <span>projects</span>
         <button
           class="lattice-icon-button"
           title="a new project, or a folder by its url"
@@ -503,7 +508,7 @@ export default function LatticeFrameTool(handle, element) {
 
   function NoProject() {
     return html`<div class="lattice-no-project">
-      <p>${() => (home() ? "nothing in home yet" : "finding home…")}</p>
+      <p>${() => (home() ? "no projects yet" : "finding projects…")}</p>
       <${Show} when=${home}>
         <button class="lattice-button" onClick=${() => newProject()}>new project</button>
       <//>
