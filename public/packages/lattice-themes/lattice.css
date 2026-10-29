@@ -1,0 +1,164 @@
+/* plain desktop-software themes: one light/one dark palettes, system fonts,
+   macos accent blue. each theme only sets the --lattice-* palette; the block
+   below maps it onto the studio, editor and syntax tokens once for both. */
+
+[theme="lattice-light"] {
+	color-scheme: light;
+
+	--lattice-window: #fafafa;
+	--lattice-chrome: #eaeaeb;
+	--lattice-ink: #383a42;
+	--lattice-ink-mute: #696c77;
+	--lattice-ink-faint: #a0a1a7;
+	--lattice-accent: #007aff;
+	--lattice-cursor: #526fff;
+	--lattice-selection: #add6ffcc;
+
+	--lattice-red: #e45649;
+	--lattice-orange: #986801;
+	--lattice-yellow: #c18401;
+	--lattice-green: #50a14f;
+	--lattice-cyan: #0184bc;
+	--lattice-blue: #4078f2;
+	--lattice-purple: #a626a4;
+}
+
+[theme="lattice-dark"] {
+	color-scheme: dark;
+
+	--lattice-window: #282c34;
+	--lattice-chrome: #21252b;
+	--lattice-ink: #abb2bf;
+	--lattice-ink-mute: #828997;
+	--lattice-ink-faint: #5c6370;
+	--lattice-accent: #0a84ff;
+	--lattice-cursor: #528bff;
+	--lattice-selection: #264f78cc;
+
+	--lattice-red: #e06c75;
+	--lattice-orange: #d19a66;
+	--lattice-yellow: #e5c07b;
+	--lattice-green: #98c379;
+	--lattice-cyan: #56b6c2;
+	--lattice-blue: #61afef;
+	--lattice-purple: #c678dd;
+}
+
+[theme="lattice-light"],
+[theme="lattice-dark"] {
+	--studio-fill: var(--lattice-window);
+	--studio-line: var(--lattice-ink);
+	--studio-chrome-fill: var(--lattice-chrome);
+	--studio-chrome-line: var(--lattice-ink);
+	/* keep the derived greys grey, with only a hint of the blue */
+	--studio-offset-tint: var(--lattice-blue);
+	--studio-offset-tint-amount: 3%;
+
+	--studio-primary: var(--lattice-accent);
+	--studio-primary-line: white;
+	--studio-secondary: var(--lattice-purple);
+	--studio-link: var(--lattice-blue);
+	--studio-danger: var(--lattice-red);
+	--studio-warning: var(--lattice-yellow);
+	--studio-added: var(--lattice-green);
+	--studio-deleted: var(--lattice-red);
+	--studio-modified: var(--lattice-yellow);
+	--studio-selection-fill: var(--lattice-selection);
+	--studio-selection-line: var(--lattice-ink);
+
+	--studio-family-sans:
+		-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+		"Helvetica Neue", sans-serif;
+	--studio-family-code:
+		"SF Mono", ui-monospace, Menlo, Monaco, "Cascadia Mono", Consolas, monospace;
+	--studio-family-ui: var(--studio-family-sans);
+	--studio-font-size: 13px;
+	--studio-line-height: 1.45;
+
+	--studio-radius-xs: 3px;
+	--studio-radius-sm: 4px;
+	--studio-radius: 6px;
+	--studio-radius-md: 8px;
+	--studio-radius-lg: 10px;
+
+	--editor-font-size: 14px;
+	--editor-cursor-fill: var(--lattice-cursor);
+
+	--text-editor-fill: var(--lattice-window);
+	--text-editor-line: var(--lattice-ink);
+	--text-editor-cursor-fill: var(--lattice-cursor);
+	--text-editor-gutter-fill: var(--lattice-window);
+	--text-editor-gutter-line: var(--lattice-ink-faint);
+	--text-editor-gutter-border: transparent;
+	--text-editor-active-line-fill: color-mix(
+		in oklch,
+		var(--lattice-ink) 5%,
+		transparent
+	);
+	--text-editor-active-line-fill--gutter: color-mix(
+		in oklch,
+		var(--lattice-ink) 8%,
+		transparent
+	);
+	--text-editor-tooltip-fill: var(--lattice-chrome);
+	--text-editor-tooltip-color: var(--lattice-ink);
+
+	--syntax-comment: var(--lattice-ink-faint);
+	--syntax-style-comment: italic;
+	--syntax-doc-comment: var(--lattice-ink-faint);
+	--syntax-style-doc-comment: italic;
+	--syntax-quote: var(--lattice-ink-faint);
+
+	--syntax-meta: var(--lattice-ink-mute);
+	--syntax-invalid: var(--lattice-red);
+
+	--syntax-operator: var(--lattice-cyan);
+	--syntax-punctuation: var(--lattice-ink);
+	--syntax-angle-bracket: var(--lattice-ink);
+	--syntax-list: var(--lattice-ink);
+
+	--syntax-keyword: var(--lattice-purple);
+	--syntax-control-keyword: var(--lattice-purple);
+	--syntax-module-keyword: var(--lattice-purple);
+
+	--syntax-tag-name: var(--lattice-red);
+	--syntax-attribute-name: var(--lattice-orange);
+
+	--syntax-bool: var(--lattice-orange);
+	--syntax-atom: var(--lattice-orange);
+	--syntax-number: var(--lattice-orange);
+	--syntax-integer: var(--lattice-orange);
+	--syntax-float: var(--lattice-orange);
+
+	--syntax-type-name: var(--lattice-yellow);
+	--syntax-class-name: var(--lattice-yellow);
+	--syntax-namespace: var(--lattice-yellow);
+	--syntax-type-operator: var(--lattice-purple);
+
+	--syntax-function--variable-name: var(--lattice-blue);
+	--syntax-function--property-name: var(--lattice-blue);
+	--syntax-variable-name: var(--lattice-ink);
+	--syntax-definition--variable-name: var(--lattice-red);
+
+	--syntax-string: var(--lattice-green);
+	--syntax-fill-string: transparent;
+	--syntax-special--string: var(--lattice-green);
+	--syntax-escape: var(--lattice-cyan);
+	--syntax-regexp: var(--lattice-cyan);
+
+	--syntax-strong: var(--lattice-yellow);
+	--syntax-weight-strong: bold;
+	--syntax-emphasis: var(--lattice-purple);
+	--syntax-style-emphasis: italic;
+
+	--syntax-heading: var(--lattice-red);
+	--syntax-weight-heading: bold;
+
+	--syntax-link: var(--lattice-blue);
+	--syntax-style-link: underline;
+
+	--syntax-inserted: var(--lattice-green);
+	--syntax-deleted: var(--lattice-red);
+	--syntax-changed: var(--lattice-yellow);
+	--syntax-content-separator: var(--lattice-ink-faint);
+}

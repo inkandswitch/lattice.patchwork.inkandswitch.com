@@ -22,7 +22,7 @@ showLoadingAnimation()
 window.patchwork = await setup({
 	packageListURL,
 	accountKey: "tinyPatchworkAccountUrl",
-	frameToolId: "threepane",
+	frameToolId: "lattice",
 }).catch(error => {
 	showErrorScreen(error, {contact: "chee@inkandswitch.com"})
 	throw error

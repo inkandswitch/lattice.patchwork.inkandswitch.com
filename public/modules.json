@@ -1,0 +1,22 @@
+{
+	"@patchwork": {
+		"type": "patchwork:module-settings"
+	},
+	"modules": [
+		"./packages/providers/",
+		"./packages/drafts/",
+		"./packages/account/",
+		"./packages/folder/",
+		"./packages/file/",
+		"./packages/packages/",
+		"./packages/settings/",
+		"./packages/sync-indicator/",
+		"./packages/doc-presence/",
+		"./packages/codemirror-base/",
+		"./packages/codemirror-markdown/",
+		"./packages/theming/",
+		"./packages/lattice-themes/",
+		"./packages/tldraw5/",
+		"./packages/lattice/"
+	]
+}

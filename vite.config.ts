@@ -2,12 +2,14 @@ import {dirname, join} from "node:path"
 import {fileURLToPath} from "node:url"
 import {defineConfig} from "vite"
 import {base, core, environment, patchwork} from "./vite/environment.ts"
+import {frame} from "./vite/frame.ts"
 
 const root = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
 	plugins: [
 		environment(),
+		frame({from: "src/frame", to: "/packages/lattice"}),
 		patchwork({
 			title: "Patchwork",
 			description: "local-first collaborative malleable software environment",
@@ -23,7 +25,13 @@ export default defineConfig({
 							useIdFactory: false
 						}
 					: undefined,
-			themeColor: {light: "#f8f8f8", dark: "#181e24"},
+			themeColor: {light: "#eaeaeb", dark: "#21252b"},
+			html: {
+				attributes: {
+					"data-theme-light": "lattice-light",
+					"data-theme-dark": "lattice-dark",
+				},
+			},
 			icons: {
 				source: process.env.PATCHWORK_FAVICON ?? "public/patchwork.svg",
 				maskIcon: "public/mask.svg",
