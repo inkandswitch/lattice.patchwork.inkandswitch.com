@@ -5,30 +5,20 @@ import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { nestProviders, frameProviders, projectProviders } from "./providers.js";
 import { folderLink } from "./files.js";
 import { mountWorkspace } from "./workspace.js";
+import { Resizer, remember, remembered, sidebarState } from "./sidebars.js";
 
 const STYLESHEET = new URL("./shell.css", import.meta.url).href;
 
-// remembered on this device: which project is open, and which sidebars
-function remembered(key, fallback) {
-  try {
-    const value = localStorage.getItem(key);
-    return value == null ? fallback : JSON.parse(value);
-  } catch {
-    return fallback;
-  }
-}
-function remember(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
-}
+// where this frame came from, when it isn't the site it's running in: a
+// dev server's, given as ?lattice-frame= (see src/main.ts)
+const FRAME_ORIGIN = new URL(import.meta.url).origin;
+const DEV_FRAME = FRAME_ORIGIN === location.origin ? null : FRAME_ORIGIN;
 
-// a sidebar toggle's icon: a window with its left or right column filled
-function sidebarIcon(side) {
-  const x = side === "left" ? 2.5 : 10.5;
+// a sidebar toggle's icon: a window with a column filled, `at` from its left
+function sidebarIcon(at) {
   return html`<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
     <rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" />
-    <rect x=${x} y="3.5" width="3" height="9" rx="0.5" fill="currentColor" opacity="0.55" />
+    <rect x=${at} y="3.5" width="3" height="9" rx="0.5" fill="currentColor" opacity="0.55" />
   </svg>`;
 }
 
@@ -74,6 +64,28 @@ export default function LatticeFrameTool(handle, element) {
       .filter((project) => isValidAutomergeUrl(project.url));
   });
 
+  // a project's workspace (its layout) is a doc of its own, linked from its
+  // folder as `workspace`. it's what drafts are of: drafts don't do folders,
+  // and the overlay forks the folder and the files into a draft anyway, as
+  // they're resolved beneath it
+  async function newWorkspace(layout = null) {
+    return (await repo.create2({ "@patchwork": { type: "lattice:workspace" }, layout })).url;
+  }
+
+  async function workspaceFor(projectUrl) {
+    const folder = await repo.find(projectUrl);
+    const linked = folder.doc()?.workspace;
+    if (linked && isValidAutomergeUrl(String(linked))) return String(linked);
+    // a project from before workspaces kept its layout on the folder
+    const old = folder.doc()?.layout;
+    const url = await newWorkspace(old ? JSON.parse(JSON.stringify(old)) : null);
+    folder.change((doc) => {
+      doc.workspace = url;
+      delete doc.layout;
+    });
+    return url;
+  }
+
   // before projects, the frame kept its files and layout on the account
   // doc. they become a project of their own, once
   async function moveOldWorkspace() {
@@ -87,7 +99,9 @@ export default function LatticeFrameTool(handle, element) {
       "@patchwork": { type: "folder" },
       title: "knitting",
       docs: links,
-      layout: account.layout ? structuredClone(account.layout) : null,
+      workspace: await newWorkspace(
+        account.layout ? JSON.parse(JSON.stringify(account.layout)) : null,
+      ),
     });
     homeHandle.change((doc) => {
       doc.docs ??= [];
@@ -120,6 +134,7 @@ export default function LatticeFrameTool(handle, element) {
       "@patchwork": { type: "folder" },
       title: "untitled",
       docs: [],
+      workspace: await newWorkspace(),
     });
     homeHandle.change((doc) => {
       doc.docs ??= [];
@@ -145,76 +160,99 @@ export default function LatticeFrameTool(handle, element) {
 
   // ── sidebars ───────────────────────────────────────────────────────────
 
-  const [leftOpen, setLeftOpen] = createSignal(remembered("lattice:left", true));
-  const [rightOpen, setRightOpen] = createSignal(remembered("lattice:right", true));
-  createEffect(() => remember("lattice:left", leftOpen()));
-  createEffect(() => remember("lattice:right", rightOpen()));
+  // the folders and the project's files are resizable; the inspector isn't
+  // (yet). each opens and closes on its own
+  const folders = sidebarState("folders", 200);
+  const files = sidebarState("files", 200);
+  const inspector = sidebarState("inspector", 300);
 
-  // ── the open project: its own providers around its files, workspace and
-  //    inspector, so its drafts are drafts of all of it ────────────────────
+  // ── the open project: its own providers, with its workspace doc as the
+  //    draft host, around its files, workspace and inspector, so its drafts
+  //    are drafts of all of it ─────────────────────────────────────────────
 
   let main;
 
   function mountProject(url) {
     main.replaceChildren();
-    const providers = nestProviders(main, projectProviders(url));
-
     let dead = false;
+    let providers = null;
     let unmount = null;
-    providers.ready.then(async (inner) => {
+
+    workspaceFor(url).then(async (workspaceUrl) => {
+      if (dead) return;
+      providers = nestProviders(main, projectProviders(workspaceUrl));
+      const inner = await providers.ready;
       if (!inner) return;
       // the innermost provider's repo resolves through the draft overlay, so
       // the workspace reads and writes whichever draft is checked out
       const projectRepo = inner.repo ?? repo;
-      const project = await projectRepo.find(url);
+      const [workspace, folder] = await Promise.all([
+        projectRepo.find(workspaceUrl),
+        projectRepo.find(url),
+      ]);
       if (dead) return;
 
-      const workspace = document.createElement("div");
-      workspace.className = "lattice-workspace";
+      const area = document.createElement("div");
+      area.className = "lattice-workspace";
       const inspector = document.createElement("aside");
       inspector.className = "lattice-inspector";
       inspector.innerHTML = `<header class="lattice-inspector-heading">drafts</header>`;
-      inner.append(workspace, inspector);
+      inner.append(area, inspector);
       // made in the page, so it's under the project's providers as it mounts
       const drafts = document.createElement("patchwork-view");
       drafts.className = "lattice-inspector-panel";
       drafts.setAttribute("component", "drafts");
       inspector.append(drafts);
 
-      unmount = mountWorkspace(project, workspace, { repo: projectRepo, baseRepo: repo });
+      unmount = mountWorkspace({ workspace, folder }, area, {
+        repo: projectRepo,
+        baseRepo: repo,
+        files,
+      });
     });
 
     return () => {
       dead = true;
       unmount?.();
-      providers.remove();
+      providers?.remove();
     };
   }
 
   // ── the pieces ─────────────────────────────────────────────────────────
 
+  function Toggle(props) {
+    const { sidebar, name, at } = props;
+    return html`<button
+      class="lattice-toggle"
+      aria-pressed=${() => String(sidebar.open())}
+      title=${() => `${sidebar.open() ? "hide" : "show"} the ${name}`}
+      onClick=${() => sidebar.setOpen(!sidebar.open())}
+    >
+      ${sidebarIcon(at)}
+    </button>`;
+  }
+
   function TopBar() {
     return html`<header class="lattice-topbar">
-      <button
-        class="lattice-toggle"
-        aria-pressed=${() => String(leftOpen())}
-        title=${() => (leftOpen() ? "hide the sidebar" : "show the sidebar")}
-        onClick=${() => setLeftOpen(!leftOpen())}
-      >
-        ${sidebarIcon("left")}
-      </button>
+      <${Toggle} sidebar=${folders} name="folders" at=${2.5} />
+      <${Toggle} sidebar=${files} name="files" at=${5.5} />
       <span class="lattice-breadcrumb">
-        /home${() => (current() ? `/${current().name}` : "")}
+        home${() => (current() ? ` › ${current().name}` : "")}
       </span>
       <span class="lattice-spacer"></span>
-      <button
-        class="lattice-toggle"
-        aria-pressed=${() => String(rightOpen())}
-        title=${() => (rightOpen() ? "hide the inspector" : "show the inspector")}
-        onClick=${() => setRightOpen(!rightOpen())}
+      ${DEV_FRAME &&
+      html`<button
+        class="lattice-dev-frame"
+        title=${`this frame is ${DEV_FRAME}'s, not this site's (?lattice-frame=). click to go back to the site's own`}
+        onClick=${() => {
+          const url = new URL(location.href);
+          url.searchParams.set("lattice-frame", "");
+          location.href = url.href;
+        }}
       >
-        ${sidebarIcon("right")}
-      </button>
+        dev frame · ${new URL(DEV_FRAME).host}
+      </button>`}
+      <${Toggle} sidebar=${inspector} name="inspector" at=${10.5} />
     </header>`;
   }
 
@@ -240,21 +278,27 @@ export default function LatticeFrameTool(handle, element) {
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
           >
-            /${project.name}
+            ${project.name}
           </button>`;
   }
 
-  // /system's folders are here, but they don't do anything yet
+  // system's folders are here, but they don't do anything yet
   function SystemItem(props) {
     return html`<span class="lattice-tree-item lattice-system" aria-disabled="true" title="nothing here yet">
-      /${props.name}
+      ${props.name}
     </span>`;
   }
 
   function Sidebar() {
-    return html`<nav class="lattice-sidebar" aria-label="folders">
+    return html`<nav
+      class="lattice-sidebar"
+      aria-label="folders"
+      style=${() => ({ width: `${folders.width()}px` })}
+    >
+      <${Resizer} sidebar=${folders} />
+      <div class="lattice-sidebar-content">
       <div class="lattice-tree-heading">
-        <span>/home</span>
+        <span>home</span>
         <button class="lattice-icon-button" title="new project" onClick=${() => newProject()}>
           +
         </button>
@@ -267,17 +311,18 @@ export default function LatticeFrameTool(handle, element) {
           ${(project) => html`<${ProjectItem} project=${project} />`}
         <//>
       </div>
-      <div class="lattice-tree-heading lattice-system">/system</div>
+      <div class="lattice-tree-heading lattice-system">system</div>
       <div class="lattice-tree-children">
         <${SystemItem} name="packages" />
         <${SystemItem} name="settings" />
+      </div>
       </div>
     </nav>`;
   }
 
   function NoProject() {
     return html`<div class="lattice-no-project">
-      <p>${() => (home() ? "nothing in /home yet" : "finding /home…")}</p>
+      <p>${() => (home() ? "nothing in home yet" : "finding home…")}</p>
       <${Show} when=${home}>
         <button class="lattice-button" onClick=${() => newProject()}>new project</button>
       <//>
@@ -294,12 +339,11 @@ export default function LatticeFrameTool(handle, element) {
   function Shell() {
     return html`<div
         class="knitoutjs-editor-tool lattice-shell"
-        data-left=${() => (leftOpen() ? "open" : "closed")}
-        data-right=${() => (rightOpen() ? "open" : "closed")}
+        data-inspector=${() => (inspector.open() ? "open" : "closed")}
       >
         <${TopBar} />
         <div class="lattice-body">
-          <${Show} when=${leftOpen}><${Sidebar} /><//>
+          <${Show} when=${folders.open}><${Sidebar} /><//>
           <${Show} when=${currentUrl} fallback=${html`<${NoProject} />`}>
             <div
               class="lattice-main"

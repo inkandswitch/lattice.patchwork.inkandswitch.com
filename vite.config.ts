@@ -7,6 +7,12 @@ import {frame} from "./vite/frame.ts"
 const root = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
+	// `pnpm dev --tunnel` reaches this server through a cloudflare quick
+	// tunnel, which vite's host check would otherwise turn away
+	server:
+		process.env.LATTICE_TUNNEL === "1"
+			? {allowedHosts: [".trycloudflare.com"]}
+			: undefined,
 	plugins: [
 		environment(),
 		frame({from: "src/frame", to: "/packages/lattice"}),

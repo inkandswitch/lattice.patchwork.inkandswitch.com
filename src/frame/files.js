@@ -10,6 +10,16 @@ export function docText(doc) {
   return String(content);
 }
 
+// a module worker, from a script that may be on another origin: a dev
+// server's frame (?lattice-frame=). a worker can't be started from another
+// origin's script, but a blob of this origin's can import it (with cors)
+export function moduleWorker(url) {
+  if (new URL(url).origin === location.origin) return new Worker(url, { type: "module" });
+  const source = `import ${JSON.stringify(String(url))};`;
+  const blob = new Blob([source], { type: "text/javascript" });
+  return new Worker(URL.createObjectURL(blob), { type: "module" });
+}
+
 // a string in a doc can be a plain string or an ImmutableString (pushwork
 // writes links that way); read them the same
 function asString(value) {

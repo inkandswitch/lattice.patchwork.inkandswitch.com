@@ -30,6 +30,7 @@ import {
   activate,
 } from "./layout.js";
 import defaultSource from "./default-source.js";
+import { Resizer } from "./sidebars.js";
 
 const STYLESHEET = new URL("./frame.css", import.meta.url).href;
 const MIN_CELL = 80;
@@ -99,35 +100,42 @@ function zoneAt(event, rect, band) {
 }
 
 /**
- * a project's workspace: the panes showing its files (and anything else),
- * laid out as its folder doc's `layout`. `handle` is the project's folder.
- * `repo` resolves through the project's draft overlay, so what's done here
- * goes into whichever draft is checked out; `baseRepo` doesn't, for docs that
- * mustn't be forked into a draft (a terminal: latticex is on the original)
+ * a project's workspace: the panes showing its files (and anything else).
+ * `folder` is the project's folder, whose entries are its files; `workspace`
+ * is its workspace doc, whose `layout` is the panes. `repo` resolves through
+ * the project's draft overlay, so what's done here goes into whichever draft
+ * is checked out; `baseRepo` doesn't, for docs that mustn't be forked into a
+ * draft (a terminal: latticex is on the original). `files` is the files
+ * column's sidebar state (sidebars.js), which the frame's top bar toggles
  */
-export function mountWorkspace(handle, element, { repo, baseRepo }) {
+export function mountWorkspace({ workspace, folder }, element, { repo, baseRepo, files }) {
   let root;
   let menu;
 
-  // ── what's in the project doc ──────────────────────────────────────────
+  // ── what's in the project ──────────────────────────────────────────────
 
   const [layout, setLayout] = createStore({ root: null });
   const [fileUrls, setFileUrls] = createSignal([]);
   const [projectName, setProjectName] = createSignal("");
 
-  function readDoc() {
-    const doc = handle.doc();
+  function readLayout() {
+    const doc = workspace.doc();
     const tree = doc?.layout ? JSON.parse(JSON.stringify(doc.layout)) : null;
     setLayout("root", reconcile(tree, { key: "id" }));
+  }
+  function readFolder() {
+    const doc = folder.doc();
     setFileUrls(folderUrls(doc));
     setProjectName(folderTitle(doc));
   }
-  readDoc();
-  handle.on("change", readDoc);
+  readLayout();
+  readFolder();
+  workspace.on("change", readLayout);
+  folder.on("change", readFolder);
 
   function updateLayout(change) {
     const next = change(structuredClone(unwrap(layout.root) ?? null));
-    handle.change((doc) => {
+    workspace.change((doc) => {
       doc.layout = next ?? null;
     });
   }
@@ -139,7 +147,7 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
     const links = await Promise.all(
       fresh.map(async (url) => folderLink(url, (await repo.find(url)).doc())),
     );
-    handle.change((doc) => {
+    folder.change((doc) => {
       doc.docs ??= [];
       const have = folderUrls(doc);
       for (const link of links) if (!have.includes(link.url)) doc.docs.push(link);
@@ -957,11 +965,48 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
     }
   }
 
+  // taking a file out of the project: its folder forgets it and its panes
+  // close. the doc itself is still there for anything else that links to it
+  function removeFile(url) {
+    folder.change((doc) => {
+      const docs = doc.docs ?? [];
+      for (let i = docs.length - 1; i >= 0; i--) {
+        if (String(docs[i]?.url) === url) docs.splice(i, 1);
+      }
+    });
+    updateLayout((tree) => {
+      for (let showing; (showing = findPanelShowing(tree, url)); ) {
+        tree = removePanel(tree, showing.group.panels[showing.index].id);
+      }
+      return tree;
+    });
+  }
+
+  // removing asks twice: the first press arms it for a few seconds
+  const [removing, setRemoving] = createSignal(null);
+  let removingTimer;
+  function askToRemove(url) {
+    clearTimeout(removingTimer);
+    if (removing() === url) {
+      setRemoving(null);
+      removeFile(url);
+      return;
+    }
+    setRemoving(url);
+    removingTimer = setTimeout(() => setRemoving(null), 3000);
+  }
+
   // the project's files, down the side of its workspace
   function Files() {
-    return html`<nav class="lattice-files" aria-label="files">
+    return html`<nav
+      class="lattice-files"
+      aria-label="files"
+      style=${() => ({ width: `${files.width()}px` })}
+    >
+      <${Resizer} sidebar=${files} />
+      <div class="lattice-sidebar-content">
       <header class="lattice-files-heading">
-        <span class="lattice-path" title=${() => projectName()}>/${projectName}</span>
+        <span class="lattice-path" title=${() => projectName()}>${projectName}</span>
         <button
           class="lattice-icon-button"
           title="a new file, or open one (hold alt for more)"
@@ -974,14 +1019,13 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
         each=${projectFiles}
         fallback=${html`<p class="lattice-files-empty">no files yet</p>`}
       >
-        ${(file) => html`<button
+        ${(file) => html`<div
           class="lattice-file"
           data-colour=${docColour(file.url)}
           data-glow=${() => glow(file.url)}
           data-showing=${() => (findPanelShowing(layout.root, file.url) ? "" : undefined)}
-          title=${() => `${file.name}\nclick to open it, or drag it onto a pane`}
+          data-removing=${() => (removing() === file.url ? "" : undefined)}
           draggable="true"
-          onClick=${() => open(file.url)}
           onDragStart=${(event) => {
             event.dataTransfer.setData(
               "text/x-patchwork-dnd",
@@ -992,10 +1036,31 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
           onPointerEnter=${() => setHovered(file.url)}
           onPointerLeave=${unhover}
         >
-          <span class="knitoutjs-swatch"></span>
-          <span class="lattice-file-name">/${() => file.name}</span>
-        </button>`}
+          <button
+            class="lattice-file-open"
+            title=${() => `${file.name}\nclick to open it, or drag it onto a pane`}
+            onClick=${() => open(file.url)}
+            onKeyDown=${(event) => {
+              if (event.key === "Delete" || event.key === "Backspace") askToRemove(file.url);
+            }}
+          >
+            <span class="knitoutjs-swatch"></span>
+            <span class="lattice-file-name">${() => file.name}</span>
+          </button>
+          <button
+            class="lattice-file-remove"
+            aria-label=${() => `remove ${file.name} from ${projectName()}`}
+            title=${() =>
+              removing() === file.url
+                ? "click again to remove it"
+                : `remove it from ${projectName()} (the doc itself stays)`}
+            onClick=${() => askToRemove(file.url)}
+          >
+            ${() => (removing() === file.url ? "remove?" : "×")}
+          </button>
+        </div>`}
       <//>
+      </div>
     </nav>`;
   }
 
@@ -1003,7 +1068,7 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
     () =>
       html`<link rel="stylesheet" href=${STYLESHEET} />
         <div class="knitoutjs-editor-tool lattice-project">
-        <${Files} />
+        <${Show} when=${files.open}><${Files} /><//>
         <div
           class="knitoutjs-editor-tool knitoutjs-frame"
           ref=${(el) => {
@@ -1037,13 +1102,15 @@ export function mountWorkspace(handle, element, { repo, baseRepo }) {
   );
 
   function cleanup() {
-    handle.off("change", readDoc);
+    workspace.off("change", readLayout);
+    folder.off("change", readFolder);
     document.removeEventListener("dragover", onDocumentDragOver);
     document.removeEventListener("dragend", stopDragging);
     document.removeEventListener("drop", stopDragging);
     document.removeEventListener("keydown", onAltKey);
     document.removeEventListener("keyup", onAltKey);
     clearTimeout(noticeTimer);
+    clearTimeout(removingTimer);
     for (const [id, host] of hosts) destroyHost(id, host);
     for (const { off } of infos.values()) off?.();
     dispose();

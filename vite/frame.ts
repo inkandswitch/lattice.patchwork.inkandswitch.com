@@ -49,6 +49,8 @@ export function frame({from, to}: {from: string; to: string}): Plugin {
 				try {
 					const body = await readFile(path)
 					response.setHeader("Cache-Control", "no-cache")
+					// so another site can use this frame (?lattice-frame=)
+					response.setHeader("Access-Control-Allow-Origin", "*")
 					response.setHeader("Content-Type", CONTENT_TYPES[extname(path)])
 					response.end(body)
 				} catch {

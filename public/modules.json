@@ -16,7 +16,6 @@
 		"./packages/codemirror-markdown/",
 		"./packages/theming/",
 		"./packages/lattice-themes/",
-		"./packages/tldraw5/",
-		"./packages/lattice/"
+		"./packages/tldraw5/"
 	]
 }

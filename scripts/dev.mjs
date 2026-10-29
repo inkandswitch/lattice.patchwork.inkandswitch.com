@@ -7,7 +7,12 @@ import {stripVTControlCharacters} from "node:util"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const children = []
 const processGroups = process.platform !== "win32"
-const footerLines = 7
+// --tunnel: a cloudflare quick tunnel to this server, so the deployed
+// lattice (yours, or mimi's) can use this frame: ?lattice-frame=<tunnel>
+const tunnel =
+	process.argv.includes("--tunnel") || process.env.LATTICE_TUNNEL === "1"
+const SITE = "https://lattice.patchwork.inkandswitch.com"
+const footerLines = tunnel ? 9 : 7
 const footer = process.stdout.isTTY && process.stdout.rows > footerLines
 let stopping = false
 let footerVisible = false
@@ -16,6 +21,8 @@ let readyTimer
 let devURL = "starting…"
 let corePackages = ""
 let basePackages = ""
+let tunnelURL = tunnel ? "starting…" : ""
+let frameLink = tunnel ? "once the tunnel's up" : ""
 
 function fit(value, width) {
 	if (value.length <= width) return value
@@ -47,7 +54,9 @@ function showFooter() {
 				` Patchwork ${status} `.length + 2,
 				devURL.length + 17,
 				corePackages.length + 17,
-				basePackages.length + 17
+				basePackages.length + 17,
+				tunnelURL.length + 17,
+				frameLink.length + 17
 			)
 		)
 	)
@@ -59,6 +68,12 @@ function showFooter() {
 		`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m site:     \x1b[36m${fit(devURL, valueWidth)}\x1b[0m`,
 		`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m core:     \x1b[36m${fit(corePackages, valueWidth)}\x1b[0m`,
 		`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m pkg-base: \x1b[36m${fit(basePackages, valueWidth)}\x1b[0m`,
+		...(tunnel
+			? [
+					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m tunnel:   \x1b[36m${fit(tunnelURL, valueWidth)}\x1b[0m`,
+					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m frame:    \x1b[36m${fit(frameLink, valueWidth)}\x1b[0m`,
+				]
+			: []),
 		`\x1b[2m│\x1b[0m`,
 		`\x1b[2m└${"─".repeat(width - 2)}┘\x1b[0m`,
 	]
@@ -175,6 +190,46 @@ function ensureBase(directory) {
 	}
 }
 
+// cloudflared prints the quick tunnel's url among its logs. the tunnel going
+// away (or not starting) leaves the dev server running
+function startTunnel(url) {
+	const child = spawn(
+		"cloudflared",
+		["tunnel", "--no-autoupdate", "--url", url],
+		{stdio: ["ignore", "pipe", "pipe"], detached: processGroups}
+	)
+	children.push(child)
+	let output = ""
+	const read = chunk => {
+		output = `${output}${chunk}`.slice(-4096)
+		const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
+		if (!match || match[0] === tunnelURL) return
+		tunnelURL = match[0]
+		frameLink = `${SITE}/?lattice-frame=${tunnelURL}`
+		console.log(
+			`\n  tunnel: ${tunnelURL}\n  lattice with this frame: ${frameLink}\n  (anyone with these can use this dev server)\n`
+		)
+		showFooter()
+	}
+	child.stdout.on("data", read)
+	child.stderr.on("data", read)
+	child.on("error", error => {
+		tunnelURL =
+			error.code === "ENOENT"
+				? "needs cloudflared: brew install cloudflared"
+				: `couldn't start: ${error.message}`
+		frameLink = ""
+		console.error(`tunnel: ${tunnelURL}`)
+		showFooter()
+	})
+	child.on("exit", code => {
+		if (stopping || tunnelURL.startsWith("needs")) return
+		tunnelURL = `closed (cloudflared exited ${code})`
+		frameLink = ""
+		showFooter()
+	})
+}
+
 function stop() {
 	if (stopping) return
 	stopping = true
@@ -211,6 +266,7 @@ const env = {
 }
 const watchEnv = {
 	...env,
+	...(tunnel ? {LATTICE_TUNNEL: "1"} : {}),
 	PNPM_CONFIG_REPORTER: process.env.PNPM_CONFIG_REPORTER ?? "append-only",
 }
 
@@ -235,6 +291,7 @@ site.stdout?.on("data", chunk => {
 	siteOutput = `${siteOutput}${stripVTControlCharacters(chunk.toString())}`
 	const match = siteOutput.match(/Local:\s+(https?:\/\/\S+)/)
 	if (match) {
+		if (tunnel && devURL === "starting…") startTunnel(match[1])
 		devURL = match[1]
 		setStatus("ready")
 		siteOutput = ""

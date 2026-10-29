@@ -67,6 +67,18 @@
 		flex: 1;
 	}
 
+	/* this frame is a dev server's, not the site's own */
+	& .lattice-dev-frame {
+		padding: 2px 8px;
+		border: none;
+		border-radius: var(--studio-radius-round, 999px);
+		background: var(--studio-warning-fill, #c18401);
+		color: var(--studio-warning-line, black);
+		font-family: var(--lattice-path-family);
+		font-size: 11px;
+		cursor: pointer;
+	}
+
 	/* ── the body: sidebar | project (files | workspace) | inspector ───── */
 
 	& .lattice-body {
@@ -88,17 +100,27 @@
 		min-width: 0;
 	}
 
+	/* their widths are the user's (sidebars.js) */
 	& .lattice-sidebar,
 	& .lattice-files {
+		position: relative;
 		display: flex;
 		flex: none;
 		flex-direction: column;
 		box-sizing: border-box;
-		width: 200px;
-		padding: 8px 0;
-		overflow: auto;
+		min-height: 0;
 		font-family: var(--lattice-path-family);
 		font-size: 12px;
+	}
+
+	/* what scrolls, so the resizer beside it doesn't */
+	& .lattice-sidebar-content {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		padding: 8px 0;
+		overflow: auto;
 	}
 
 	& .lattice-sidebar {
@@ -125,7 +147,7 @@
 	}
 
 	& .lattice-tree-item,
-	& .lattice-file {
+	& .lattice-file-open {
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -234,7 +256,8 @@
 	}
 
 	& .lattice-file {
-		padding-left: 18px;
+		display: flex;
+		align-items: center;
 		color: var(--studio-line-offset-30, currentColor);
 
 		&[data-showing] {
@@ -243,6 +266,57 @@
 		}
 		&[data-glow] {
 			background: color-mix(in oklab, var(--doc) 16%, transparent);
+		}
+	}
+
+	& .lattice-file-open {
+		flex: 1;
+		min-width: 0;
+		padding-left: 18px;
+		padding-right: 4px;
+	}
+
+	/* shown on hover, or while it's asking to be pressed again */
+	& .lattice-file-remove {
+		flex: none;
+		visibility: hidden;
+		margin-right: 6px;
+		padding: 0 5px;
+		border: none;
+		border-radius: var(--studio-radius-sm, 4px);
+		background: none;
+		color: var(--studio-line-offset-40, currentColor);
+		font-family: var(--studio-family-ui, system-ui, sans-serif);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--studio-fill-offset-20, #0001);
+			color: var(--studio-danger-text, #e45649);
+		}
+	}
+	& .lattice-file:hover .lattice-file-remove,
+	& .lattice-file:focus-within .lattice-file-remove,
+	& .lattice-file[data-removing] .lattice-file-remove {
+		visibility: visible;
+	}
+	& .lattice-file[data-removing] .lattice-file-remove {
+		background: var(--studio-danger-fill, #e45649);
+		color: var(--studio-danger-line, white);
+	}
+
+	/* along a sidebar's right edge, over its border */
+	& .lattice-resizer {
+		position: absolute;
+		top: 0;
+		right: -3px;
+		bottom: 0;
+		z-index: 1;
+		width: 6px;
+		cursor: col-resize;
+
+		&:hover,
+		&[data-dragging] {
+			background: color-mix(in oklch, var(--studio-primary, #007aff) 45%, transparent);
 		}
 	}
 
@@ -269,7 +343,7 @@
 		background: var(--studio-chrome-fill, #eaeaeb);
 	}
 
-	&[data-right="closed"] .lattice-inspector {
+	&[data-inspector="closed"] .lattice-inspector {
 		display: none;
 	}
 

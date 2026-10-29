@@ -14,6 +14,26 @@ export const plugins = [
       return KnitoutFrameTool;
     },
   },
+  // a lattice project's layout: what its drafts are of. it lives behind
+  // the project's folder (as `workspace`), never on its own
+  {
+    type: "patchwork:datatype",
+    id: "lattice:workspace",
+    name: "Lattice Workspace",
+    icon: "LayoutGrid",
+    unlisted: true,
+    async load() {
+      return {
+        init(doc) {
+          doc.layout = null;
+        },
+        getTitle() {
+          return "workspace";
+        },
+        setTitle() {},
+      };
+    },
+  },
   // a terminal latticex shares from someone's computer. unlisted: you make
   // one from a frame's + menu, holding alt
   {
