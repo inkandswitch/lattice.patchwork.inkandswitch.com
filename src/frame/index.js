@@ -13,5 +13,38 @@ export const plugins = [
       const { default: KnitoutFrameTool } = await import("./frame.js");
       return KnitoutFrameTool;
     },
-  }
+  },
+  // a terminal latticex shares from someone's computer. unlisted: you make
+  // one from a frame's + menu, holding alt
+  {
+    type: "patchwork:datatype",
+    id: "latticex",
+    name: "Terminal",
+    icon: "SquareTerminal",
+    unlisted: true,
+    async load() {
+      return {
+        init(doc) {
+          doc.title = "terminal";
+        },
+        getTitle(doc) {
+          return doc.title || "terminal";
+        },
+        setTitle(doc, title) {
+          doc.title = title;
+        },
+      };
+    },
+  },
+  {
+    type: "patchwork:tool",
+    id: "latticex",
+    name: "Terminal",
+    icon: "SquareTerminal",
+    supportedDatatypes: ["latticex"],
+    async load() {
+      const { default: LatticexTerminalTool } = await import("./terminal.js");
+      return LatticexTerminalTool;
+    },
+  },
 ];

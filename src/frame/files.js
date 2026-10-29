@@ -9,8 +9,10 @@ export function docText(doc) {
   return String(content);
 }
 
-// "js", "k", or whatever else the file says it is
+// "js", "k", or whatever else the file says it is. a latticex terminal isn't
+// a file, but it opens in a tool of ours as if it were
 export function fileExtension(doc) {
+  if (doc?.["@patchwork"]?.type === "latticex") return "latticex";
   if (doc?.extension) return doc.extension.replace(/^\./, "").toLowerCase();
   const match = doc?.name?.match(/\.([^.]+)$/);
   return match ? match[1].toLowerCase() : "";
@@ -35,6 +37,14 @@ export const TOOLS = {
     position: 1,
     extensions: ["js", "k"],
     load: () => import("./editor.js"),
+  },
+  terminal: {
+    id: "terminal",
+    name: "terminal",
+    title: "a program on someone's computer, shared with latticex",
+    position: 1,
+    extensions: ["latticex"],
+    load: () => import("./terminal.js"),
   },
   patchwork: {
     id: "patchwork",

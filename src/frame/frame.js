@@ -27,6 +27,7 @@ import {
   activate,
 } from "./layout.js";
 import defaultSource from "./default-source.js";
+import { nestProviders, frameProviders, docProviders } from "./providers.js";
 
 const STYLESHEET = new URL("./frame.css", import.meta.url).href;
 const MIN_CELL = 80;
@@ -208,8 +209,9 @@ export default function KnitoutFrameTool(handle, element) {
 
   const unhover = () => setHovered(null);
 
-  // ── tools: each panel's tool lives in its own element, which moves with
-  //    the panel when the layout changes rather than starting over
+  // ── tools: each panel's tool lives in its own element, inside its own doc
+  //    providers, which move with the panel when the layout changes rather
+  //    than starting over
 
   // show a linked doc: if it's open already, bring its tab forward and light
   // it up for a moment; if not, open it on one side of the pane asking
@@ -265,8 +267,17 @@ export default function KnitoutFrameTool(handle, element) {
     let host = hosts.get(id);
     if (host && host.url === url && host.tool === tool) return host;
     if (host) destroyHost(id, host);
-    host = { url, tool, el: document.createElement("div"), cleanup: null };
+    const providers = nestProviders(docProviders(url));
+    host = {
+      url,
+      tool,
+      el: document.createElement("div"),
+      box: providers.outer,
+      ready: providers.ready,
+      cleanup: null,
+    };
     host.el.className = "knitoutjs-tool";
+    providers.inner.append(host.el);
     hosts.set(id, host);
     mountTool(host);
     return host;
@@ -277,6 +288,7 @@ export default function KnitoutFrameTool(handle, element) {
       const [docHandle, module] = await Promise.all([
         repo.find(host.url),
         TOOLS[host.tool].load(),
+        host.ready,
       ]);
       if (host.dead) return;
       host.cleanup = module.default(docHandle, host.el, toolContext);
@@ -291,7 +303,7 @@ export default function KnitoutFrameTool(handle, element) {
     if (host.dead) return;
     host.dead = true;
     host.cleanup?.();
-    host.el.remove();
+    host.box.remove();
     if (hosts.get(id) === host) hosts.delete(id);
   }
 
@@ -300,13 +312,13 @@ export default function KnitoutFrameTool(handle, element) {
     let slot;
     createEffect(() => {
       const host = hostFor(panel);
-      slot.replaceChildren(host.el);
+      slot.replaceChildren(host.box);
       const owner = {};
       host.owner = owner;
       // if nobody picks it up again this tick, it's really gone
       onCleanup(() =>
         queueMicrotask(() => {
-          if (host.owner === owner && !host.el.isConnected) {
+          if (host.owner === owner && !host.box.isConnected) {
             destroyHost(panel.id, host);
           }
         }),
@@ -369,9 +381,26 @@ export default function KnitoutFrameTool(handle, element) {
     openDocs([await createFile(name)], groupId);
   }
 
+  // a doc for latticex to share a terminal over: it shows the command to run
+  async function newTerminal(groupId) {
+    const terminal = await repo.create2({
+      "@patchwork": { type: "latticex" },
+      title: "terminal",
+    });
+    openDocs([terminal.url], groupId);
+  }
+
   const [menuFor, setMenuFor] = createSignal(null);
+  // the menu has more in it while alt is held
+  const [altHeld, setAltHeld] = createSignal(false);
+  const onAltKey = (event) => {
+    if (event.key === "Alt") setAltHeld(event.type === "keydown");
+  };
+  document.addEventListener("keydown", onAltKey);
+  document.addEventListener("keyup", onAltKey);
 
   function openMenu(event, groupId) {
+    setAltHeld(event.altKey);
     setMenuFor(groupId);
     const rect = event.currentTarget.getBoundingClientRect();
     menu.style.top = `${rect.bottom + 4}px`;
@@ -872,6 +901,9 @@ export default function KnitoutFrameTool(handle, element) {
       ${item("pattern", "a .js and the .k it writes", fromMenu(newPattern))}
       ${item(".js file", "", fromMenu((groupId) => newFile(groupId, "untitled.knitout.js")))}
       ${item(".k file", "", fromMenu((groupId) => newFile(groupId, "untitled.k")))}
+      <${Show} when=${altHeld}>
+        ${item("terminal", "shared from your computer with latticex", fromMenu(newTerminal))}
+      <//>
       <div class="knitoutjs-menu-heading">in this project</div>
       <${For}
         each=${() => projectFiles()}
@@ -900,9 +932,16 @@ export default function KnitoutFrameTool(handle, element) {
     </div>`;
   }
 
+  // the frame is the account doc's tool, so its providers are the account's
+  const providers = nestProviders(frameProviders(handle.url));
+  element.append(providers.outer);
+  const [providersReady, setProvidersReady] = createSignal(false);
+  providers.ready.then(() => setProvidersReady(true));
+
   const dispose = render(
     () =>
       html`<link rel="stylesheet" href=${STYLESHEET} />
+        <${Show} when=${providersReady}>
         <div
           class="knitoutjs-editor-tool knitoutjs-frame"
           ref=${(el) => {
@@ -930,8 +969,9 @@ export default function KnitoutFrameTool(handle, element) {
             <div class="knitoutjs-outer-hint" data-zone=${outerZone}></div>
           <//>
           <${Menu} />
-        </div>`,
-    element,
+        </div>
+        <//>`,
+    providers.inner,
   );
 
   return () => {
@@ -939,9 +979,12 @@ export default function KnitoutFrameTool(handle, element) {
     document.removeEventListener("dragover", onDocumentDragOver);
     document.removeEventListener("dragend", stopDragging);
     document.removeEventListener("drop", stopDragging);
+    document.removeEventListener("keydown", onAltKey);
+    document.removeEventListener("keyup", onAltKey);
     clearTimeout(noticeTimer);
     for (const [id, host] of hosts) destroyHost(id, host);
     for (const { off } of infos.values()) off?.();
     dispose();
+    providers.outer.remove();
   };
 }

@@ -1,0 +1,7 @@
+# its own workspace, so the site's install never builds node-pty
+allowBuilds:
+  cbor-extract: true
+  # its install script only checks its prebuilds are there
+  node-pty: true
+minimumReleaseAgeExclude:
+  - "@automerge/*"

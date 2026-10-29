@@ -1,0 +1,18 @@
+{
+	"name": "latticex",
+	"version": "0.0.1",
+	"description": "share a program on a pty over an automerge doc's ephemeral channel",
+	"type": "module",
+	"private": true,
+	"bin": {
+		"latticex": "./latticex.js"
+	},
+	"engines": {
+		"node": ">=22.13"
+	},
+	"dependencies": {
+		"@automerge/automerge-repo": "2.6.0-subduction.48",
+		"@xterm/headless": "6.0.0",
+		"node-pty": "1.1.0"
+	}
+}
