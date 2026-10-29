@@ -1,4 +1,5 @@
 // what we know about the files a knitout project shows
+import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 
 export function docText(doc) {
   const content = doc?.content;
@@ -7,6 +8,32 @@ export function docText(doc) {
   if (content instanceof Uint8Array) return new TextDecoder().decode(content);
   if (typeof content.val === "string") return content.val;
   return String(content);
+}
+
+// a string in a doc can be a plain string or an ImmutableString (pushwork
+// writes links that way); read them the same
+function asString(value) {
+  return value == null ? undefined : String(value);
+}
+
+// the urls a folder doc links to, in order
+export function folderUrls(doc) {
+  return (Array.isArray(doc?.docs) ? doc.docs : [])
+    .map((link) => asString(link?.url))
+    .filter((url) => url && isValidAutomergeUrl(url));
+}
+
+export function folderTitle(doc) {
+  return asString(doc?.title) || "untitled";
+}
+
+// the entry a folder keeps for a doc: what patchwork's folder tool writes
+export function folderLink(url, doc) {
+  return {
+    name: asString(doc?.name ?? doc?.title) || shortUrl(url),
+    type: asString(doc?.["@patchwork"]?.type) || "file",
+    url,
+  };
 }
 
 // "js", "k", or whatever else the file says it is. a latticex terminal isn't
@@ -44,6 +71,8 @@ export const TOOLS = {
     title: "a program on someone's computer, shared with latticex",
     position: 1,
     extensions: ["latticex"],
+    // latticex shares on the doc itself, never on a draft's copy of it
+    drafts: false,
     load: () => import("./terminal.js"),
   },
   patchwork: {

@@ -1,0 +1,293 @@
+/* the frame around the workspace: top bar, /home and /system down the left,
+   a project's files, and the inspector down the right */
+.knitoutjs-editor-tool.lattice-shell {
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	background: var(--studio-chrome-fill, #eaeaeb);
+	color: var(--studio-chrome-line, var(--studio-line, #383a42));
+	font: 13px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+
+	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
+	--lattice-muted: var(--studio-chrome-line-offset-40, #888);
+	--lattice-path-family: var(--studio-family-code, ui-monospace, monospace);
+	--lattice-current: color-mix(in oklch, var(--studio-primary, #007aff) 16%, transparent);
+
+	& button {
+		font: inherit;
+		color: inherit;
+	}
+
+	/* ── top bar ──────────────────────────────────────────────────────── */
+
+	& .lattice-topbar {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 6px;
+		height: 34px;
+		padding: 0 6px;
+		border-bottom: 1px solid var(--lattice-rule);
+	}
+
+	& .lattice-toggle {
+		display: grid;
+		place-items: center;
+		width: 28px;
+		height: 24px;
+		padding: 0;
+		border: none;
+		border-radius: var(--studio-radius-sm, 4px);
+		background: none;
+		color: var(--lattice-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--studio-chrome-fill-offset-20, #0001);
+		}
+		&[aria-pressed="true"] {
+			color: inherit;
+		}
+	}
+
+	& .lattice-breadcrumb {
+		min-width: 0;
+		overflow: hidden;
+		color: var(--lattice-muted);
+		font-family: var(--lattice-path-family);
+		font-size: 12px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	& .lattice-spacer {
+		flex: 1;
+	}
+
+	/* ── the body: sidebar | project (files | workspace) | inspector ───── */
+
+	& .lattice-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+
+	& .lattice-main {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+		background: var(--studio-fill, #fafafa);
+	}
+
+	& .lattice-workspace {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+	}
+
+	& .lattice-sidebar,
+	& .lattice-files {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		box-sizing: border-box;
+		width: 200px;
+		padding: 8px 0;
+		overflow: auto;
+		font-family: var(--lattice-path-family);
+		font-size: 12px;
+	}
+
+	& .lattice-sidebar {
+		border-right: 1px solid var(--lattice-rule);
+	}
+
+	& .lattice-tree-heading,
+	& .lattice-files-heading {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		min-height: 24px;
+		padding: 0 6px 0 12px;
+		font-weight: 600;
+	}
+
+	& .lattice-tree-heading.lattice-system {
+		margin-top: 12px;
+	}
+
+	& .lattice-tree-children {
+		display: flex;
+		flex-direction: column;
+	}
+
+	& .lattice-tree-item,
+	& .lattice-file {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-height: 24px;
+		padding: 0 12px 0 24px;
+		border: none;
+		background: none;
+		text-align: left;
+		cursor: pointer;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+
+		&:hover {
+			background: var(--studio-chrome-fill-offset-20, #0001);
+		}
+	}
+
+	& .lattice-tree-item[aria-current="page"] {
+		background: var(--lattice-current);
+		box-shadow: inset 2px 0 var(--studio-primary, #007aff);
+	}
+
+	& .lattice-system {
+		color: var(--lattice-muted);
+		font-style: italic;
+		cursor: default;
+
+		&.lattice-tree-item:hover {
+			background: none;
+		}
+	}
+
+	& .lattice-tree-rename {
+		margin: 1px 6px 1px 18px;
+		padding: 2px 5px;
+		border: 1px solid var(--studio-primary, #007aff);
+		border-radius: var(--studio-radius-sm, 4px);
+		background: var(--studio-fill, #fff);
+		color: inherit;
+		font: inherit;
+	}
+
+	& .lattice-tree-empty,
+	& .lattice-files-empty {
+		margin: 4px 12px 4px 24px;
+		color: var(--lattice-muted);
+	}
+
+	& .lattice-icon-button {
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		padding: 0;
+		border: none;
+		border-radius: var(--studio-radius-sm, 4px);
+		background: none;
+		color: var(--lattice-muted);
+		font-size: 15px;
+		cursor: pointer;
+
+		&:hover {
+			background: var(--studio-chrome-fill-offset-20, #0001);
+			color: inherit;
+		}
+	}
+
+	& .lattice-no-project {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		background: var(--studio-fill, #fafafa);
+		color: var(--lattice-muted);
+	}
+
+	& .lattice-button {
+		padding: 4px 12px;
+		border: 1px solid var(--lattice-rule);
+		border-radius: var(--studio-radius, 6px);
+		background: var(--studio-fill, #fff);
+		cursor: pointer;
+	}
+
+	/* ── a project: its files beside its workspace ───────────────────────── */
+
+	& .lattice-project {
+		display: flex;
+		flex: 1;
+		min-width: 0;
+	}
+
+	& .lattice-files {
+		border-right: 1px solid var(--studio-fill-offset-30, #0002);
+		background: var(--studio-fill, #fafafa);
+		color: var(--studio-line, #383a42);
+	}
+
+	& .lattice-path {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	& .lattice-file {
+		padding-left: 18px;
+		color: var(--studio-line-offset-30, currentColor);
+
+		&[data-showing] {
+			color: var(--studio-line, #383a42);
+			font-weight: 600;
+		}
+		&[data-glow] {
+			background: color-mix(in oklab, var(--doc) 16%, transparent);
+		}
+	}
+
+	& .lattice-file-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	& .lattice-project > .knitoutjs-frame {
+		flex: 1;
+		width: auto;
+		min-width: 0;
+	}
+
+	/* ── the inspector ────────────────────────────────────────────────── */
+
+	& .lattice-inspector {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		width: 300px;
+		min-height: 0;
+		border-left: 1px solid var(--lattice-rule);
+		background: var(--studio-chrome-fill, #eaeaeb);
+	}
+
+	&[data-right="closed"] .lattice-inspector {
+		display: none;
+	}
+
+	& .lattice-inspector-heading {
+		flex: none;
+		padding: 8px 12px 4px;
+		color: var(--lattice-muted);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	& .lattice-inspector-panel {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+		overflow: auto;
+	}
+}
