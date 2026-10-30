@@ -1,0 +1,162 @@
+.knitoutjs-editor-tool {
+	&.kniterate {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+		width: 100%;
+		height: 100%;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		background: var(--knitoutjs-sheet);
+		color: var(--knitoutjs-ink);
+		font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+	}
+
+	/* the editor's toolbar: which side, the yarns, the buttons */
+	& .kniterate-bar {
+		display: flex;
+		flex: none;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 10px;
+		padding: 5px 6px;
+		border-bottom: 1px solid var(--knitoutjs-line-soft);
+		background: var(--knitoutjs-chrome);
+		color: var(--knitoutjs-chrome-ink);
+	}
+
+	& .kniterate-spacer {
+		flex: 1;
+	}
+
+	& .kniterate-sides {
+		display: flex;
+
+		& .knitout-button + .knitout-button {
+			margin-left: -1px;
+		}
+
+		& .knitout-button.is-on {
+			background: var(--knitoutjs-ink);
+			color: var(--knitoutjs-sheet);
+		}
+	}
+
+	/* one swatch for each carrier, in its yarn's colour */
+	& .kniterate-yarns {
+		display: flex;
+		gap: 3px;
+	}
+
+	& .kniterate-yarn {
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 1px solid var(--knitoutjs-line);
+		border-radius: 50%;
+		background: var(--yarn);
+		color: var(--knitoutjs-sheet);
+		font: 600 10px var(--knitoutjs-mono, ui-monospace, monospace);
+		cursor: pointer;
+
+		&:hover {
+			translate: 0 -1px;
+			box-shadow: 0 1px 0 var(--knitoutjs-line);
+		}
+	}
+
+	& .kniterate-warnings {
+		color: var(--knitoutjs-muted);
+		font-size: 11px;
+		cursor: help;
+	}
+
+	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
+	& .knitout-button {
+		padding: 2px 8px;
+		border: 1px solid var(--knitoutjs-line, currentColor);
+		border-radius: 2px;
+		background: var(--knitoutjs-sheet, var(--studio-fill, #fff));
+		box-shadow: 1px 1px 0 var(--knitoutjs-line, currentColor);
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+
+		&:hover {
+			translate: -1px -1px;
+			box-shadow: 2px 2px 0 var(--knitoutjs-line, currentColor);
+		}
+
+		&:active {
+			translate: 1px 1px;
+			box-shadow: none;
+		}
+	}
+
+	& .kniterate-stage {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+
+		& canvas {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			outline: none;
+			touch-action: none;
+		}
+	}
+
+	& .kniterate-empty {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		color: var(--knitoutjs-muted);
+		font: italic 15px var(--knitoutjs-serif, Georgia, serif);
+		pointer-events: none;
+	}
+
+	/* what the needle under the pointer does, or how to find out */
+	& .kniterate-status {
+		flex: none;
+		padding: 3px 8px;
+		overflow: hidden;
+		border-top: 1px solid var(--knitoutjs-line-soft);
+		background: var(--knitoutjs-chrome);
+		color: var(--knitoutjs-chrome-ink);
+		font-size: 11px;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&.is-hint {
+			color: var(--knitoutjs-muted);
+		}
+	}
+
+	& .kniterate-error {
+		flex: none;
+		padding: 4px 8px;
+		border-top: 1px solid var(--knitoutjs-danger);
+		background: color-mix(in oklab, var(--knitoutjs-danger) 12%, var(--knitoutjs-sheet));
+		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		white-space: pre-wrap;
+		cursor: pointer;
+	}
+
+	& .kniterate-probe {
+		position: absolute;
+		width: 0;
+		height: 0;
+		overflow: hidden;
+	}
+
+	& [hidden].kniterate-empty,
+	& [hidden].kniterate-error,
+	& [hidden].kniterate-warnings {
+		display: none;
+	}
+}

@@ -21,6 +21,16 @@ export function textHash(text) {
   return (hash >>> 0).toString(36);
 }
 
+// download some text as a file
+export function saveFile(text, filename) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 // a module worker, from a script that may be on another origin: a dev
 // server's frame (?lattice-frame=). a worker can't be started from another
 // origin's script, but a blob of this origin's can import it (with cors)
@@ -93,6 +103,14 @@ export const TOOLS = {
     position: 2,
     extensions: ["k"],
     load: () => import("./visualizer.js"),
+  },
+  kniterate: {
+    id: "kniterate",
+    name: "kniterate",
+    title: "the passes this .k makes on a Kniterate, drawn the way its editor draws them",
+    position: 3,
+    extensions: ["k"],
+    load: () => import("./kniterate.js"),
   },
   editor: {
     id: "editor",

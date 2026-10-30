@@ -1,5 +1,5 @@
 import {convertKnitout} from "./vendor/knitout-to-kcode.js"
-import {docText, moduleWorker} from "./files.js"
+import {docText, moduleWorker, saveFile} from "./files.js"
 import {parseSource, highlighter} from "./stitch-source.js"
 
 const STYLESHEET = new URL("./visualizer.css", import.meta.url).href
@@ -21,15 +21,6 @@ function annotateKnitout(text) {
 			return op.trim() ? `${op};!source:k${k}` : line
 		})
 		.join("\n")
-}
-
-function saveFile(text, filename) {
-	const url = URL.createObjectURL(new Blob([text], {type: "text/plain"}))
-	const link = document.createElement("a")
-	link.href = url
-	link.download = filename
-	link.click()
-	URL.revokeObjectURL(url)
 }
 
 function button(className, text, onClick) {
