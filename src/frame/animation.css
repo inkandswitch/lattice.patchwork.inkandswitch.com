@@ -1,0 +1,235 @@
+.knitoutjs-editor-tool {
+	&.knitout-animation {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+		width: 100%;
+		height: 100%;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		background: var(--knitoutjs-sheet);
+		color: var(--knitoutjs-ink);
+		font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+	}
+
+	& .knitout-animation-bar {
+		display: flex;
+		flex: none;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px;
+		padding: 5px 6px;
+		border-bottom: 1px solid var(--knitoutjs-line-soft);
+		background: var(--knitoutjs-chrome);
+		color: var(--knitoutjs-chrome-ink);
+	}
+
+	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
+	& .knitout-button {
+		padding: 2px 8px;
+		border: 1px solid var(--knitoutjs-line, currentColor);
+		border-radius: 2px;
+		background: var(--knitoutjs-sheet, var(--studio-fill, #fff));
+		box-shadow: 1px 1px 0 var(--knitoutjs-line, currentColor);
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+
+		&:hover {
+			translate: -1px -1px;
+			box-shadow: 2px 2px 0 var(--knitoutjs-line, currentColor);
+		}
+
+		&:active {
+			translate: 1px 1px;
+			box-shadow: none;
+		}
+	}
+
+	/* the one button that does something */
+	& .knitout-animation-play {
+		min-width: 5em;
+		background: var(--knitoutjs-accent);
+		color: var(--knitoutjs-accent-ink);
+	}
+
+	& .knitout-animation-speed {
+		padding: 2px 4px;
+		border: 1px solid var(--knitoutjs-line);
+		border-radius: 2px;
+		background: var(--knitoutjs-sheet);
+		color: inherit;
+		font: inherit;
+	}
+
+	& .knitout-animation-scrubber {
+		flex: 1 1 120px;
+		min-width: 80px;
+		accent-color: var(--knitoutjs-accent);
+	}
+
+	& .knitout-animation-counter {
+		color: var(--knitoutjs-muted);
+		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		font-variant-numeric: tabular-nums;
+	}
+
+	& .knitout-animation-stage {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+
+	& .knitout-animation-svg {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		outline: none;
+		touch-action: none;
+		fill: none;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+
+		/* only the stitches and loops answer the pointer: the needles and
+		   yarns in front of them don't get in the way */
+		& .layer-backBed,
+		& .layer-frontBed,
+		& .layer-yarns,
+		& .layer-sprites {
+			pointer-events: none;
+		}
+
+		/* each column of fabric slides down as a stitch is pulled through */
+		& .column {
+			transition: transform 0.18s ease-out;
+		}
+
+		/* (a <use> is drawn from what it inherits, not from rules on the shape
+		   it copies) */
+		& .rest {
+			stroke: var(--knitoutjs-muted);
+			stroke-width: 0.9;
+
+			&.busy {
+				visibility: hidden;
+			}
+		}
+
+		& .sprite {
+			stroke: var(--knitoutjs-ink);
+			stroke-width: 1.2;
+
+			& .butt {
+				fill: var(--knitoutjs-ink);
+				stroke: none;
+			}
+		}
+
+		& .layer-backLoops {
+			opacity: 0.7;
+		}
+
+		& .stitch path {
+			stroke: var(--yarn);
+			stroke-width: 2.1;
+		}
+
+		& .stitch .extra {
+			stroke-width: 1.2;
+			opacity: 0.7;
+		}
+
+		& .stitch[data-op]:hover path,
+		& .loop[data-op]:hover {
+			stroke: var(--knitoutjs-ink);
+		}
+
+		& .loop {
+			stroke: var(--yarn);
+			stroke-width: 1.7;
+
+			&.tuck {
+				stroke-dasharray: 2 1.2;
+			}
+		}
+
+		& .feeder {
+			& rect {
+				fill: var(--yarn);
+				stroke: var(--knitoutjs-ink);
+				stroke-width: 0.5;
+			}
+
+			& .yarn {
+				stroke: var(--yarn);
+				stroke-width: 1.1;
+			}
+
+			& text {
+				fill: var(--knitoutjs-muted);
+				stroke: none;
+				font: 5px var(--knitoutjs-mono, ui-monospace, monospace);
+			}
+		}
+
+		/* carriers' yarns (--yarn-0…5, set from yarns.js), in the order the
+		   Carriers header names them */
+		& .y0 { --yarn: var(--yarn-0); }
+		& .y1 { --yarn: var(--yarn-1); }
+		& .y2 { --yarn: var(--yarn-2); }
+		& .y3 { --yarn: var(--yarn-3); }
+		& .y4 { --yarn: var(--yarn-4); }
+		& .y5 { --yarn: var(--yarn-5); }
+	}
+
+	/* seeking draws everything afresh: nothing to slide */
+	&.is-instant .knitout-animation-svg {
+		& .column {
+			transition: none;
+		}
+	}
+
+	& .knitout-animation-empty {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		color: var(--knitoutjs-muted);
+		font: italic 15px var(--knitoutjs-serif, Georgia, serif);
+		pointer-events: none;
+	}
+
+	& .knitout-animation-status {
+		flex: none;
+		padding: 3px 8px;
+		overflow: hidden;
+		border-top: 1px solid var(--knitoutjs-line-soft);
+		background: var(--knitoutjs-chrome);
+		color: var(--knitoutjs-chrome-ink);
+		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&.is-hint {
+			color: var(--knitoutjs-muted);
+			font-family: var(--knitoutjs-sans, system-ui, sans-serif);
+		}
+	}
+
+	& .knitout-animation-error {
+		flex: none;
+		padding: 4px 8px;
+		border-top: 1px solid var(--knitoutjs-danger);
+		background: color-mix(in oklab, var(--knitoutjs-danger) 12%, var(--knitoutjs-sheet));
+		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		cursor: pointer;
+	}
+
+	& [hidden].knitout-animation-empty,
+	& [hidden].knitout-animation-error {
+		display: none;
+	}
+}

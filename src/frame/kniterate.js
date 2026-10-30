@@ -1,4 +1,5 @@
 import {docText, moduleWorker, saveFile} from "./files.js"
+import {YARN_TOKENS, YARNS_CHANGED, storedYarns, storeYarn} from "./yarns.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -26,27 +27,6 @@ const NARROW = 3
 // rows shorter than this have no room for words, only arrows and yarns
 const TEXT_ROW = 10
 const RULER = 18
-
-// the colours of carriers 1–6 until someone picks their own: the doc colours
-const YARN_TOKENS = ["cherry", "blue", "stem", "lilac", "peach", "butter"].map(
-	name => `--knitoutjs-${name}`,
-)
-const YARN_STORE = "lattice:kniterate-yarns"
-
-function storedYarns() {
-	try {
-		const yarns = JSON.parse(localStorage.getItem(YARN_STORE))
-		return Array.isArray(yarns) ? yarns : []
-	} catch {
-		return []
-	}
-}
-
-function storeYarns(yarns) {
-	try {
-		localStorage.setItem(YARN_STORE, JSON.stringify(yarns))
-	} catch {}
-}
 
 // "12-14,20" → [12, 13, 14, 20]
 function parseRanges(text) {
@@ -273,10 +253,10 @@ export default function KniterateTool(handle, element, context = {}) {
 			picker.value = toHex(colours.yarns[index])
 			picker.click()
 		})
-		chip.addEventListener("dblclick", () => setYarn(index, null))
+		chip.addEventListener("dblclick", () => storeYarn(index, null))
 		return chip
 	})
-	picker.addEventListener("input", () => picking != null && setYarn(picking, picker.value))
+	picker.addEventListener("input", () => picking != null && storeYarn(picking, picker.value))
 	yarnChips.append(...chips, picker)
 
 	const spacer = document.createElement("div")
@@ -361,20 +341,13 @@ export default function KniterateTool(handle, element, context = {}) {
 		chips.forEach((chip, index) => chip.style.setProperty("--yarn", colours.yarns[index]))
 	}
 
-	function setYarn(index, colour) {
-		const yarns = storedYarns()
-		yarns[index] = colour
-		storeYarns(yarns)
-		readColours()
-		requestDraw()
-	}
-
 	const scheme = matchMedia("(prefers-color-scheme: dark)")
 	function onScheme() {
 		readColours()
 		requestDraw()
 	}
 	scheme.addEventListener("change", onScheme)
+	addEventListener(YARNS_CHANGED, onScheme)
 
 	// ── what's drawn, and from where
 
@@ -1026,6 +999,7 @@ export default function KniterateTool(handle, element, context = {}) {
 		handle.off("change", scheduleUpdate)
 		events.removeEventListener("knitout:highlight-lines", onHighlightLines)
 		scheme.removeEventListener("change", onScheme)
+		removeEventListener(YARNS_CHANGED, onScheme)
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(canvasListeners)) {
 			canvas.removeEventListener(type, listener)

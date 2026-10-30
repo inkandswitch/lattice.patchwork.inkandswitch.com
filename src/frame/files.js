@@ -112,6 +112,14 @@ export const TOOLS = {
     extensions: ["k"],
     load: () => import("./kniterate.js"),
   },
+  animation: {
+    id: "animation",
+    name: "animation",
+    title: "watch this .k being knitted, a stitch at a time, by a little latch needle",
+    position: 4,
+    extensions: ["k"],
+    load: () => import("./animation.js"),
+  },
   editor: {
     id: "editor",
     name: "text",
