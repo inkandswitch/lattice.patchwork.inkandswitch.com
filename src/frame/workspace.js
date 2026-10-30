@@ -5,7 +5,6 @@ import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { getHeads, inspectChange } from "@automerge/automerge";
 import {
-  createDocOfDatatype2,
   getFallbackTool,
   getRegistry,
   getSupportedToolsForType,
@@ -23,6 +22,7 @@ import {
   folderTitle,
   urlFromText,
   textHash,
+  createDocOfDatatype,
 } from "./files.js";
 import {
   findNode,
@@ -143,12 +143,13 @@ function zoneAt(event, rect, band) {
  * draft (a terminal: latticex is on the original). `files` is the files
  * column's sidebar state (sidebars.js), which the frame's top bar toggles.
  * `onShowing` hears the docs the panes are showing ({ url, name }, one per
- * pane), for the inspectors; `onOpen` gets a way to bring a doc forward
+ * pane), for the inspectors; `onOpen` gets a way to bring a doc forward.
+ * `hive` is the frame's keyhive, if the site has one, for new docs
  */
 export function mountWorkspace(
   { workspace, folder },
   element,
-  { repo, baseRepo, files, onShowing, onOpen },
+  { repo, baseRepo, hive, files, onShowing, onOpen },
 ) {
   let root;
   let menu;
@@ -535,7 +536,7 @@ export function mountWorkspace(
   async function newDoc(groupId, type) {
     const datatype = await loadDatatype(type);
     if (!datatype) throw new Error(`no datatype registered for "${type}"`);
-    const handle = await createDocOfDatatype2(datatype, repo);
+    const handle = await createDocOfDatatype(datatype, repo, undefined, hive);
     addFiles([handle.url]);
     openDocs([handle.url], groupId);
   }

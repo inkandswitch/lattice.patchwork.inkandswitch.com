@@ -1,5 +1,6 @@
 // what we know about the files a knitout project shows
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
+import { isKeyhiveDoc } from "@inkandswitch/patchwork-plugins";
 
 export function docText(doc) {
   const content = doc?.content;
@@ -158,4 +159,19 @@ export function newFileDoc(name, content = "") {
     mimeType: extension === "js" ? "text/javascript" : "text/plain",
     content,
   };
+}
+
+// a new doc of one of patchwork's datatypes, like patchwork-plugins'
+// createDocOfDatatype2 but recording only its type: no suggestedImportUrl
+// (or frozenImportUrl) saying where the datatype was loaded from
+export async function createDocOfDatatype(datatype, repo, change, hive) {
+  const handle = await repo.create2();
+  // a keyhive doc gets the sync server's relay, as createDocOfDatatype2 does
+  if (hive && isKeyhiveDoc(handle.url)) await hive.addSyncServerRelayToDoc(handle.url);
+  handle.change((doc) => {
+    datatype.module.init(doc, repo);
+    doc["@patchwork"] = { type: datatype.id };
+    change?.(doc);
+  });
+  return handle;
 }

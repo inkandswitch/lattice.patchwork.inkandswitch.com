@@ -19,18 +19,14 @@ const packageListURL = (
 
 // lattice's frame is a package list of its own, so a dev server's can stand
 // in for the site's: ?lattice-frame=https://some-tunnel.example (or a path to
-// its /packages/lattice/). it's remembered here until ?lattice-frame= with
-// nothing, and the site's own is used whenever the given one doesn't answer
+// its /packages/lattice/). only while it's in the url: without it, it's the
+// site's own. the site's own is used too whenever the given one doesn't answer
 const OWN_FRAME = "/packages/lattice/"
-const FRAME_KEY = "latticeFrameURL"
 
 async function latticeFrame() {
-	const given = new URLSearchParams(location.search).get("lattice-frame")
-	if (given != null) {
-		if (given) localStorage.setItem(FRAME_KEY, given)
-		else localStorage.removeItem(FRAME_KEY)
-	}
-	const wanted = localStorage.getItem(FRAME_KEY)
+	// it used to be remembered here; forget what was
+	localStorage.removeItem("latticeFrameURL")
+	const wanted = new URLSearchParams(location.search).get("lattice-frame")
 	const own = new URL("modules.json", new URL(OWN_FRAME, location.href)).href
 	if (!wanted) return own
 	const base = new URL(wanted, location.href)

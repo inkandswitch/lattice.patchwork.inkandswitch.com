@@ -263,6 +263,7 @@ export default function LatticeFrameTool(handle, element) {
       const unmountWorkspace = mountWorkspace({ workspace, folder }, area, {
         repo: projectRepo,
         baseRepo: repo,
+        hive: element.hive,
         files,
         onShowing: setShowing,
         onOpen: (open) => (openInWorkspace = open),
@@ -334,7 +335,7 @@ export default function LatticeFrameTool(handle, element) {
         title=${`this frame is ${DEV_FRAME}'s, not this site's (?lattice-frame=). click to go back to the site's own`}
         onClick=${() => {
           const url = new URL(location.href);
-          url.searchParams.set("lattice-frame", "");
+          url.searchParams.delete("lattice-frame");
           location.href = url.href;
         }}
       >
