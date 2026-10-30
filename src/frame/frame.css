@@ -723,6 +723,7 @@
 		display: grid;
 		flex: 1;
 		place-items: center;
+		padding: 16px;
 	}
 
 	& .knitoutjs-empty-card {
@@ -744,6 +745,15 @@
 		display: flex;
 		justify-content: center;
 		gap: 8px;
+	}
+
+	/* a doc's datatype, on a "no tool for this" card */
+	& .knitoutjs-empty-type {
+		padding: 1px 5px;
+		border-radius: var(--knitoutjs-radius);
+		background: var(--knitoutjs-highlighter);
+		color: var(--knitoutjs-ink);
+		font: 11px var(--knitoutjs-mono);
 	}
 
 	& .knitoutjs-empty-notice {
