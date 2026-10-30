@@ -98,6 +98,7 @@
 		& .layer-backBed,
 		& .layer-frontBed,
 		& .layer-yarns,
+		& .layer-carriage,
 		& .layer-sprites {
 			pointer-events: none;
 		}
@@ -130,6 +131,33 @@
 
 		& .layer-backLoops {
 			opacity: 0.7;
+		}
+
+		/* the back bed's fabric, seen through the front's */
+		& .layer-backFabric {
+			opacity: 0.4;
+		}
+
+		& .carriage {
+			& .body {
+				fill: color-mix(in oklab, var(--knitoutjs-chrome) 70%, var(--knitoutjs-ink));
+				stroke: var(--knitoutjs-ink);
+				stroke-width: 0.8;
+			}
+
+			& .handle {
+				fill: var(--knitoutjs-ink);
+			}
+
+			& .cam {
+				stroke: var(--knitoutjs-ink);
+				stroke-width: 1.2;
+			}
+
+			& .arrow {
+				stroke: var(--knitoutjs-chrome);
+				stroke-width: 1.4;
+			}
 		}
 
 		& .stitch path {

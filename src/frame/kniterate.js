@@ -1,5 +1,5 @@
 import {docText, moduleWorker, saveFile} from "./files.js"
-import {YARN_TOKENS, YARNS_CHANGED, storedYarns, storeYarn} from "./yarns.js"
+import {YARNS, YARNS_CHANGED, storeYarn, yarnColours} from "./yarns.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -243,7 +243,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	picker.type = "color"
 	picker.hidden = true
 	let picking = null
-	const chips = YARN_TOKENS.map((_, index) => {
+	const chips = YARNS.map((_, index) => {
 		const chip = document.createElement("button")
 		chip.className = "kniterate-yarn"
 		chip.textContent = String(index + 1)
@@ -326,7 +326,6 @@ export default function KniterateTool(handle, element, context = {}) {
 
 	let colours = null
 	function readColours() {
-		const chosen = storedYarns()
 		colours = {
 			sheet: resolve("var(--knitoutjs-sheet)"),
 			ink: resolve("var(--knitoutjs-ink)"),
@@ -336,7 +335,7 @@ export default function KniterateTool(handle, element, context = {}) {
 			highlight: resolve("var(--knitoutjs-highlighter)"),
 			accent: resolve("var(--knitoutjs-accent)"),
 			mono: getComputedStyle(root).getPropertyValue("--knitoutjs-mono").trim() || "monospace",
-			yarns: YARN_TOKENS.map((token, index) => chosen[index] || resolve(`var(${token})`)),
+			yarns: yarnColours(),
 		}
 		chips.forEach((chip, index) => chip.style.setProperty("--yarn", colours.yarns[index]))
 	}

@@ -8,10 +8,11 @@ const root = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
 	// `pnpm dev --tunnel` reaches this server through a cloudflare quick
-	// tunnel, which vite's host check would otherwise turn away
+	// tunnel, which vite's host check would otherwise turn away. cloudflared
+	// dials localhost over ipv4, and vite might otherwise listen on ::1 alone
 	server:
 		process.env.LATTICE_TUNNEL === "1"
-			? {allowedHosts: [".trycloudflare.com"]}
+			? {host: "127.0.0.1", allowedHosts: [".trycloudflare.com"]}
 			: undefined,
 	plugins: [
 		environment(),

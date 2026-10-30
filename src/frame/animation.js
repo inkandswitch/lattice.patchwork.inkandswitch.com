@@ -1,4 +1,5 @@
 import {docText} from "./files.js"
+import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
@@ -16,12 +17,20 @@ const NEEDLE = 20
 const REACH = 15
 const FEEDER = -3
 const FABRIC_TOP = 30
-const TOP = -36
+// the carriage rides above the back bed's needles, CARRIAGE wide
+const CARRIAGE_Y = -48
+const CARRIAGE = 90
+const TOP = -56
+// needles either side of the knitting: room for the carriage to run out and
+// turn
+const MARGIN = Math.ceil(OVERRUN + CARRIAGE / COL / 2)
 // how much fabric each needle keeps on the page
 const KEEP = 240
 
 // how long each op takes, in steps (a stitch is one)
 const DURATIONS = {knit: 1, tuck: 1, split: 1, drop: 0.6, miss: 0.35, rack: 0.6}
+// and turning the carriage round at the end of a pass: shunk-shunk
+const TURN = 1.4
 const SPEEDS = [
 	{name: "slow", perSecond: 1.5},
 	{name: "walk", perSecond: 5},
@@ -49,178 +58,6 @@ function button(text, title, onClick) {
 	element.title = title
 	element.addEventListener("click", onClick)
 	return element
-}
-
-// ── reading the knitout
-
-const NEEDLE_RE = /^(f|b|fs|bs)(-?\d+)$/
-
-function needleOf(token) {
-	const match = NEEDLE_RE.exec(token ?? "")
-	if (!match) throw `"${token}" isn't a needle`
-	const bed = match[1]
-	return {bed, back: bed[0] === "b", n: Number(match[2]), key: token}
-}
-
-// every op in a .k, as {kind, dir, needle, to, carriers, rack, kLine, jsLine,
-// text}, with the carriers it names (in the order the header gives them) and
-// the needles it uses
-export function readKnitout(text) {
-	const ops = []
-	const carriers = []
-	const problems = []
-	let min = Infinity
-	let max = -Infinity
-	const use = needle => {
-		if (needle.n < min) min = needle.n
-		if (needle.n > max) max = needle.n
-	}
-	const yarns = names =>
-		names.map(name => {
-			if (!carriers.includes(name)) carriers.push(name)
-			return name
-		})
-
-	text.split("\n").forEach((raw, index) => {
-		const kLine = index + 1
-		const header = raw.match(/^;;Carriers:\s*(.*)$/)
-		if (header) {
-			yarns(header[1].trim().split(/\s+/).filter(Boolean))
-			return
-		}
-		const semi = raw.indexOf(";")
-		const opText = (semi === -1 ? raw : raw.slice(0, semi)).trim()
-		if (!opText) return
-		const source = raw.match(/;!source:(-?\d+)/)
-		const [name, ...args] = opText.split(/\s+/)
-		const op = {kLine, jsLine: source ? Number(source[1]) : null, text: opText, carriers: []}
-		try {
-			if (name === "knit" || name === "tuck" || name === "miss") {
-				op.kind = name
-				op.dir = args[0]
-				op.needle = needleOf(args[1])
-				op.carriers = yarns(args.slice(2))
-			} else if (name === "drop" || name === "amiss") {
-				op.kind = name === "drop" ? "drop" : "tuck"
-				op.dir = "+"
-				op.needle = needleOf(args[0])
-			} else if (name === "split") {
-				op.kind = "split"
-				op.dir = args[0]
-				op.needle = needleOf(args[1])
-				op.to = needleOf(args[2])
-				op.carriers = yarns(args.slice(3))
-			} else if (name === "xfer") {
-				op.kind = "split"
-				op.dir = "+"
-				op.needle = needleOf(args[0])
-				op.to = needleOf(args[1])
-			} else if (name === "in" || name === "inhook") {
-				op.kind = "in"
-				op.carriers = yarns(args)
-			} else if (name === "out" || name === "outhook") {
-				op.kind = "out"
-				op.carriers = yarns(args)
-			} else if (name === "rack") {
-				op.kind = "rack"
-				op.rack = Number(args[0])
-				if (!Number.isFinite(op.rack)) throw `"${args[0]}" isn't a racking`
-			} else {
-				// stitch, pause, releasehook, x-…: nothing to see
-				op.kind = "other"
-			}
-		} catch (problem) {
-			problems.push({line: kLine, text: String(problem)})
-			return
-		}
-		if (op.kind === "knit" || op.kind === "tuck" || op.kind === "split") {
-			if (op.dir !== "+" && op.dir !== "-") {
-				problems.push({line: kLine, text: `"${op.dir}" isn't a direction`})
-				return
-			}
-		}
-		if (op.needle) use(op.needle)
-		if (op.to) use(op.to)
-		ops.push(op)
-	})
-	return {ops, carriers, problems, range: min > max ? [0, 20] : [min, max]}
-}
-
-// ── the machine: what's on each needle, the fabric under each, and where the
-//    yarns are. ops change it; the page follows
-
-function newMachine() {
-	return {
-		held: new Map(), // needle key → {needle, loops: [{yarn, op, tuck}]}
-		columns: new Map(), // n → [{yarn, back, extra, op}]
-		carriers: new Map(), // name → {x, hang (a needle key), active}
-		rack: 0,
-	}
-}
-
-function heldOn(machine, needle) {
-	let held = machine.held.get(needle.key)
-	if (!held) machine.held.set(needle.key, (held = {needle, loops: []}))
-	return held
-}
-
-// where a needle is, across the bed, in needles from the front bed's 0
-function across(machine, needle) {
-	return needle.back ? needle.n + machine.rack : needle.n
-}
-
-// do op `index` to the machine: what it changed, as {touched: [needle keys],
-// stitches: [{n, stitch}], rack: bool}
-function apply(machine, op, index, yarnOf) {
-	const change = {touched: [], stitches: [], rack: false}
-	const move = (needle, dir) => {
-		for (const name of op.carriers) {
-			const carrier = machine.carriers.get(name) ?? {active: true}
-			carrier.x = across(machine, needle) + (dir === "-" ? -0.5 : 0.5)
-			carrier.hang = needle.key
-			carrier.active = true
-			machine.carriers.set(name, carrier)
-		}
-	}
-	const fresh = () =>
-		op.carriers.length ? [{yarn: yarnOf(op.carriers[0]), op: index, tuck: op.kind === "tuck"}] : []
-
-	if (op.kind === "knit" || op.kind === "drop") {
-		const held = heldOn(machine, op.needle)
-		if (held.loops.length) {
-			const [first] = held.loops
-			const stitch = {yarn: first.yarn, back: op.needle.back, extra: held.loops.length - 1, op: first.op}
-			const column = machine.columns.get(op.needle.n) ?? []
-			column.push(stitch)
-			machine.columns.set(op.needle.n, column)
-			change.stitches.push({n: op.needle.n, stitch})
-		}
-		held.loops = fresh()
-		change.touched.push(op.needle.key)
-		move(op.needle, op.dir)
-	} else if (op.kind === "tuck") {
-		const held = heldOn(machine, op.needle)
-		held.loops.push(...fresh())
-		change.touched.push(op.needle.key)
-		move(op.needle, op.dir)
-	} else if (op.kind === "split") {
-		const from = heldOn(machine, op.needle)
-		const to = heldOn(machine, op.to)
-		to.loops.push(...from.loops)
-		from.loops = fresh()
-		change.touched.push(op.needle.key, op.to.key)
-		move(op.needle, op.dir)
-	} else if (op.kind === "miss") {
-		move(op.needle, op.dir)
-	} else if (op.kind === "in") {
-		for (const name of op.carriers) machine.carriers.set(name, {x: null, hang: null, active: true})
-	} else if (op.kind === "out") {
-		for (const name of op.carriers) machine.carriers.delete(name)
-	} else if (op.kind === "rack") {
-		machine.rack = op.rack
-		change.rack = true
-	}
-	return change
 }
 
 /**
@@ -305,7 +142,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	svg("path", {d: "M0 7.5 L-2.4 3.2", class: "latch"}, needleShape)
 
 	const layers = {}
-	for (const name of ["backBed", "backLoops", "fabric", "frontLoops", "frontBed", "yarns", "sprites"]) {
+	for (const name of [
+		"backBed",
+		"backFabric",
+		"backLoops",
+		"fabric",
+		"frontLoops",
+		"frontBed",
+		"yarns",
+		"carriage",
+		"sprites",
+	]) {
 		layers[name] = svg("g", {class: `layer-${name}`}, picture)
 	}
 	// the needle that's moving (and, for a transfer, the one it gives to),
@@ -319,6 +166,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		return {element: sprite, latch}
 	})
 	const travelling = svg("path", {class: "loop travelling", visibility: "hidden"}, layers.sprites)
+
+	// the carriage: its cams push the needles up as it passes over them
+	const carriage = svg("g", {class: "carriage", visibility: "hidden"}, layers.carriage)
+	const carriageBody = svg("g", {}, carriage)
+	svg("rect", {x: -CARRIAGE / 2, y: CARRIAGE_Y, width: CARRIAGE, height: 16, rx: 2.5, class: "body"}, carriageBody)
+	svg("rect", {x: -14, y: CARRIAGE_Y - 5, width: 28, height: 5, rx: 1.5, class: "handle"}, carriageBody)
+	svg("path", {d: `M-16 ${CARRIAGE_Y + 16} L0 ${CARRIAGE_Y + 22} L16 ${CARRIAGE_Y + 16}`, class: "cam"}, carriageBody)
+	const carriageArrow = svg("path", {class: "arrow"}, carriageBody)
 
 	const empty = document.createElement("div")
 	empty.className = "knitout-animation-empty"
@@ -345,6 +200,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// ── state
 
 	let knitout = {ops: [], carriers: [], problems: [], range: [0, 20]}
+	let track = [] // the carriage's run, op by op
 	let machine = newMachine()
 	let index = 0 // the next op to do
 	let progress = 0 // how far through it, 0–1
@@ -355,7 +211,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// the page's side of the machine
 	const restNeedles = new Map() // needle key → <use>
 	const loopElements = new Map() // needle key → <g>
-	const columnElements = new Map() // n → {group, count}
+	const columnElements = new Map() // column key → {group, count, n}
 	const feeders = new Map() // carrier name → {group, yarn}
 
 	// ── drawing what's still
@@ -411,26 +267,28 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		return group
 	}
 
-	function columnFor(n) {
-		let column = columnElements.get(n)
+	// the back bed's fabric hangs behind the front's: a tube's far side, a
+	// jacquard's backing
+	function columnFor(key, n, back) {
+		let column = columnElements.get(key)
 		if (!column) {
-			const group = svg("g", {class: "column"}, layers.fabric)
-			column = {group, count: 0}
-			columnElements.set(n, column)
+			const group = svg("g", {class: "column"}, back ? layers.backFabric : layers.fabric)
+			column = {group, count: 0, n}
+			columnElements.set(key, column)
 		}
 		return column
 	}
 
-	function placeColumn(n, column) {
-		column.group.style.transform = `translate(${n * COL}px, ${FABRIC_TOP + column.count * ROW}px)`
+	function placeColumn(column) {
+		column.group.style.transform = `translate(${column.n * COL}px, ${FABRIC_TOP + column.count * ROW}px)`
 	}
 
-	function addStitch(n, stitch) {
-		const column = columnFor(n)
+	function addStitch({key, n, back, stitch}) {
+		const column = columnFor(key, n, back)
 		column.group.appendChild(stitchElement(stitch, column.count))
 		column.count++
 		if (column.group.childElementCount > KEEP) column.group.firstElementChild.remove()
-		placeColumn(n, column)
+		placeColumn(column)
 	}
 
 	function drawRack() {
@@ -444,7 +302,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		layers.frontBed.replaceChildren()
 		restNeedles.clear()
 		const [min, max] = knitout.range
-		for (let n = min - 4; n <= max + 4; n++) {
+		for (let n = min - MARGIN; n <= max + MARGIN; n++) {
 			for (const back of [false, true]) {
 				const key = (back ? "b" : "f") + n
 				const transform = back
@@ -464,18 +322,19 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function drawAll() {
 		root.classList.add("is-instant")
 		layers.fabric.replaceChildren()
+		layers.backFabric.replaceChildren()
 		layers.backLoops.replaceChildren()
 		layers.frontLoops.replaceChildren()
 		columnElements.clear()
 		loopElements.clear()
-		for (const [n, stitches] of machine.columns) {
-			const column = columnFor(n)
+		for (const [key, {n, back, stitches}] of machine.columns) {
+			const column = columnFor(key, n, back)
 			const from = Math.max(0, stitches.length - KEEP)
 			for (let k = from; k < stitches.length; k++) {
 				column.group.appendChild(stitchElement(stitches[k], k))
 			}
 			column.count = stitches.length
-			placeColumn(n, column)
+			placeColumn(column)
 		}
 		for (const key of machine.held.keys()) drawHeld(key)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
@@ -512,7 +371,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		travelling.setAttribute("visibility", "hidden")
 
 		const op = progress > 0 ? knitout.ops[index] : null
-		const t = progress
+		// the carriage turns round first, if it has to, then the needles go
+		const turning = op ? turnOf(index) / durationOf(index) : 0
+		const t = turning ? clamp01((progress - turning) / (1 - turning)) : progress
+		drawCarriage(op, turning, t)
 		let caught = null // where the moving needle's hook has the yarn
 		let carrierX = null
 
@@ -561,6 +423,39 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		drawYarns(op, t, carrierX, caught)
 	}
 
+	// the carriage, where the last op left it, or on its way to the next: out
+	// past the end of the pass, a jolt as it turns, and back
+	function drawCarriage(op, turning, t) {
+		const at = op ? track[index] : track[index - 1]
+		if (!at) {
+			carriage.setAttribute("visibility", "hidden")
+			return
+		}
+		let x = at.x
+		let dir = at.dir
+		let jolt = 0
+		if (op) {
+			const start = at.turn ?? at.from
+			if (turning && progress < turning) {
+				const u = progress / turning
+				x = at.from + (at.turn - at.from) * ease(u)
+				dir = at.dir === "+" ? "-" : "+"
+			} else {
+				x = start + (at.x - start) * ease(t / 0.5)
+				// shunk: it knocks against the end of its run, and settles
+				if (turning && t < 0.3) jolt = Math.sin((t / 0.3) * Math.PI * 3) * (1 - t / 0.3) * 1.6
+			}
+		}
+		carriage.setAttribute("transform", `translate(${x * COL + jolt} 0)`)
+		carriageBody.setAttribute("transform", `translate(0 ${-Math.abs(jolt) * 0.6})`)
+		const head = dir === "+" ? 1 : -1
+		carriageArrow.setAttribute(
+			"d",
+			`M${-8 * head} ${CARRIAGE_Y + 8} h${16 * head} m${-4 * head} -3.5 l${4 * head} 3.5 l${-4 * head} 3.5`,
+		)
+		carriage.setAttribute("visibility", "visible")
+	}
+
 	// the carriers in the gap, each with its yarn going down to the last loop
 	// it made (or into the hook that's just caught it)
 	function drawYarns(op, t, toX, caught) {
@@ -590,8 +485,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			feeder.group.querySelector("text").setAttribute("x", fx)
 			let end = null
 			if (moving && caught) end = caught
-			else if (carrier.hang) {
-				const held = machine.held.get(carrier.hang)
+			else {
+				const held = lastLoop(machine, carrier)
 				if (held) end = {x: across(machine, held.needle) * COL, y: hangY(held.needle)}
 			}
 			feeder.yarn.setAttribute(
@@ -615,7 +510,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	function scale() {
 		const [min, max] = knitout.range
-		const fit = size.width / ((max - min + 9) * COL)
+		const fit = size.width / ((max - min + 2 * MARGIN + 1) * COL)
 		return Math.max(1.4, Math.min(4.5, fit)) * camera.zoom
 	}
 
@@ -625,8 +520,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const width = size.width / s
 		const height = size.height / s
 		const [min, max] = knitout.range
-		const left = (min - 4.5) * COL
-		const right = (max + 4.5) * COL
+		const left = (min - MARGIN - 0.5) * COL
+		const right = (max + MARGIN + 0.5) * COL
 		if (right - left <= width) {
 			camera.x = (left + right) / 2 - width / 2
 		} else if (camera.follow) {
@@ -644,15 +539,20 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	let lastTime = 0
 	let lastSent = {line: null, at: 0}
 
-	function durationOf(op) {
-		return DURATIONS[op.kind] ?? 0
+	function turnOf(i) {
+		return track[i]?.turn != null ? TURN : 0
+	}
+
+	function durationOf(i) {
+		const base = DURATIONS[knitout.ops[i].kind] ?? 0
+		return base && base + turnOf(i)
 	}
 
 	// finish the op that's moving, and on to the next
 	function commit() {
 		const op = knitout.ops[index]
 		const change = apply(machine, op, index, yarnOf)
-		for (const {n, stitch} of change.stitches) addStitch(n, stitch)
+		for (const added of change.stitches) addStitch(added)
 		for (const key of change.touched) drawHeld(key)
 		if (change.rack) drawRack()
 		index++
@@ -666,7 +566,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		if (playing) {
 			let budget = dt * speed.perSecond
 			while (budget > 0 && index < knitout.ops.length) {
-				const duration = durationOf(knitout.ops[index])
+				const duration = durationOf(index)
 				if (!duration) {
 					commit()
 					continue
@@ -681,7 +581,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				}
 			}
 			// skip over ops there's nothing to see of, so the next one's ready
-			while (index < knitout.ops.length && progress === 0 && !durationOf(knitout.ops[index])) commit()
+			while (index < knitout.ops.length && progress === 0 && !durationOf(index)) commit()
 			if (index >= knitout.ops.length) pause()
 			followAlong(now)
 		}
@@ -725,7 +625,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const ops = knitout.ops
 		if (progress > 0) commit()
 		else {
-			while (index < ops.length && !durationOf(ops[index])) commit()
+			while (index < ops.length && !durationOf(index)) commit()
 			if (index < ops.length) commit()
 		}
 		requestFrame()
@@ -735,7 +635,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function stepBack() {
 		if (progress > 0) return seek(index)
 		let i = index - 1
-		while (i > 0 && !durationOf(knitout.ops[i])) i--
+		while (i > 0 && !durationOf(i)) i--
 		seek(i)
 	}
 
@@ -809,9 +709,15 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const matrix = picture.getScreenCTM()
 		if (!matrix) return null
 		const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-		const stitches = machine.columns.get(Math.round(at.x / COL))
-		const k = stitches ? stitches.length - 1 - Math.floor((at.y - FABRIC_TOP) / ROW) : -1
-		return k >= 0 && k < stitches.length ? stitches[k].op : null
+		const n = Math.round(at.x / COL)
+		const row = Math.floor((at.y - FABRIC_TOP) / ROW)
+		// the front's fabric first: it's the one in front
+		for (const key of ["f" + n, "b" + n]) {
+			const stitches = machine.columns.get(key)?.stitches
+			const k = stitches ? stitches.length - 1 - row : -1
+			if (k >= 0 && k < stitches.length) return stitches[k].op
+		}
+		return null
 	}
 
 	function onPointerMove(event) {
@@ -854,7 +760,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const ops = knitout.ops
 		for (let step = 0; step < ops.length; step++) {
 			const i = (index + step) % ops.length
-			if (hit(ops[i]) && durationOf(ops[i])) {
+			if (hit(ops[i]) && durationOf(i)) {
 				seek(i + 1)
 				return
 			}
@@ -959,6 +865,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function reread() {
 		const text = docText(handle.doc())
 		knitout = readKnitout(text)
+		track = carriageTrack(knitout.ops)
 		empty.hidden = knitout.ops.length > 0
 		const [problem] = knitout.problems
 		errorBar.hidden = !problem

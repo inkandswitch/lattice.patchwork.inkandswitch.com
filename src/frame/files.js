@@ -120,6 +120,14 @@ export const TOOLS = {
     extensions: ["k"],
     load: () => import("./animation.js"),
   },
+  knit3d: {
+    id: "knit3d",
+    name: "3d",
+    title: "the fabric this .k makes, in 3d, hanging from the needle bed: a tube opens out round",
+    position: 5,
+    extensions: ["k"],
+    load: () => import("./knit3d.js"),
+  },
   editor: {
     id: "editor",
     name: "text",
