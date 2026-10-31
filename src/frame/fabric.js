@@ -35,6 +35,11 @@ const REHANG = 0.5
 // holds it level (so hard); and each loop keeps to the needle it was knitted
 // on (so hard)
 const TAKEDOWN = 0.01
+// and every loop off the needles falls (so far each sweep) as far as its yarn
+// lets it: slack fabric hangs, rather than spreading out every which way. (no
+// further than where it'd hang, though: a long hanging chain of loops, each
+// pulled by the loops below it, would otherwise stretch)
+const GRAVITY = 0.02
 const LEVEL = 0.25
 const KEEP_TO_NEEDLE = 0.03
 // knitting's stiff pulled, and soft pushed: when there's more of it one side
@@ -69,6 +74,8 @@ const CARRIED = 2
 export function newFabric() {
 	const fabric = {
 		count: 0, // loops laid out
+		floor: null, // the lowest each loop falls to: where it'd hang (see hang)
+		hungFor: "", // the needles' loops (and settings) it was worked out for
 		joined: 0, // loops whose joins are read
 		size: 0,
 		xs: null,
@@ -117,6 +124,7 @@ function grow(fabric, size) {
 	fabric.xs = sized(Float32Array, fabric.xs)
 	fabric.ys = sized(Float32Array, fabric.ys)
 	fabric.zs = sized(Float32Array, fabric.zs)
+	fabric.floor = sized(Float32Array, fabric.floor)
 	fabric.flat = sized(Float32Array, fabric.flat)
 	fabric.out = sized(Float32Array, fabric.out)
 	fabric.pinned = sized(Uint8Array, fabric.pinned)
@@ -250,26 +258,35 @@ export function relax(
 		round[i] = loop.back ? -loop.dir : loop.dir
 	}
 	pinned.fill(0, 0, count)
+	let needles = 0
 	for (const held of machine.held.values()) {
 		const x = across(machine, held.needle)
 		const z = held.needle.back ? -gap : gap
 		for (const loop of held.loops) {
 			pinned[loop.id] = 1
+			needles = (needles * 31 + loop.id) | 0
 			xs[loop.id] = x
 			ys[loop.id] = 0
 			zs[loop.id] = z
 		}
+	}
+	// where it'd hang: worked out again when the knitting's changed
+	const hungFor = `${count} ${needles} ${squash}`
+	const rehung = hungFor !== fabric.hungFor
+	const {floor} = fabric
+	if (rehung) {
+		floor.set(hang().subarray(start, count), start)
+		fabric.hungFor = hungFor
 	}
 
 	// (sweeps, however long they take)
 	let least = 0
 	if (!fabric.count || count - fabric.count > COLD) {
 		// hang each loop about where it'll settle (see hang), then settle
-		const hung = hang()
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
 			xs[i] = loops[i].x
-			ys[i] = hung[i]
+			ys[i] = floor[i]
 			zs[i] = plane[i]
 		}
 		least = COLD_SWEEPS
@@ -282,9 +299,8 @@ export function relax(
 		}
 		// and as it's knitted, the takedown draws it down towards where it'd
 		// hang (so it's where it'd be laid out afresh, however it got there)
-		if (count > fabric.count && !grab) {
-			const hung = hang()
-			for (let i = start; i < count; i++) if (!pinned[i]) ys[i] += (hung[i] - ys[i]) * REHANG
+		if (rehung && !grab) {
+			for (let i = start; i < count; i++) if (!pinned[i]) ys[i] += (floor[i] - ys[i]) * REHANG
 		}
 	}
 	fabric.count = count
@@ -364,6 +380,7 @@ export function relax(
 		for (const i of bottom) ys[i] += (level - ys[i]) * LEVEL * hold - TAKEDOWN
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
+			ys[i] = grabbed >= 0 ? ys[i] - GRAVITY : Math.max(floor[i], ys[i] - GRAVITY)
 			xs[i] += (home[i] - xs[i]) * keep
 			zs[i] += (plane[i] - zs[i]) * hold
 			// (and out of its face as far as it's bunched up: which the yarn's
