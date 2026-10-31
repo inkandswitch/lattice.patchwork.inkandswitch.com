@@ -46,6 +46,12 @@ const PRESSURE = 0.03
 const TAUT = 0.04
 // and how stiff a tube's yarn is, round it: it rounds off the folds
 const BEND = 0.15
+// rows bunched closer than a wale apart bulge out of their bed's face, away
+// from the other bed (an ottoman's ridges, a short row's pucker), by so much
+// of how far short they are each sweep; and fabric that isn't bunched
+// flattens back onto its bed, slowly
+const BULGE = 0.3
+const FLATTEN = 0.05
 // yarn that can go slack: a float, or yarn carried up the fabric's side
 const FLOAT = 1
 const CARRIED = 2
@@ -66,6 +72,7 @@ export function newFabric() {
 		home: null, // the x a loop keeps to: its needle's
 		round: null, // which way round a tube it goes: 1 if it's knitted going + on the front, or − on the back
 		plane: null, // the z it keeps to, on the machine: its bed's
+		face: null, // which way out of its bed it bulges: 1 off the front, −1 off the back
 		push: null, // which way out of the fabric's face a loop is
 		outward: null, // and which way it's pushed, inflated
 		prev: null,
@@ -101,6 +108,7 @@ function grow(fabric, size) {
 	fabric.home = sized(Float32Array, fabric.home)
 	fabric.round = sized(Int8Array, fabric.round)
 	fabric.plane = sized(Float32Array, fabric.plane)
+	fabric.face = sized(Int8Array, fabric.face)
 	fabric.push = sized(Float32Array, fabric.push, 3)
 	fabric.outward = sized(Float32Array, fabric.outward, 3)
 	fabric.prev = sized(Int32Array, fabric.prev)
@@ -193,13 +201,14 @@ export function relax(
 	grow(fabric, count)
 	join(fabric, loops, count)
 	const start = firstLoop(machine, limit)
-	const {xs, ys, zs, pinned, home, round, plane, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents} =
+	const {xs, ys, zs, pinned, home, round, plane, face, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents} =
 		fabric
 
 	for (let i = start; i < count; i++) {
 		const loop = loops[i]
 		home[i] = loop.n + (loop.back ? machine.rack : 0)
 		plane[i] = loop.back ? -gap : gap
+		face[i] = loop.back ? -1 : 1
 		round[i] = loop.back ? -loop.dir : loop.dir
 	}
 	pinned.fill(0, 0, count)
@@ -318,7 +327,10 @@ export function relax(
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
 			xs[i] += (home[i] - xs[i]) * keep
-			zs[i] += (plane[i] - zs[i]) * hold
+			// (never into the other bed's fabric, but out of its own face, if
+			// it's bunched up)
+			const out = (zs[i] - plane[i]) * face[i]
+			zs[i] += (plane[i] - zs[i]) * hold * (out > 0 ? FLATTEN : 1)
 		}
 		if (grabbed >= 0) {
 			xs[grabbed] = grab.x
@@ -342,6 +354,11 @@ export function relax(
 						ys[i] -= (above * wc) / (wc + wp)
 						ys[parent] += (above * wp) / (wc + wp)
 					}
+				}
+				// and bunched up, it bulges out
+				if (!held(i)) {
+					const short = WALE - Math.hypot(xs[i] - xs[parent], ys[i] - ys[parent], zs[i] - zs[parent])
+					if (short > 0) zs[i] += face[i] * short * BULGE
 				}
 			}
 			// (yarn can go slack, floating, but not be pulled long; and nor

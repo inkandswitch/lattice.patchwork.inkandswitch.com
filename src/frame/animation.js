@@ -14,6 +14,10 @@ const REPARSE_DELAY = 250
 // the gap between them, and the fabric hangs from FABRIC_TOP down
 const COL = 10
 const ROW = 7
+// the near bed's stitches are drawn in layers, nearest last: so many, each so
+// many needles' pitch deeper than the last
+const DEPTHS = 6
+const DEPTH = 0.4
 const BACK_HOOK = -5
 const FRONT_HOOK = 5
 const NEEDLE = 20
@@ -373,9 +377,11 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		return unsettled
 	}
 
-	// the stitches, on the canvas: the far bed's faint, behind the near one's.
-	// a stitch is a V (or, on the far bed, the arc of its loop's head), batched
-	// into one path for each yarn on each bed
+	// the stitches, on the canvas: the far bed's faint, behind the near one's,
+	// and the near one's nearest last (so a ridge, bulging out, hides the rows
+	// it rises from). a stitch is a V, its legs reaching down to the loops it
+	// was pulled through (or, on the far bed, the arc of its loop's head),
+	// batched into one path for each yarn at each depth
 	function drawFabric() {
 		const ratio = devicePixelRatio || 1
 		const width = Math.round(size.width * ratio)
@@ -399,35 +405,56 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const right = middle + reach + COL
 		const top = camera.y - ROW
 		const bottom = camera.y + size.height / scale() + ROW
-		// [back, front] × yarn, what's pointed at, and (showing strain) how
-		// hard each is pulled
-		const paths = Array.from({length: 16}, () => new Path2D())
+		// the far bed × yarn, the near bed × depth × yarn, what's pointed at,
+		// and (showing strain) how hard each is pulled
+		const marks = 6 + DEPTHS * 6
+		const paths = Array.from({length: marks + 4}, () => new Path2D())
 		const showStrain = strainBox.checked
 		const back = f < 0
-		for (let id = firstLoop(machine); id < loops.length; id++) {
+		const first = firstLoop(machine)
+		for (let id = first; id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
 			if (!(x > left && x < right && y > top && y < bottom)) continue
 			const loop = loops[id]
 			const far = loop.back !== back
 			const pulled = showStrain ? Math.round(strain(fabric, id) * 3) : 0
-			const path = paths[loop.op === pointing ? 12 : pulled ? 12 + pulled : (far ? 0 : 6) + loop.yarn]
+			const near = (back ? -fabric.zs[id] : fabric.zs[id]) / DEPTH
+			const depth = Math.max(0, Math.min(DEPTHS - 1, Math.floor(near)))
+			const path =
+				paths[loop.op === pointing ? marks : pulled ? marks + pulled : far ? loop.yarn : 6 + depth * 6 + loop.yarn]
 			if (far) {
 				path.moveTo(x - 3.8, y + 1.8)
 				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
-			} else {
-				path.moveTo(x - 3.6, y - 3.6)
-				path.lineTo(x - 0.5, y + 3.3)
-				path.moveTo(x + 3.6, y - 3.6)
-				path.lineTo(x + 0.5, y + 3.3)
+				continue
 			}
+			// (pulled long, its legs are long)
+			let footX = x
+			let footY = y + 3.3
+			let shownParents = 0
+			let across = 0
+			let highest = Infinity
+			for (const parent of loop.parents) {
+				if (parent < first || Number.isNaN(xs[parent])) continue
+				across += xs[parent]
+				highest = Math.min(highest, ys[parent])
+				shownParents++
+			}
+			if (shownParents) {
+				footX = across / shownParents
+				footY = Math.max(footY, highest - 3.7)
+			}
+			path.moveTo(x - 3.6, y - 3.6)
+			path.lineTo(footX - 0.5, footY)
+			path.moveTo(x + 3.6, y - 3.6)
+			path.lineTo(footX + 0.5, footY)
 		}
 		c.lineWidth = 2.1
 		c.lineCap = "round"
 		c.lineJoin = "round"
-		for (let at = 0; at < 16; at++) {
-			c.globalAlpha = at < 6 ? 0.4 : at > 12 ? (at - 12) / 3 : 1
-			c.strokeStyle = at === 12 ? colours.ink : at > 12 ? colours.danger : colours.yarns[at % 6]
+		for (let at = 0; at < paths.length; at++) {
+			c.globalAlpha = at < 6 ? 0.4 : at > marks ? (at - marks) / 3 : 1
+			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % 6]
 			c.stroke(paths[at])
 		}
 		c.globalAlpha = 1
