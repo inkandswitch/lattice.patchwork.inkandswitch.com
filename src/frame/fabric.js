@@ -33,7 +33,7 @@ const LEVEL = 0.25
 const KEEP_TO_NEEDLE = 0.03
 // knitting's stiff pulled, and soft pushed: when there's more of it one side
 // than the other (short rows), the extra rows bunch up, as far as SQUASH of a
-// wale apart. a loop on a needle gives (a little) to let fabric go on down
+// wale apart (unless relax is told otherwise: see settings.js). a loop on a needle gives (a little) to let fabric go on down
 const SOFT = 0.15
 export const SQUASH = 0.3
 const GIVE = 0.25
@@ -175,8 +175,14 @@ export function strain(fabric, i) {
 // lay out loops that are new since last time, then settle the fabric some
 // `sweeps` (or till performance.now() is `until`): how far anything moved,
 // at most. `inflate` (0 to 1) lets the fabric off its bed's plane, and blows
-// a tube up round, as if it were worn. only the newest `limit` loops move
-export function relax(fabric, machine, sweeps, {gap = 0, inflate = 0, until = Infinity, limit = LIMIT} = {}) {
+// a tube up round, as if it were worn. only the newest `limit` loops move.
+// bunched rows come as close as `squash` of a wale
+export function relax(
+	fabric,
+	machine,
+	sweeps,
+	{gap = 0, inflate = 0, until = Infinity, limit = LIMIT, squash = SQUASH} = {},
+) {
 	const {loops} = machine
 	const count = loops.length
 	if (count < fabric.count) Object.assign(fabric, newFabric())
@@ -313,7 +319,7 @@ export function relax(fabric, machine, sweeps, {gap = 0, inflate = 0, until = In
 				// (and no further than its yarn reaches)
 				nudge(i, parent, REACH, 1, 0)
 				// and a parent stays below
-				const above = ys[i] - ys[parent] - WALE * SQUASH
+				const above = ys[i] - ys[parent] - WALE * squash
 				if (above < 0) {
 					const wc = pinned[i] ? 0 : 1
 					const wp = pinned[parent] ? 0 : 1

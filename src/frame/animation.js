@@ -1,7 +1,8 @@
-import {checkPanel, checker, located, opOf} from "./checks.js"
+import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
+import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
@@ -199,7 +200,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	root.appendChild(status)
 
 	// will it knit: what the check found, each problem going to its op
-	const checks = checker()
 	const panel = checkPanel(stage, problem => {
 		const op = opOf(problem, knitout.ops)
 		if (op == null) return
@@ -412,7 +412,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// settle the fabric a little more, and show it: whether there's more to do
 	function settle(budget) {
-		const moved = relax(fabric, machine, Infinity, {until: performance.now() + budget})
+		const until = performance.now() + budget * settings.speed
+		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash})
 		return syncFabric(false) || moved > 0.01
 	}
 
@@ -449,7 +450,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		layers.frontLoops.replaceChildren()
 		shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
 		loopElements.clear()
-		relax(fabric, machine, 0)
+		relax(fabric, machine, 0, {squash: settings.squash})
 		syncFabric(true)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
 	}
@@ -954,6 +955,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	}
 
 	strainBox.addEventListener("change", requestFrame)
+	// the machine and yarn, as they're set (see settings.js)
+	let settings = readSettings()
+	function onSettings() {
+		settings = readSettings()
+		requestFrame()
+	}
+	addEventListener(SETTINGS_CHANGED, onSettings)
 	speedSelect.addEventListener("change", () => {
 		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
 	})
@@ -990,7 +998,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		drawBeds()
 		// the knitting stays where it was, if it's still that long
 		seek(Math.min(index, knitout.ops.length))
-		checks.check(text).then(panel.show)
+		panel.check(text)
 	}
 
 	function scheduleReread() {
@@ -1014,7 +1022,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		for (const [type, listener] of Object.entries(pictureListeners)) {
 			picture.removeEventListener(type, listener)
 		}
-		checks.close()
+		removeEventListener(SETTINGS_CHANGED, onSettings)
 		panel.remove()
 		root.remove()
 		link.remove()

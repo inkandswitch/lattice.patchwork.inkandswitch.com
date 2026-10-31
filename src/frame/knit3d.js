@@ -1,7 +1,8 @@
-import {checkPanel, checker, located, opOf} from "./checks.js"
+import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
 import {WALE, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
+import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
@@ -390,7 +391,6 @@ export default function Knit3dTool(handle, element) {
 	stage.appendChild(canvas)
 
 	// will it knit: what the check found, each problem going to its op
-	const checks = checker()
 	const panel = checkPanel(stage, problem => {
 		const op = opOf(problem, knitout.ops)
 		if (op == null) return
@@ -565,8 +565,8 @@ export default function Knit3dTool(handle, element) {
 	// however far they've gone
 	const mesh = new Mesh()
 	function build(budget) {
-		const until = performance.now() + budget
-		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until})
+		const until = performance.now() + budget * settings.speed
+		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until, squash: settings.squash})
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
 		const count = loops.length
@@ -924,6 +924,14 @@ export default function Knit3dTool(handle, element) {
 	})
 	bedBox.addEventListener("change", refresh)
 	strainBox.addEventListener("change", refresh)
+	// the machine and yarn, as they're set (see settings.js)
+	let settings = readSettings()
+	function onSettings() {
+		settings = readSettings()
+		settling = 0
+		refresh()
+	}
+	addEventListener(SETTINGS_CHANGED, onSettings)
 
 	function onColours() {
 		readColours()
@@ -955,7 +963,7 @@ export default function Knit3dTool(handle, element) {
 			roundSlider.value = String(round)
 		}
 		show()
-		checks.check(docText(handle.doc())).then(panel.show)
+		panel.check(docText(handle.doc()))
 		if (!fitted && knitout.ops.length) {
 			fitted = true
 			resetCamera()
@@ -992,7 +1000,7 @@ export default function Knit3dTool(handle, element) {
 		gl.deleteBuffer(instanceBuffer)
 		gl.deleteVertexArray(loopVao)
 		gl.deleteProgram(loopProgram)
-		checks.close()
+		removeEventListener(SETTINGS_CHANGED, onSettings)
 		panel.remove()
 		root.remove()
 		link.remove()

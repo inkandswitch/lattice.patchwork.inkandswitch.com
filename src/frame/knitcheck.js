@@ -9,25 +9,30 @@ import {across, apply, carriageTrack, newMachine, readKnitout} from "./knitting.
 // a problem is {level: "error" (it won't knit) | "risk" (it may go wrong) |
 // "note", text, op, line, count (of the like, together), lastLine}
 
-// the kniterate: 7 gauge (a needle every 25.4 / 7 mm), beds 252 needles
-// wide, carriers 1–6 (as its converter has them)
-export const KNITERATE = {needles: 252, pitch: 25.4 / 7, carriers: ["1", "2", "3", "4", "5", "6"]}
+// the kniterate: beds 252 needles wide, carriers 1–6 (as its converter has
+// them). its gauge (7 needles to the inch, as it comes) is a setting
+export const KNITERATE = {needles: 252, carriers: ["1", "2", "3", "4", "5", "6"]}
 // loops on one needle it mightn't clear, knitting them together
 const STACK = 3
-// needles a float can cross before it's long enough (25 mm or so) to snag
-const FLOAT = 7
+// how long (mm) a float gets before it snags
+const FLOAT = 25
 // rows the needles beside a held loop can knit before there's no room for
 // them: the held loop's yarn reaches REACH down, and the rows beside it,
-// bunched up as tight as they go, are SQUASH of a wale apart. any more and
+// bunched up as tight as they go, are `squash` of a wale apart. any more and
 // they ride up the needles, instead of being pulled down to knit off
-export const HOLD_ROWS = Math.floor(REACH / (SQUASH * WALE))
+export function holdRows(squash = SQUASH) {
+	return Math.floor(REACH / (squash * WALE))
+}
 // needles further apart than they were knitted that yarn across the gap
 // between the beds can be racked before it's pulled tight
 const RACK_SLACK = 2
 // at most so many problems are kept
 const MOST = 300
 
-export function checkKnitout(text, converted = null) {
+// `settings`: {gauge (needles to the inch), squash}, as settings.js has them
+export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH} = {}) {
+	const pitch = 25.4 / gauge // mm
+	const HOLD_ROWS = holdRows(squash)
 	const knitout = readKnitout(text)
 	const {ops} = knitout
 	const problems = []
@@ -193,11 +198,11 @@ export function checkKnitout(text, converted = null) {
 				if (last) {
 					const gap = Math.abs(across(machine, op.needle) - last.x)
 					usage.floats += Math.max(0, gap - 1)
-					if (gap > FLOAT && last.dir === (op.dir === "-" ? -1 : 1)) {
+					if (gap * pitch > FLOAT && last.dir === (op.dir === "-" ? -1 : 1)) {
 						report(
 							"note",
 							i,
-							`carrier ${c} floats ${gap} needles (${Math.round(gap * KNITERATE.pitch)} mm): long floats snag`,
+							`carrier ${c} floats ${gap} needles (${Math.round(gap * pitch)} mm): long floats snag`,
 							"float",
 						)
 					}
@@ -279,10 +284,11 @@ export function checkKnitout(text, converted = null) {
 	return {
 		problems,
 		width,
+		holdRows: HOLD_ROWS,
 		// yarn each carrier uses: its loops, and its floats
 		yarn: [...yarn].map(([carrier, {loops, floats}]) => ({
 			carrier,
-			metres: ((loops * LOOP + floats) * KNITERATE.pitch) / 1000,
+			metres: ((loops * LOOP + floats) * pitch) / 1000,
 		})),
 	}
 }

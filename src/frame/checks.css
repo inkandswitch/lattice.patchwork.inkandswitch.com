@@ -1,13 +1,19 @@
-/* the check's button, in a tool's bar, and its list over the stage */
-.checks-button {
-	&[data-level="error"] {
-		background: var(--knitoutjs-danger);
-		color: var(--knitoutjs-accent-ink);
+/* the check's button, in a tool's bar, and its list over the stage. (white
+   on its colour: as specific as it takes to beat the tools' buttons) */
+.knitout-button.checks-button[data-level] {
+	color: #fff;
+
+	&[data-level="ok"] {
+		background: var(--knitoutjs-stem);
 	}
 
+	&[data-level="error"] {
+		background: var(--knitoutjs-danger);
+	}
+
+	/* (a deeper butter: white reads on it) */
 	&[data-level="risk"] {
-		background: var(--knitoutjs-butter);
-		color: #1c1a17;
+		background: color-mix(in oklab, var(--knitoutjs-butter) 55%, #8a5a00);
 	}
 }
 
@@ -30,6 +36,70 @@
 	&[hidden] {
 		display: none;
 	}
+}
+
+.checks-settings {
+	display: grid;
+	gap: 4px;
+	padding: 8px 10px;
+	border-bottom: 1px solid var(--knitoutjs-line-soft);
+	background: var(--knitoutjs-chrome);
+	color: var(--knitoutjs-chrome-ink);
+	font-size: 11px;
+
+	& input[type="number"] {
+		width: 3.5em;
+		font: inherit;
+	}
+
+	& input[type="range"] {
+		width: 90px;
+		accent-color: var(--knitoutjs-accent);
+	}
+
+	& select {
+		font: inherit;
+	}
+}
+
+.checks-setting {
+	display: grid;
+	grid-template-columns: 5.5em 1fr;
+	align-items: center;
+	gap: 8px;
+}
+
+.checks-setting-name {
+	color: var(--knitoutjs-muted);
+}
+
+.checks-setting-field {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 5px;
+}
+
+.checks-hint {
+	color: var(--knitoutjs-muted);
+}
+
+.checks-reset {
+	justify-self: start;
+	padding: 0;
+	border: none;
+	background: none;
+	color: var(--knitoutjs-muted);
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.checks-results {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 0;
 }
 
 .checks-heading {
@@ -92,6 +162,18 @@
 			background: var(--knitoutjs-line-soft);
 			outline: none;
 		}
+	}
+}
+
+.checks-kind {
+	display: block;
+	color: var(--knitoutjs-muted);
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+
+	[data-level="error"] > .checks-what > & {
+		color: var(--knitoutjs-danger);
 	}
 }
 
