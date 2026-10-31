@@ -31,11 +31,7 @@ const HANG_PASSES = 8
 // (and knitting, it's eased so much of the way to where it'd hang, each time
 // there's more of it)
 const REHANG = 0.5
-// the takedown pulls the fabric's bottom edge down (so far each sweep), and
-// holds it level (so hard); and each loop keeps to the needle it was knitted
-// on (so hard)
-const TAKEDOWN = 0.01
-// and every loop off the needles falls (so far each sweep) as far as its yarn
+// every loop off the needles falls (so far each sweep) as far as its yarn
 // lets it: slack fabric hangs, rather than spreading out every which way. (no
 // further than where it'd hang, though: a long hanging chain of loops, each
 // pulled by the loops below it, would otherwise stretch)
@@ -43,7 +39,7 @@ const GRAVITY = 0.02
 // (pulled further down than that, it springs back up: so much of the way each
 // sweep)
 const SPRING = 0.06
-const LEVEL = 0.25
+// each loop keeps to the needle it was knitted on (so hard)
 const KEEP_TO_NEEDLE = 0.03
 // knitting's stiff pulled, and soft pushed: when there's more of it one side
 // than the other (short rows), the extra rows bunch up, as far as SQUASH of a
@@ -54,6 +50,11 @@ const GIVE = 0.25
 // and each stitch holds its shape across its diagonals: it doesn't shear
 // (so a tube doesn't twist) as easily as a bare grid of wales and rows would
 const SHEAR = 0.5
+// each pass, a stitch moves its corrections' average, times OVERRELAX (more
+// than 1 gets there in fewer passes); and once no stitch moves more than
+// SETTLED, it's settled, and isn't worked on further
+const OVERRELAX = 1.5
+const SETTLED = 0.002
 // how hard an inflated tube's loops push out of its face, each sweep: till
 // the yarn round it is pulled TAUT longer than it is
 const PRESSURE = 0.03
@@ -316,13 +317,23 @@ export function relax(
 	const grabbed = grab && grab.id >= start && grab.id < count && !pinned[grab.id] ? grab.id : -1
 	const held = i => pinned[i] || i === grabbed
 
-	const was = sweeps ? [xs.slice(start, count), ys.slice(start, count), zs.slice(start, count)] : null
-	// pull a and b towards `rest` apart: all the way, or (pulled long) by
-	// `pulled`, or (pushed short) by `pushed`
-	function nudge(a, b, rest, pulled, pushed) {
-		const wa = held(a) ? 0 : 1
-		const wb = held(b) ? 0 : 1
-		if (!wa && !wb) return
+	// each pass, every stitch's corrections are worked out from where its
+	// neighbours are now (and where it is), summed into these, and then they
+	// all move together, by the average of theirs (as Shima Seiki's loop
+	// simulation does: moving each as it's worked out goes unstable)
+	const sx = new Float32Array(count)
+	const sy = new Float32Array(count)
+	const sz = new Float32Array(count)
+	const corrections = new Float32Array(count)
+	// a and b `rest` apart: each moves half the way to it (or, if the other's
+	// held, all of it): all the way pulled long, or `pulled` of it, or
+	// `pushed` of it pushed short. (a correction of nothing still counts, so a
+	// stitch most of whose neighbours are where they should be only moves a
+	// little)
+	function correct(a, b, rest, pulled, pushed) {
+		const freeA = !held(a)
+		const freeB = !held(b)
+		if (!freeA && !freeB) return
 		let dx = xs[b] - xs[a]
 		let dy = ys[b] - ys[a]
 		const dz = zs[b] - zs[a]
@@ -331,27 +342,20 @@ export function relax(
 			dy = -1e-3
 			distance = 1e-3
 		}
-		const give = distance > rest ? pulled : pushed
-		if (!give) return
-		const share = ((distance - rest) / distance / (wa + wb)) * give
-		const mx = dx * share
-		const my = dy * share
-		const mz = dz * share
-		xs[a] += mx * wa
-		ys[a] += my * wa
-		zs[a] += mz * wa
-		xs[b] -= mx * wb
-		ys[b] -= my * wb
-		zs[b] -= mz * wb
-	}
-
-	// the bottom edge: the loops cast on, or the oldest the fabric shows
-	const bottom = []
-	for (let i = start; i < count; i++) {
-		if (pinned[i]) continue
-		let older = firstParent[i + 1] > firstParent[i]
-		for (let p = firstParent[i]; p < firstParent[i + 1]; p++) if (parents[p] >= start) older = false
-		if (loops[i].cast || older) bottom.push(i)
+		const give = (distance > rest ? pulled : pushed) * ((distance - rest) / distance)
+		const share = freeA && freeB ? 0.5 : 1
+		if (freeA) {
+			sx[a] += dx * give * share
+			sy[a] += dy * give * share
+			sz[a] += dz * give * share
+			corrections[a]++
+		}
+		if (freeB) {
+			sx[b] -= dx * give * share
+			sy[b] -= dy * give * share
+			sz[b] -= dz * give * share
+			corrections[b]++
+		}
 	}
 
 	// a tube's yarn goes round it one way, so (yarn along) × (wale up) points
@@ -377,13 +381,21 @@ export function relax(
 	// (off the machine, a tube's wales go round it, not straight down)
 	const keep = KEEP_TO_NEEDLE * hold
 
+	// (and how far each was at the start of the pass: how far it's moved is
+	// where it ends up, not how far it's corrected, then put back)
+	const bx = new Float32Array(count)
+	const by = new Float32Array(count)
+	const bz = new Float32Array(count)
+	let moved = 0
 	sweeps = Math.max(sweeps, least)
 	for (let sweep = 0; sweep < sweeps && (sweep < least || sweep % 4 || performance.now() < until); sweep++) {
-		// the takedown grips the bottom edge, pulls it down, and holds it level
-		// (off the machine, it only hangs)
-		let level = 0
-		for (const i of bottom) level += ys[i] / bottom.length
-		for (const i of bottom) ys[i] += (level - ys[i]) * LEVEL * hold - TAKEDOWN
+		bx.set(xs.subarray(start, count), start)
+		by.set(ys.subarray(start, count), start)
+		bz.set(zs.subarray(start, count), start)
+		// it falls (as far as it'd hang), keeps to its needles and its bed, and
+		// bulges out of its face as far as it's bunched up (which the yarn's
+		// corrections don't see, or the bulge would pull it up, bunching it
+		// more)
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
 			if (grabbed >= 0) ys[i] -= GRAVITY
@@ -391,9 +403,6 @@ export function relax(
 			else ys[i] += (floor[i] - ys[i]) * SPRING
 			xs[i] += (home[i] - xs[i]) * keep
 			zs[i] += (plane[i] - zs[i]) * hold
-			// (and out of its face as far as it's bunched up: which the yarn's
-			// constraints don't see, or the bulge would pull it up, bunching it
-			// more)
 			let short = 0
 			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
 				const parent = parents[p]
@@ -407,50 +416,79 @@ export function relax(
 			ys[grabbed] = grab.y
 		}
 		if (inflate) inflateBy(pressure)
-		// newest first: each row holds up the ones it was pulled through
-		for (let i = count - 1; i >= start; i--) {
+
+		// every stitch's corrections, from its neighbours: the loops it was
+		// pulled through (a wale away), the loops either side of it on its yarn
+		// (a course away), and the stitch diagonally below it (it keeps its
+		// shape: it doesn't shear)
+		sx.fill(0, start, count)
+		sy.fill(0, start, count)
+		sz.fill(0, start, count)
+		corrections.fill(0, start, count)
+		for (let i = start; i < count; i++) {
 			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
 				const parent = parents[p]
-				if (parent < start) continue
-				nudge(i, parent, rest(i), pinned[i] ? GIVE : 1, SOFT)
-				// (and no further than its yarn reaches)
-				nudge(i, parent, REACH, 1, 0)
-				// and a parent stays below
-				const above = ys[i] - ys[parent] - WALE * squash
-				if (above < 0) {
-					const wc = held(i) ? 0 : 1
-					const wp = held(parent) ? 0 : 1
-					if (wc + wp) {
-						ys[i] -= (above * wc) / (wc + wp)
-						ys[parent] += (above * wp) / (wc + wp)
-					}
-				}
+				if (parent >= start) correct(i, parent, rest(i), pinned[i] ? GIVE : 1, SOFT)
 			}
 			// (yarn can go slack, floating, but not be pulled long; and nor
 			// can yarn going across to the other bed, which needn't be a
 			// wale's length from its loop below it, needles away)
 			if (prev[i] >= start && slack[i] !== CARRIED) {
 				const across = loops[i].back !== loops[prev[i]].back
-				nudge(i, prev[i], reach(i), 1, slack[i] || across ? 0 : 1)
+				correct(i, prev[i], reach(i), 1, slack[i] || across ? 0 : 1)
 			}
 			const beside = diagonal[i]
 			if (beside >= start && prev[i] >= start) {
 				const below = parents[firstParent[i]]
-				nudge(i, beside, span[i], (pinned[i] ? GIVE : 1) * SHEAR, SOFT * SHEAR)
-				nudge(prev[i], below, span[i], (pinned[prev[i]] ? GIVE : 1) * SHEAR, SOFT * SHEAR)
+				correct(i, beside, span[i], (pinned[i] ? GIVE : 1) * SHEAR, SOFT * SHEAR)
+				correct(prev[i], below, span[i], (pinned[prev[i]] ? GIVE : 1) * SHEAR, SOFT * SHEAR)
 			}
 		}
-	}
-	let moved = 0
-	if (was) {
 		for (let i = start; i < count; i++) {
-			moved = Math.max(
-				moved,
-				Math.abs(xs[i] - was[0][i - start]),
-				Math.abs(ys[i] - was[1][i - start]),
-				Math.abs(zs[i] - was[2][i - start]),
-			)
+			if (!corrections[i]) continue
+			const share = OVERRELAX / corrections[i]
+			xs[i] += sx[i] * share
+			ys[i] += sy[i] * share
+			zs[i] += sz[i] * share
 		}
+
+		// and then what can't be: a loop further from the loops it was pulled
+		// through than its yarn reaches, or closer to the needles than the
+		// rows it's below can bunch
+		for (let i = count - 1; i >= start; i--) {
+			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
+				const parent = parents[p]
+				if (parent < start) continue
+				const wc = held(i) ? 0 : 1
+				const wp = held(parent) ? 0 : 1
+				if (!(wc + wp)) continue
+				const dx = xs[parent] - xs[i]
+				const dy = ys[parent] - ys[i]
+				const dz = zs[parent] - zs[i]
+				const distance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+				if (distance > REACH) {
+					const share = (distance - REACH) / distance / (wc + wp)
+					xs[i] += dx * share * wc
+					ys[i] += dy * share * wc
+					zs[i] += dz * share * wc
+					xs[parent] -= dx * share * wp
+					ys[parent] -= dy * share * wp
+					zs[parent] -= dz * share * wp
+				}
+				const above = ys[i] - ys[parent] - WALE * squash
+				if (above < 0) {
+					ys[i] -= (above * wc) / (wc + wp)
+					ys[parent] += (above * wp) / (wc + wp)
+				}
+			}
+		}
+		let most = 0
+		for (let i = start; i < count; i++) {
+			most = Math.max(most, Math.abs(xs[i] - bx[i]), Math.abs(ys[i] - by[i]), Math.abs(zs[i] - bz[i]))
+		}
+		moved = Math.max(moved, most)
+		// (settled: no further)
+		if (sweep >= least && most < SETTLED) break
 	}
 	for (let i = start; i < count; i++) {
 		if (pinned[i]) out[i] = 0

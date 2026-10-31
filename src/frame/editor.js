@@ -7,6 +7,7 @@ import { knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docColour, docText, fileExtension } from "./files.js";
 import { runInto } from "./run.js";
 import { builderOf, setBuild } from "./builds.js";
+import { icon } from "./icons.js";
 
 const AUTO_RUN_DELAY = 600;
 
@@ -307,7 +308,7 @@ export default function KnitoutEditorTool(handle, element, context) {
             title="go to this line"
             onClick=${() => run.goToLine(run.status().line)}
           >
-            ⚠ line ${() => run.status().line}:
+            ${icon("warning")} line ${() => run.status().line}:
           </button>
         <//>
         ${() =>

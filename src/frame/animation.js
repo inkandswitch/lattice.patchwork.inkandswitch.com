@@ -4,6 +4,7 @@ import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {icon} from "./icons.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
 const SVG = "http://www.w3.org/2000/svg"
@@ -79,6 +80,15 @@ function button(text, title, onClick) {
 	return element
 }
 
+// a button that's only a picture: its name's for screen readers, its title
+// for everyone else
+function iconButton(name, label, title, onClick) {
+	const element = button("", title, onClick)
+	element.append(icon(name))
+	element.setAttribute("aria-label", label)
+	return element
+}
+
 /**
  * the knitting of a .k, played out stitch by stitch on a little machine:
  * a latch needle comes up, catches the yarn from its carrier in its hook, and
@@ -110,7 +120,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	bar.className = "knitout-animation-bar"
 	root.appendChild(bar)
 
-	const playButton = button("play", "play the knitting (space)", () => (playing ? pause() : play()))
+	const playButton = button("", "play the knitting (space)", () => (playing ? pause() : play()))
+	playButton.append(icon("play"), " play")
 	playButton.classList.add("knitout-animation-play")
 	const speedSelect = document.createElement("select")
 	speedSelect.className = "knitout-animation-speed"
@@ -137,16 +148,16 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const yarns = yarnPicker()
 
 	bar.append(
-		button("restart", "back to the start, before the first stitch", () => {
+		iconButton("restart", "restart", "back to the start, before the first stitch", () => {
 			pause()
 			seek(0)
 		}),
-		button("back", "undo the last op (←)", () => {
+		iconButton("back", "back", "undo the last op (←)", () => {
 			pause()
 			stepBack()
 		}),
 		playButton,
-		button("step", "do the next op (→)", () => {
+		iconButton("step", "step", "do the next op (→)", () => {
 			pause()
 			stepOnce()
 		}),
@@ -871,13 +882,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		if (index >= knitout.ops.length) seek(0)
 		playing = true
 		camera.follow = true
-		playButton.textContent = "pause"
+		playButton.replaceChildren(icon("pause"), " pause")
 		requestFrame()
 	}
 
 	function pause() {
 		playing = false
-		playButton.textContent = "play"
+		playButton.replaceChildren(icon("play"), " play")
 		requestFrame()
 	}
 

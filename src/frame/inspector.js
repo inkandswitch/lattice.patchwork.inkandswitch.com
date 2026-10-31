@@ -1,6 +1,7 @@
 import { createSignal, For } from "solid-js";
 import html from "solid-js/html";
 import { remember, remembered } from "./sidebars.js";
+import { icon } from "./icons.js";
 
 const DRAG_TYPE = "application/x-lattice-inspector";
 const ORDER_KEY = "lattice:inspector:order";
@@ -88,7 +89,7 @@ export function Inspector(props) {
         }}
         onDragEnd=${() => setDropAt(null)}
       >
-        <span class="lattice-inspector-chevron" aria-hidden="true">›</span>
+        <span class="lattice-inspector-chevron" aria-hidden="true">${icon("chevron-right", 10)}</span>
         ${section.name}
       </button>
       <div class="lattice-inspector-body" hidden=${() => !open()}>${section.render()}</div>

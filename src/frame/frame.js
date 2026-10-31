@@ -8,6 +8,7 @@ import { mountWorkspace } from "./workspace.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
 import { Resizer, remember, remembered, sidebarState } from "./sidebars.js";
+import { icon } from "./icons.js";
 
 // frame.css too, for its menus, before any workspace has brought it
 const STYLESHEETS = ["./frame.css", "./shell.css"].map(
@@ -525,9 +526,10 @@ export default function LatticeFrameTool(handle, element) {
         <button
           class="lattice-icon-button"
           title="a new project, or a folder by its url"
+          aria-label="a new project, or a folder by its url"
           onClick=${openHomeMenu}
         >
-          +
+          ${icon("plus", 14)}
         </button>
       </div>
       <div class="lattice-tree-children">

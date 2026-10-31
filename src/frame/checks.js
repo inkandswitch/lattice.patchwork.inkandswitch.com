@@ -1,4 +1,5 @@
 import {moduleWorker} from "./files.js"
+import {icon} from "./icons.js"
 import {KNITERATE, holdRows} from "./knitcheck.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
 
@@ -210,8 +211,9 @@ export function checkPanel(stage, onPick) {
 				: "nothing here should trouble a kniterate"
 		const close = document.createElement("button")
 		close.className = "checks-close"
-		close.textContent = "×"
+		close.append(icon("close", 14))
 		close.title = "close"
+		close.setAttribute("aria-label", "close")
 		close.addEventListener("click", () => (panel.hidden = true))
 		const facts = document.createElement("div")
 		facts.className = "checks-facts"

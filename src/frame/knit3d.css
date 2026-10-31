@@ -48,10 +48,11 @@
 		}
 	}
 
+	/* (white on black: the ink and the page swapped) */
 	& .knit3d-play {
 		min-width: 5em;
-		background: var(--knitoutjs-accent);
-		color: var(--knitoutjs-accent-ink);
+		background: var(--knitoutjs-ink);
+		color: var(--knitoutjs-sheet);
 	}
 
 	& .knit3d-select {

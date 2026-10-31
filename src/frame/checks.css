@@ -129,6 +129,10 @@
 	color: var(--knitoutjs-muted);
 	font: 16px/1 var(--knitoutjs-sans, system-ui, sans-serif);
 	cursor: pointer;
+
+	&:hover {
+		color: var(--knitoutjs-ink);
+	}
 }
 
 .checks-list {

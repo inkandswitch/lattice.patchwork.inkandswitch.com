@@ -362,7 +362,9 @@
 
 	/* shown on hover, or while it's asking to be pressed again */
 	& .lattice-file-remove {
+		display: inline-grid;
 		flex: none;
+		place-items: center;
 		visibility: hidden;
 		margin-right: 6px;
 		padding: 0 5px;
@@ -470,7 +472,8 @@
 	}
 
 	& .lattice-inspector-chevron {
-		display: inline-block;
+		display: inline-grid;
+		place-items: center;
 		transition: transform var(--studio-transition-fast, 0.1s ease);
 	}
 	& [data-open] > .lattice-inspector-heading .lattice-inspector-chevron {

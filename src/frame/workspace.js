@@ -40,6 +40,7 @@ import {
 } from "./layout.js";
 import defaultSource from "./default-source.js";
 import { Resizer } from "./sidebars.js";
+import { icon } from "./icons.js";
 import { builds, setBuild } from "./builds.js";
 
 const STYLESHEET = new URL("./frame.css", import.meta.url).href;
@@ -1036,17 +1037,18 @@ export function mountWorkspace(
         }}
       >
         ${() => toolName(panel)}
-        <span aria-hidden="true">▾</span>
+        ${icon("chevron-down", 10)}
       </button>
       <button
         class="knitoutjs-close"
         title="close"
+        aria-label="close"
         onClick=${(event) => {
           event.stopPropagation();
           updateLayout((tree) => removePanel(tree, panel.id));
         }}
       >
-        ×
+        ${icon("close", 12)}
       </button>
     </div>`;
   }
@@ -1141,7 +1143,8 @@ export function mountWorkspace(
                 title=${() => `${build().message ?? ""}\nshow the .js, at that line`}
                 onClick=${() => showError(info.source, panel.id)}
               >
-                ${() => (build().line != null ? `⚠ error on line ${build().line}` : "⚠ error")}
+                ${icon("warning")}
+                ${() => (build().line != null ? `error on line ${build().line}` : "error")}
               </button>`;
             case "stale":
               return html`out of date —
@@ -1276,16 +1279,7 @@ export function mountWorkspace(
             aria-label=${`open it with ${tool.name} in a new tab`}
             onClick=${() => openInNewTab(tool)}
           >
-            <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-              <path
-                d="M9 2.5h4.5V7M13.5 2.5 7 9M11.5 9.5v3.5a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5h3.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            ${icon("open-new", 12)}
           </button>
         </div>`}
       <//>
@@ -1420,9 +1414,10 @@ export function mountWorkspace(
         <button
           class="lattice-icon-button"
           title="a new file, or open one (hold alt for more)"
+          aria-label="a new file, or open one"
           onClick=${(event) => openMenu(event, null)}
         >
-          +
+          ${icon("plus", 14)}
         </button>
       </header>
       <${For}
@@ -1478,7 +1473,7 @@ export function mountWorkspace(
                 : `remove it from ${projectName()} (the doc itself stays)`}
             onClick=${() => askToRemove(file.url)}
           >
-            ${() => (removing() === file.url ? "remove?" : "×")}
+            ${() => (removing() === file.url ? "remove?" : icon("close", 12))}
           </button>`}
         </div>`}
       <//>

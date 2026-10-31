@@ -4,6 +4,7 @@ import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {icon} from "./icons.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250
@@ -335,7 +336,8 @@ export default function Knit3dTool(handle, element) {
 	bar.className = "knit3d-bar"
 	root.appendChild(bar)
 
-	const playButton = button("play", "watch the fabric grow", () => (playing ? pause() : play()))
+	const playButton = button("", "watch the fabric grow", () => (playing ? pause() : play()))
+	playButton.append(icon("play"), " play")
 	playButton.classList.add("knit3d-play")
 	const speedSelect = document.createElement("select")
 	speedSelect.className = "knit3d-select"
@@ -860,13 +862,13 @@ export default function Knit3dTool(handle, element) {
 		if (upTo >= knitout.ops.length) upTo = 0
 		playhead = upTo
 		playing = true
-		playButton.textContent = "pause"
+		playButton.replaceChildren(icon("pause"), " pause")
 		refresh()
 	}
 
 	function pause() {
 		playing = false
-		playButton.textContent = "play"
+		playButton.replaceChildren(icon("play"), " play")
 	}
 
 	// ── pointer and wheel

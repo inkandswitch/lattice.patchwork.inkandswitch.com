@@ -1,5 +1,6 @@
 import {StateEffect, StateField} from "@codemirror/state"
 import {EditorView, Decoration, ViewPlugin, WidgetType} from "@codemirror/view"
+import {icon} from "./icons.js"
 
 const setHoverLine = StateEffect.define()
 
@@ -47,7 +48,7 @@ class ErrorMessage extends WidgetType {
 	toDOM() {
 		const span = document.createElement("span")
 		span.className = "cm-knitout-error-message"
-		span.textContent = `⚠ ${this.message}`
+		span.append(icon("warning"), ` ${this.message}`)
 		return span
 	}
 }
