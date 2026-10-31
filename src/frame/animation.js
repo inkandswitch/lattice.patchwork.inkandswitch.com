@@ -3,7 +3,7 @@ import {docText} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
-import {YARNS_CHANGED, yarnColours} from "./yarns.js"
+import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
 const SVG = "http://www.w3.org/2000/svg"
@@ -30,6 +30,8 @@ const MARGIN = Math.ceil(OVERRUN + CARRIAGE / COL / 2)
 // how long the fabric gets to settle each frame (ms), playing or not
 const PLAYING_BUDGET = 5
 const STILL_BUDGET = 10
+// how long turning the machine round takes (s)
+const FLIP_TIME = 0.45
 
 // how long each op takes, in steps (a stitch is one)
 const DURATIONS = {knit: 1, tuck: 1, split: 1, drop: 0.6, miss: 0.35, rack: 0.6}
@@ -72,8 +74,9 @@ function button(text, title, onClick) {
  * the picture is an svg, animated op by op, over a canvas of the fabric. play, step and scrub through it;
  * while it plays, the line being knitted lights up in the editors. point at
  * a stitch to see which line made it (click: find it, double click: put the
- * cursor there). with the animation paused, moving the cursor in an editor
- * winds the knitting to where that line knits
+ * cursor there), or drag it to pull on the fabric. flip it to see it from
+ * behind. with the animation paused, moving the cursor in an editor winds the
+ * knitting to where that line knits
  */
 export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const events = context.events ?? element
@@ -116,6 +119,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const strainBox = document.createElement("input")
 	strainBox.type = "checkbox"
 	strainLabel.append(strainBox, "strain")
+	const flipButton = button("flip", "", () => flip())
+	flipButton.classList.add("knitout-animation-flip")
+	const yarns = yarnPicker()
 
 	bar.append(
 		button("restart", "back to the start, before the first stitch", () => {
@@ -134,7 +140,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		speedSelect,
 		scrubber,
 		counter,
+		flipButton,
 		strainLabel,
+		yarns.element,
 	)
 
 	// ── the picture
@@ -158,17 +166,15 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	svg("path", {d: "M0 3 L0 0.6 Q0 -2 -2 -2 Q-3.6 -2 -3.6 -0.2"}, needleShape)
 	svg("path", {d: "M0 7.5 L-2.4 3.2", class: "latch"}, needleShape)
 
+	// the machine, in its own coordinates: turned round, seen from behind, it's
+	// mirrored about the middle of the view
+	const world = svg("g", {class: "world"}, picture)
+	// back to front, from the front; from behind, the beds go the other way
+	const FROM_FRONT = ["backBed", "backLoops", "frontLoops", "frontBed", "yarns", "carriage", "sprites"]
+	const FROM_BACK = ["frontBed", "frontLoops", "backLoops", "backBed", "yarns", "carriage", "sprites"]
 	const layers = {}
-	for (const name of [
-		"backBed",
-		"backLoops",
-		"frontLoops",
-		"frontBed",
-		"yarns",
-		"carriage",
-		"sprites",
-	]) {
-		layers[name] = svg("g", {class: `layer-${name}`}, picture)
+	for (const name of FROM_FRONT) {
+		layers[name] = svg("g", {class: `layer-${name}`}, world)
 	}
 	// the needle that's moving (and, for a transfer, the one it gives to),
 	// and the loop on its way across
@@ -245,6 +251,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	let progress = 0 // how far through it, 0–1
 	let playing = false
 	let speed = SPEEDS[1]
+	// seen from behind (or turning round to be): how far round it's turned,
+	// 0–1, and so how wide the picture is, 1 to −1
+	let fromBack = false
+	let turned = 0
+	const facing = () => Math.cos(Math.PI * ease(turned))
+	const mirror = () => (facing() < 0 ? -1 : 1)
+	// the loop being pulled on: {id, offset from the pointer, the pointer}
+	let pull = null
 	const yarnOf = name => Math.max(0, knitout.carriers.indexOf(name)) % 6
 
 	// the page's side of the machine
@@ -262,6 +276,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// middle of the stitch it makes
 	const pageX = id => fabric.xs[id] * COL
 	const pageY = id => FABRIC_TOP + (-fabric.ys[id] / WALE - 0.5) * ROW
+	// and back: where a point on the page is, in the fabric
+	const fabricX = x => x / COL
+	const fabricY = y => -((y - FABRIC_TOP) / ROW + 0.5) * WALE
 
 	// a loop held on a needle: its legs go down into the loops it was pulled
 	// through (or, for a tuck, only a little way)
@@ -356,8 +373,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		return unsettled
 	}
 
-	// the stitches, on the canvas: the back bed's faint, behind the front's.
-	// a stitch is a V (or, on the back, the arc of its loop's head), batched
+	// the stitches, on the canvas: the far bed's faint, behind the near one's.
+	// a stitch is a V (or, on the far bed, the arc of its loop's head), batched
 	// into one path for each yarn on each bed
 	function drawFabric() {
 		const ratio = devicePixelRatio || 1
@@ -371,25 +388,31 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		c.setTransform(1, 0, 0, 1, 0, 0)
 		c.clearRect(0, 0, width, height)
 		const s = scale() * ratio
-		c.setTransform(s, 0, 0, s, -camera.x * s, -camera.y * s)
+		// (mirrored about the middle of the view, turned round)
+		const f = facing()
+		const middle = camera.x + size.width / scale() / 2
+		c.setTransform(f * s, 0, 0, s, (middle - f * middle - camera.x) * s, -camera.y * s)
 		const {loops} = machine
 		const {xs, ys} = shown
-		const left = camera.x - COL
-		const right = camera.x + size.width / scale() + COL
+		const reach = size.width / scale() / 2 / Math.max(0.05, Math.abs(f))
+		const left = middle - reach - COL
+		const right = middle + reach + COL
 		const top = camera.y - ROW
 		const bottom = camera.y + size.height / scale() + ROW
 		// [back, front] × yarn, what's pointed at, and (showing strain) how
 		// hard each is pulled
 		const paths = Array.from({length: 16}, () => new Path2D())
 		const showStrain = strainBox.checked
+		const back = f < 0
 		for (let id = firstLoop(machine); id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
 			if (!(x > left && x < right && y > top && y < bottom)) continue
 			const loop = loops[id]
+			const far = loop.back !== back
 			const pulled = showStrain ? Math.round(strain(fabric, id) * 3) : 0
-			const path = paths[loop.op === pointing ? 12 : pulled ? 12 + pulled : (loop.back ? 0 : 6) + loop.yarn]
-			if (loop.back) {
+			const path = paths[loop.op === pointing ? 12 : pulled ? 12 + pulled : (far ? 0 : 6) + loop.yarn]
+			if (far) {
 				path.moveTo(x - 3.8, y + 1.8)
 				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
 			} else {
@@ -413,8 +436,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// settle the fabric a little more, and show it: whether there's more to do
 	function settle(budget) {
 		const until = performance.now() + budget * settings.speed
-		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash})
+		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash, grab: pulledTo()})
 		return syncFabric(false) || moved > 0.01
+	}
+
+	// where the loop being pulled on is held: under the pointer (wherever the
+	// view's moved to)
+	function pulledTo() {
+		if (!pull) return null
+		const at = pointAt(pull.clientX, pull.clientY)
+		if (!at) return null
+		return {id: pull.id, x: fabricX(at.x) + pull.dx, y: fabricY(at.y) + pull.dy}
 	}
 
 	function drawRack() {
@@ -596,7 +628,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const fx = x * COL
 			feeder.group.setAttribute("class", `feeder y${yarnOf(name)}`)
 			feeder.group.querySelector("rect").setAttribute("x", fx - 1.8)
-			feeder.group.querySelector("text").setAttribute("x", fx)
+			// (its name reads the right way round from behind too)
+			feeder.group
+				.querySelector("text")
+				.setAttribute("transform", `translate(${fx} 0) scale(${mirror()} 1)`)
 			let end = null
 			if (moving && caught) end = caught
 			else {
@@ -645,6 +680,40 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			camera.x += (target - camera.x) * Math.min(1, dt * 5)
 		}
 		picture.setAttribute("viewBox", `${camera.x} ${camera.y} ${width} ${height}`)
+		const f = facing()
+		const middle = camera.x + width / 2
+		world.setAttribute(
+			"transform",
+			f === 1 ? "" : `translate(${middle} 0) scale(${f} 1) translate(${-middle} 0)`,
+		)
+	}
+
+	// ── turning it round, to see it from behind
+
+	function flip() {
+		fromBack = !fromBack
+		requestFrame()
+	}
+
+	// turn it a little further round, if it's turning: whether it still is
+	let stacked = null
+	function turnRound(dt) {
+		const target = fromBack ? 1 : 0
+		if (turned !== target) {
+			turned = fromBack ? Math.min(1, turned + dt / FLIP_TIME) : Math.max(0, turned - dt / FLIP_TIME)
+		}
+		// edge on, the beds swap over: the one that was behind's in front now
+		const back = facing() < 0
+		if (stacked !== back) {
+			stacked = back
+			for (const name of back ? FROM_BACK : FROM_FRONT) world.appendChild(layers[name])
+			picture.classList.toggle("is-from-back", back)
+		}
+		flipButton.setAttribute("aria-pressed", String(fromBack))
+		flipButton.title = fromBack
+			? "you're looking at it from behind: turn it back round (f)"
+			: "turn it round, to see it from behind (f)"
+		return turned !== target
 	}
 
 	// ── playing
@@ -698,6 +767,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (index >= knitout.ops.length) pause()
 			followAlong(now)
 		}
+		if (turnRound(dt)) needsFrame = true
 		if (settle(playing ? PLAYING_BUDGET : STILL_BUDGET)) needsFrame = true
 		drawMoving()
 		// at rest, the view goes straight to where it's going
@@ -789,7 +859,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const op = progress > 0 ? knitout.ops[index] : index > 0 ? knitout.ops[index - 1] : null
 		status.textContent = op
 			? describe(op)
-			: "press play to watch it knit · point at a stitch to see what made it · space plays, ← → step"
+			: "press play to watch it knit · point at a stitch to see what made it, drag it to pull · space plays, ← → step, f flips"
 		status.classList.toggle("is-hint", !op)
 	}
 
@@ -807,15 +877,20 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		dispatch("knitout:hover-source", located(handle, op))
 	}
 
-	// the op that made the loop or stitch under the pointer: the one drawn
-	// there, or else the stitch whose cell it's in (the middle of a V is empty)
-	function opUnder(event) {
-		const target = event.target.closest?.("[data-op]")
-		if (target) return Number(target.getAttribute("data-op"))
-		const matrix = picture.getScreenCTM()
+	// a point on the screen, in the machine's coordinates
+	function pointAt(clientX, clientY) {
+		const matrix = world.getScreenCTM()
 		if (!matrix) return null
-		const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-		// the nearest stitch, the front's fabric first: it's the one in front
+		return new DOMPoint(clientX, clientY).matrixTransform(matrix.inverse())
+	}
+
+	// the stitch in the fabric under the pointer: the one whose cell it's in
+	// (the middle of a V is empty)
+	function stitchUnder(event) {
+		const at = pointAt(event.clientX, event.clientY)
+		if (!at) return null
+		// the nearest stitch, the near bed's fabric first: it's the one in front
+		const back = facing() < 0
 		let nearest = null
 		let best = Infinity
 		const {loops} = machine
@@ -823,18 +898,30 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const dx = (at.x - shown.xs[id]) / COL
 			const dy = (at.y - shown.ys[id]) / ROW
 			if (!(Math.abs(dx) < 1 && Math.abs(dy) < 1)) continue
-			const away = Math.hypot(dx, dy) - (loops[id].back ? 0 : 0.2)
+			const away = Math.hypot(dx, dy) - (loops[id].back === back ? 0.2 : 0)
 			if (away < best) {
 				best = away
 				nearest = id
 			}
 		}
-		return best < 0.6 ? machine.loops[nearest].op : null
+		return best < 0.6 ? nearest : null
 	}
+
+	// what's under the pointer: a loop on a needle (just its op), or a stitch
+	// in the fabric (its op, and which it is)
+	function under(event) {
+		const target = event.target.closest?.("[data-op]")
+		if (target) return {op: Number(target.getAttribute("data-op")), stitch: null}
+		const stitch = stitchUnder(event)
+		return {op: stitch == null ? null : machine.loops[stitch].op, stitch}
+	}
+
+	const opUnder = event => under(event).op
 
 	function onPointerMove(event) {
 		if (drag) return onDrag(event)
-		const op = opUnder(event)
+		const {op, stitch} = under(event)
+		picture.classList.toggle("can-pull", stitch != null)
 		if (op === pointing) return
 		pointing = op
 		requestFrame()
@@ -883,20 +970,38 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// ── pointer, wheel and keys
 
+	// dragging a stitch pulls on the fabric (it springs back when it's let
+	// go); dragging anywhere else, or with shift, moves the view
 	let drag = null
 	function onPointerDown(event) {
 		if (event.button !== 0) return
 		picture.setPointerCapture(event.pointerId)
-		drag = {x: event.clientX, y: event.clientY, moved: false, op: opUnder(event)}
+		const {op, stitch} = under(event)
+		drag = {x: event.clientX, y: event.clientY, moved: false, op, stitch: event.shiftKey ? null : stitch}
 	}
 	function onDrag(event) {
 		const dx = event.clientX - drag.x
 		const dy = event.clientY - drag.y
 		if (!drag.moved && Math.hypot(dx, dy) < 4) return
+		if (!drag.moved && drag.stitch != null) {
+			// (held from where it was taken hold of, not by its middle)
+			const at = pointAt(drag.x, drag.y)
+			if (at) {
+				const id = drag.stitch
+				pull = {id, dx: fabric.xs[id] - fabricX(at.x), dy: fabric.ys[id] - fabricY(at.y)}
+				picture.classList.add("is-pulling")
+			}
+		}
 		drag.moved = true
+		if (pull) {
+			pull.clientX = event.clientX
+			pull.clientY = event.clientY
+			requestFrame()
+			return
+		}
 		camera.follow = false
 		const s = scale()
-		camera.x -= dx / s
+		camera.x -= dx / s * mirror()
 		camera.y = Math.max(TOP, camera.y - dy / s)
 		drag.x = event.clientX
 		drag.y = event.clientY
@@ -907,6 +1012,11 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			dispatch("knitout:select-source", located(handle, knitout.ops[drag.op]))
 		}
 		drag = null
+		if (pull) {
+			pull = null
+			picture.classList.remove("is-pulling")
+			requestFrame()
+		}
 	}
 	function onDoubleClick(event) {
 		const op = opUnder(event)
@@ -919,7 +1029,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			camera.zoom = Math.max(0.3, Math.min(6, camera.zoom * Math.exp(-event.deltaY * 0.01)))
 		} else {
 			camera.follow = false
-			camera.x += event.deltaX / s
+			camera.x += event.deltaX / s * mirror()
 			camera.y = Math.max(TOP, camera.y + event.deltaY / s)
 		}
 		requestFrame()
@@ -936,6 +1046,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			event.preventDefault()
 			pause()
 			stepBack()
+		} else if (event.key === "f" && !event.metaKey && !event.ctrlKey && !event.altKey) {
+			event.preventDefault()
+			flip()
 		}
 	}
 
@@ -1017,6 +1130,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		handle.off("change", scheduleReread)
 		events.removeEventListener("knitout:highlight-lines", onHighlightLines)
 		removeEventListener(YARNS_CHANGED, onColours)
+		yarns.destroy()
 		scheme.removeEventListener("change", onColours)
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(pictureListeners)) {

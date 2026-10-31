@@ -1,0 +1,22 @@
+/* one swatch for each carrier, in its yarn's colour (see yarns.js) */
+.yarn-picker {
+	display: flex;
+	gap: 3px;
+}
+
+.yarn-chip {
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid var(--knitoutjs-line, currentColor);
+	border-radius: 50%;
+	background: var(--yarn);
+	color: var(--knitoutjs-sheet, #fff);
+	font: 600 10px var(--knitoutjs-mono, ui-monospace, monospace);
+	cursor: pointer;
+
+	&:hover {
+		translate: 0 -1px;
+		box-shadow: 0 1px 0 var(--knitoutjs-line, currentColor);
+	}
+}

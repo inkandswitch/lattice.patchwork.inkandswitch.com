@@ -29,3 +29,48 @@ export function storeYarn(index, colour) {
 	} catch {}
 	dispatchEvent(new Event(YARNS_CHANGED))
 }
+
+const STYLESHEET = new URL("./yarns.css", import.meta.url).href
+
+// a swatch for each carrier, in its yarn's colour, for a tool's bar: click
+// one to pick its colour, double click for the usual one. `destroy()` stops
+// it listening
+export function yarnPicker() {
+	const element = document.createElement("div")
+	element.className = "yarn-picker"
+
+	const link = document.createElement("link")
+	link.rel = "stylesheet"
+	link.href = STYLESHEET
+
+	const picker = document.createElement("input")
+	picker.type = "color"
+	picker.hidden = true
+	let picking = null
+	const chips = YARNS.map((_, index) => {
+		const chip = document.createElement("button")
+		chip.className = "yarn-chip"
+		chip.textContent = String(index + 1)
+		chip.title = `carrier ${index + 1}: click to pick the colour of its yarn (double click for the usual one)`
+		chip.addEventListener("click", () => {
+			picking = index
+			picker.value = yarnColours()[index]
+			picker.click()
+		})
+		chip.addEventListener("dblclick", () => storeYarn(index, null))
+		return chip
+	})
+	picker.addEventListener("input", () => picking != null && storeYarn(picking, picker.value))
+	element.append(link, ...chips, picker)
+
+	function paint() {
+		yarnColours().forEach((colour, index) => chips[index].style.setProperty("--yarn", colour))
+	}
+	paint()
+	addEventListener(YARNS_CHANGED, paint)
+
+	return {
+		element,
+		destroy: () => removeEventListener(YARNS_CHANGED, paint),
+	}
+}

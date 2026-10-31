@@ -1,6 +1,7 @@
 import {convertKnitout} from "./vendor/knitout-to-kcode.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {parseSource, highlighter} from "./stitch-source.js"
+import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 
 const STYLESHEET = new URL("./visualizer.css", import.meta.url).href
 const WORKER_URL = new URL("./visualizer-worker.js", import.meta.url)
@@ -116,9 +117,9 @@ function workerRenderer(canvas, {onHover, onGoto, onFail}) {
 	}
 
 	return {
-		parse(text, resetView) {
+		parse(text, resetView, yarns) {
 			const id = ++parses
-			worker.postMessage({type: "parse", id, text, resetView})
+			worker.postMessage({type: "parse", id, text, resetView, yarns})
 			return new Promise((resolve, reject) => parsing.set(id, {resolve, reject}))
 		},
 		highlight: lines => worker.postMessage({type: "highlight", lines}),
@@ -141,7 +142,10 @@ async function pageRenderer(canvas, {onHover, onGoto}) {
 	show.onHoverSource = (source, stitch) => onHover(source ?? null, stitch ?? null)
 	show.onDoubleClickSource = source => onGoto(source ?? null)
 	return {
-		parse: (text, resetView) => show.parse(text, false, resetView),
+		parse: (text, resetView, yarns) => {
+			show.yarnColours = yarns
+			return show.parse(text, false, resetView)
+		},
 		highlight: lines => show.setHighlightFn(highlighter(lines)),
 		resetZoom: () => show.resetZoom(),
 		resize: () => show.requestDraw(),
@@ -181,13 +185,12 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	root.appendChild(canvas)
 	resizeObserver.observe(canvas)
 
+	const yarns = yarnPicker()
+	const resetButton = button("knitout-button", "reset zoom", () => renderer?.resetZoom())
+	const exportButton = button("knitout-button", "export kcode", exportKcode)
 	const actions = document.createElement("div")
 	actions.className = "knitout-visualizer-actions"
-	actions.append(
-		button("knitout-button", "reset zoom", () => renderer?.resetZoom()),
-		button("knitout-button", "export kcode", exportKcode),
-	)
-	const [resetButton, exportButton] = actions.children
+	actions.append(yarns.element, resetButton, exportButton)
 	resetButton.title = "fit the whole piece in view again (scroll to zoom, drag to move around)"
 	exportButton.title =
 		"save this as a .kc file: kcode, the format a Kniterate machine reads"
@@ -284,7 +287,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 		empty.hidden = text.trim() !== ""
 		errorBar.hidden = true
 		try {
-			await renderer.parse(annotateKnitout(text), firstDraw)
+			await renderer.parse(annotateKnitout(text), firstDraw, yarnColours())
 		} catch (error) {
 			if (gen !== generation) return
 			errorBar.textContent = String(error)
@@ -345,6 +348,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	root.addEventListener("pointerup", onPointerUp)
 
 	handle.on("change", scheduleDraw)
+	addEventListener(YARNS_CHANGED, scheduleDraw)
 	events.addEventListener("knitout:highlight-lines", onHighlightLines)
 
 	return () => {
@@ -352,6 +356,8 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 		generation++
 		clearTimeout(timer)
 		handle.off("change", scheduleDraw)
+		removeEventListener(YARNS_CHANGED, scheduleDraw)
+		yarns.destroy()
 		events.removeEventListener("knitout:highlight-lines", onHighlightLines)
 		resizeObserver.disconnect()
 		root.removeEventListener("pointerdown", onPointerDown)

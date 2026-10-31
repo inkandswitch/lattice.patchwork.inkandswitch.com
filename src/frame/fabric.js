@@ -176,12 +176,14 @@ export function strain(fabric, i) {
 // `sweeps` (or till performance.now() is `until`): how far anything moved,
 // at most. `inflate` (0 to 1) lets the fabric off its bed's plane, and blows
 // a tube up round, as if it were worn. only the newest `limit` loops move.
-// bunched rows come as close as `squash` of a wale
+// bunched rows come as close as `squash` of a wale. `grab` ({id, x, y}) is a
+// loop someone's pulling on: it's held where they've pulled it to, and the
+// rest of the fabric comes with it
 export function relax(
 	fabric,
 	machine,
 	sweeps,
-	{gap = 0, inflate = 0, until = Infinity, limit = LIMIT, squash = SQUASH} = {},
+	{gap = 0, inflate = 0, until = Infinity, limit = LIMIT, squash = SQUASH, grab = null} = {},
 ) {
 	const {loops} = machine
 	const count = loops.length
@@ -236,12 +238,17 @@ export function relax(
 	}
 	fabric.count = count
 
+	// the loop someone's pulling on, held like a loop on a needle is (but a
+	// loop on a needle is held there, not by whoever's pulling)
+	const grabbed = grab && grab.id >= start && grab.id < count && !pinned[grab.id] ? grab.id : -1
+	const held = i => pinned[i] || i === grabbed
+
 	const was = sweeps ? [xs.slice(start, count), ys.slice(start, count), zs.slice(start, count)] : null
 	// pull a and b towards `rest` apart: all the way, or (pulled long) by
 	// `pulled`, or (pushed short) by `pushed`
 	function nudge(a, b, rest, pulled, pushed) {
-		const wa = pinned[a] ? 0 : 1
-		const wb = pinned[b] ? 0 : 1
+		const wa = held(a) ? 0 : 1
+		const wb = held(b) ? 0 : 1
 		if (!wa && !wb) return
 		let dx = xs[b] - xs[a]
 		let dy = ys[b] - ys[a]
@@ -309,6 +316,10 @@ export function relax(
 			xs[i] += (home[i] - xs[i]) * keep
 			zs[i] += (plane[i] - zs[i]) * hold
 		}
+		if (grabbed >= 0) {
+			xs[grabbed] = grab.x
+			ys[grabbed] = grab.y
+		}
 		if (inflate) inflateBy(pressure)
 		// newest first: each row holds up the ones it was pulled through
 		for (let i = count - 1; i >= start; i--) {
@@ -321,8 +332,8 @@ export function relax(
 				// and a parent stays below
 				const above = ys[i] - ys[parent] - WALE * squash
 				if (above < 0) {
-					const wc = pinned[i] ? 0 : 1
-					const wp = pinned[parent] ? 0 : 1
+					const wc = held(i) ? 0 : 1
+					const wp = held(parent) ? 0 : 1
 					if (wc + wp) {
 						ys[i] -= (above * wc) / (wc + wp)
 						ys[parent] += (above * wp) / (wc + wp)

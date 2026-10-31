@@ -1,19 +1,21 @@
 /* the check's button, in a tool's bar, and its list over the stage. (white
-   on its colour: as specific as it takes to beat the tools' buttons) */
+   on its colour: as specific as it takes to beat the tools' buttons. only
+   advice leaves it as the other buttons are: advice is neither good nor bad) */
 .knitout-button.checks-button[data-level] {
-	color: #fff;
-
 	&[data-level="ok"] {
 		background: var(--knitoutjs-stem);
+		color: #fff;
 	}
 
 	&[data-level="error"] {
 		background: var(--knitoutjs-danger);
+		color: #fff;
 	}
 
 	/* (a deeper butter: white reads on it) */
 	&[data-level="risk"] {
 		background: color-mix(in oklab, var(--knitoutjs-butter) 55%, #8a5a00);
+		color: #fff;
 	}
 }
 

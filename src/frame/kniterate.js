@@ -1,6 +1,6 @@
 import {checkPanel, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
-import {YARNS, YARNS_CHANGED, storeYarn, yarnColours} from "./yarns.js"
+import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -238,27 +238,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	)
 	sides.append(frontButton, rearButton)
 
-	const yarnChips = document.createElement("div")
-	yarnChips.className = "kniterate-yarns"
-	const picker = document.createElement("input")
-	picker.type = "color"
-	picker.hidden = true
-	let picking = null
-	const chips = YARNS.map((_, index) => {
-		const chip = document.createElement("button")
-		chip.className = "kniterate-yarn"
-		chip.textContent = String(index + 1)
-		chip.title = `carrier ${index + 1}: click to pick the colour of its yarn (double click for the usual one)`
-		chip.addEventListener("click", () => {
-			picking = index
-			picker.value = toHex(colours.yarns[index])
-			picker.click()
-		})
-		chip.addEventListener("dblclick", () => storeYarn(index, null))
-		return chip
-	})
-	picker.addEventListener("input", () => picking != null && storeYarn(picking, picker.value))
-	yarnChips.append(...chips, picker)
+	const yarns = yarnPicker()
 
 	const spacer = document.createElement("div")
 	spacer.className = "kniterate-spacer"
@@ -270,7 +250,7 @@ export default function KniterateTool(handle, element, context = {}) {
 
 	bar.append(
 		sides,
-		yarnChips,
+		yarns.element,
 		spacer,
 		warningsBadge,
 		button("reset zoom", "fit the knitting in view again (scroll to move around, pinch or ctrl+scroll to zoom)", () => {
@@ -327,13 +307,6 @@ export default function KniterateTool(handle, element, context = {}) {
 		return getComputedStyle(probe).color
 	}
 
-	function toHex(colour) {
-		const scratch = document.createElement("canvas").getContext("2d")
-		scratch.fillStyle = colour
-		const value = scratch.fillStyle
-		return value.startsWith("#") ? value : "#888888"
-	}
-
 	let colours = null
 	function readColours() {
 		colours = {
@@ -347,7 +320,6 @@ export default function KniterateTool(handle, element, context = {}) {
 			mono: getComputedStyle(root).getPropertyValue("--knitoutjs-mono").trim() || "monospace",
 			yarns: yarnColours(),
 		}
-		chips.forEach((chip, index) => chip.style.setProperty("--yarn", colours.yarns[index]))
 	}
 
 	const scheme = matchMedia("(prefers-color-scheme: dark)")
@@ -1010,6 +982,7 @@ export default function KniterateTool(handle, element, context = {}) {
 		events.removeEventListener("knitout:highlight-lines", onHighlightLines)
 		scheme.removeEventListener("change", onScheme)
 		removeEventListener(YARNS_CHANGED, onScheme)
+		yarns.destroy()
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(canvasListeners)) {
 			canvas.removeEventListener(type, listener)

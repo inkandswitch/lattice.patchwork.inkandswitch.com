@@ -1,9 +1,9 @@
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, newFabric, relax, strain} from "./fabric.js"
+import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
-import {YARNS_CHANGED, yarnColours} from "./yarns.js"
+import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250
@@ -25,8 +25,6 @@ const PLAYING_BUDGET = 6
 const STILL_BUDGET = 14
 // how far below its head a loop's legs start
 const BASE = 1.6 * ROW
-// at most this many stitches are drawn: the newest rows, when there are more
-const BUDGET = 24000
 
 const SPEEDS = [
 	{name: "slow", perSecond: 40},
@@ -369,6 +367,7 @@ export default function Knit3dTool(handle, element) {
 	const strainBox = document.createElement("input")
 	strainBox.type = "checkbox"
 	strainLabel.append(strainBox, "strain")
+	const yarns = yarnPicker()
 
 	bar.append(
 		playButton,
@@ -377,6 +376,7 @@ export default function Knit3dTool(handle, element) {
 		roundLabel,
 		bedLabel,
 		strainLabel,
+		yarns.element,
 		button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () => {
 			resetCamera()
 			draw()
@@ -417,6 +417,7 @@ export default function Knit3dTool(handle, element) {
 	if (!gl) {
 		empty.textContent = "this browser can't draw in 3d (no webgl2)"
 		return () => {
+			yarns.destroy()
 			root.remove()
 			link.remove()
 		}
@@ -570,7 +571,8 @@ export default function Knit3dTool(handle, element) {
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
 		const count = loops.length
-		const start = Math.max(0, count - BUDGET)
+		// (only the loops relax lays out: the newest rows, when there are more)
+		const start = firstLoop(machine)
 		const next = new Int32Array(count).fill(-1)
 		for (let i = start; i < count; i++) {
 			const prev = loops[i].prev
@@ -987,6 +989,7 @@ export default function Knit3dTool(handle, element) {
 		handle.off("change", scheduleReread)
 		scheme.removeEventListener("change", onColours)
 		removeEventListener(YARNS_CHANGED, onColours)
+		yarns.destroy()
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(canvasListeners)) {
 			canvas.removeEventListener(type, listener)
