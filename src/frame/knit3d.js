@@ -1,5 +1,6 @@
+import {checkPanel, checker, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, newFabric, relax} from "./fabric.js"
+import {WALE, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
@@ -361,12 +362,20 @@ export default function Knit3dTool(handle, element) {
 	bedBox.checked = true
 	bedLabel.append(bedBox, "needle bed")
 
+	const strainLabel = document.createElement("label")
+	strainLabel.className = "knit3d-toggle"
+	strainLabel.title = "colour each stitch by how hard it's pulled: red is as long as its yarn reaches (on the machine, that's what can break or drop)"
+	const strainBox = document.createElement("input")
+	strainBox.type = "checkbox"
+	strainLabel.append(strainBox, "strain")
+
 	bar.append(
 		playButton,
 		speedSelect,
 		scrubber,
 		roundLabel,
 		bedLabel,
+		strainLabel,
 		button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () => {
 			resetCamera()
 			draw()
@@ -379,6 +388,20 @@ export default function Knit3dTool(handle, element) {
 	const canvas = document.createElement("canvas")
 	canvas.tabIndex = 0
 	stage.appendChild(canvas)
+
+	// will it knit: what the check found, each problem going to its op
+	const checks = checker()
+	const panel = checkPanel(stage, problem => {
+		const op = opOf(problem, knitout.ops)
+		if (op == null) return
+		pause()
+		upTo = op + 1
+		refresh()
+		element.dispatchEvent(
+			new CustomEvent("knitout:select-source", {detail: located(handle, knitout.ops[op]), bubbles: true, composed: true}),
+		)
+	})
+	bar.appendChild(panel.button)
 
 	const empty = document.createElement("div")
 	empty.className = "knit3d-empty"
@@ -507,6 +530,7 @@ export default function Knit3dTool(handle, element) {
 			bed: [0.3, 0.31, 0.34],
 			carriage: [0.78, 0.76, 0.72],
 			cam: [0.2, 0.2, 0.22],
+			danger: rgb(getComputedStyle(root).getPropertyValue("--knitoutjs-danger").trim() || "#d33a4c"),
 		}
 	}
 
@@ -638,7 +662,11 @@ export default function Knit3dTool(handle, element) {
 				ty = -ty
 				tz = -tz
 			}
-			const colour = palette.yarns[loop.yarn] ?? palette.yarns[0]
+			let colour = palette.yarns[loop.yarn] ?? palette.yarns[0]
+			if (strainBox.checked) {
+				const pulled = strain(fabric, i)
+				colour = colour.map((value, k) => value + (palette.danger[k] - value) * pulled)
+			}
 			const v = instances
 			v[at] = x
 			v[at + 1] = y
@@ -895,6 +923,7 @@ export default function Knit3dTool(handle, element) {
 		refresh()
 	})
 	bedBox.addEventListener("change", refresh)
+	strainBox.addEventListener("change", refresh)
 
 	function onColours() {
 		readColours()
@@ -926,6 +955,7 @@ export default function Knit3dTool(handle, element) {
 			roundSlider.value = String(round)
 		}
 		show()
+		checks.check(docText(handle.doc())).then(panel.show)
 		if (!fitted && knitout.ops.length) {
 			fitted = true
 			resetCamera()
@@ -962,6 +992,8 @@ export default function Knit3dTool(handle, element) {
 		gl.deleteBuffer(instanceBuffer)
 		gl.deleteVertexArray(loopVao)
 		gl.deleteProgram(loopProgram)
+		checks.close()
+		panel.remove()
 		root.remove()
 		link.remove()
 	}

@@ -12,7 +12,14 @@ import {across} from "./knitting.js"
 // are at 0, the fabric hangs below), z out of the front bed (each bed's
 // fabric hangs `gap` either side of the middle)
 
-export const WALE = 0.72
+// the yarn, by Munden's constants for plain knitting, relaxed (courses per
+// unit × loop length ≈ 5.0, wales per unit × loop length ≈ 3.8): a loop
+// takes 3.8 needles' worth of yarn, and its rows are 3.8 / 5.0 of a needle
+// apart. a loop pulled long reaches at most half its yarn, legs straight:
+// any further and the yarn itself is pulled tight
+export const LOOP = 3.8
+export const WALE = LOOP / 5.0
+export const REACH = LOOP / 2
 // only the newest loops move; older ones are where they settled
 const LIMIT = 20000
 // so many new loops at once (a seek) and the fabric's laid out afresh
@@ -28,7 +35,7 @@ const KEEP_TO_NEEDLE = 0.03
 // than the other (short rows), the extra rows bunch up, as far as SQUASH of a
 // wale apart. a loop on a needle gives (a little) to let fabric go on down
 const SOFT = 0.15
-const SQUASH = 0.3
+export const SQUASH = 0.3
 const GIVE = 0.25
 // and each stitch holds its shape across its diagonals: it doesn't shear
 // (so a tube doesn't twist) as easily as a bare grid of wales and rows would
@@ -147,21 +154,35 @@ function join(fabric, loops, count) {
 }
 
 // the loops a fabric shows: the newest LIMIT of them
-export function firstLoop(machine) {
-	return Math.max(0, machine.loops.length - LIMIT)
+export function firstLoop(machine, limit = LIMIT) {
+	return Math.max(0, machine.loops.length - limit)
+}
+
+// how hard loop i is pulled, from 0 (at rest) to 1 (pulled as long as its
+// yarn reaches): by how far it is from the loops it was pulled through
+export function strain(fabric, i) {
+	const {xs, ys, zs, firstParent, parents} = fabric
+	if (i >= fabric.joined) return 0
+	let most = 0
+	for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
+		const parent = parents[p]
+		const distance = Math.hypot(xs[i] - xs[parent], ys[i] - ys[parent], zs[i] - zs[parent])
+		most = Math.max(most, (distance - WALE) / (REACH - WALE))
+	}
+	return Math.min(1, most)
 }
 
 // lay out loops that are new since last time, then settle the fabric some
 // `sweeps` (or till performance.now() is `until`): how far anything moved,
 // at most. `inflate` (0 to 1) lets the fabric off its bed's plane, and blows
-// a tube up round, as if it were worn
-export function relax(fabric, machine, sweeps, {gap = 0, inflate = 0, until = Infinity} = {}) {
+// a tube up round, as if it were worn. only the newest `limit` loops move
+export function relax(fabric, machine, sweeps, {gap = 0, inflate = 0, until = Infinity, limit = LIMIT} = {}) {
 	const {loops} = machine
 	const count = loops.length
 	if (count < fabric.count) Object.assign(fabric, newFabric())
 	grow(fabric, count)
 	join(fabric, loops, count)
-	const start = firstLoop(machine)
+	const start = firstLoop(machine, limit)
 	const {xs, ys, zs, pinned, home, round, plane, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents} =
 		fabric
 
@@ -289,6 +310,8 @@ export function relax(fabric, machine, sweeps, {gap = 0, inflate = 0, until = In
 				const parent = parents[p]
 				if (parent < start) continue
 				nudge(i, parent, WALE, pinned[i] ? GIVE : 1, SOFT)
+				// (and no further than its yarn reaches)
+				nudge(i, parent, REACH, 1, 0)
 				// and a parent stays below
 				const above = ys[i] - ys[parent] - WALE * SQUASH
 				if (above < 0) {

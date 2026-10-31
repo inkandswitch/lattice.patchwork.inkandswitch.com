@@ -70,6 +70,15 @@
 		accent-color: var(--knitoutjs-accent);
 	}
 
+	& .knitout-animation-toggle {
+		display: flex;
+		align-items: center;
+		gap: 3px;
+		color: var(--knitoutjs-muted);
+		font-size: 11px;
+		cursor: pointer;
+	}
+
 	& .knitout-animation-counter {
 		color: var(--knitoutjs-muted);
 		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
@@ -168,6 +177,20 @@
 
 			&.tuck {
 				stroke-dasharray: 2 1.2;
+			}
+
+			/* showing strain: pulled a third, two thirds, all the way to its
+			   yarn's reach */
+			&.strain-1 {
+				stroke: color-mix(in oklab, var(--knitoutjs-danger) 35%, var(--yarn));
+			}
+
+			&.strain-2 {
+				stroke: color-mix(in oklab, var(--knitoutjs-danger) 65%, var(--yarn));
+			}
+
+			&.strain-3 {
+				stroke: var(--knitoutjs-danger);
 			}
 		}
 

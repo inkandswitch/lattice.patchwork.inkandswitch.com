@@ -1,3 +1,4 @@
+import {checkPanel, checker, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {YARNS, YARNS_CHANGED, storeYarn, yarnColours} from "./yarns.js"
 
@@ -287,6 +288,16 @@ export default function KniterateTool(handle, element, context = {}) {
 	canvas.tabIndex = 0
 	stage.appendChild(canvas)
 	const ctx = canvas.getContext("2d")
+
+	// will it knit: what the check found, each problem's line picked in the
+	// editors
+	const checks = checker()
+	const panel = checkPanel(stage, problem => {
+		if (problem.line == null) return
+		const jsLine = jsLinesOf(docText(handle.doc()))[problem.line - 1]
+		dispatch("knitout:select-source", located(handle, {kLine: problem.line, jsLine}))
+	})
+	bar.insertBefore(panel.button, warningsBadge)
 
 	const empty = document.createElement("div")
 	empty.className = "kniterate-empty"
@@ -937,6 +948,7 @@ export default function KniterateTool(handle, element, context = {}) {
 			requestDraw()
 			return
 		}
+		checks.check(text).then(panel.show)
 		const result = await kcode.convert(text, "", {lines: true})
 		if (gen !== generation) return
 		empty.hidden = true
@@ -1004,6 +1016,8 @@ export default function KniterateTool(handle, element, context = {}) {
 			canvas.removeEventListener(type, listener)
 		}
 		kcode.destroy()
+		checks.close()
+		panel.remove()
 		root.remove()
 		link.remove()
 	}

@@ -1,5 +1,6 @@
+import {checkPanel, checker, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax} from "./fabric.js"
+import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
@@ -108,6 +109,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	scrubber.title = "wind the knitting backwards and forwards"
 	const counter = document.createElement("span")
 	counter.className = "knitout-animation-counter"
+	const strainLabel = document.createElement("label")
+	strainLabel.className = "knitout-animation-toggle"
+	strainLabel.title = "colour each stitch by how hard it's pulled: red is as long as its yarn reaches"
+	const strainBox = document.createElement("input")
+	strainBox.type = "checkbox"
+	strainLabel.append(strainBox, "strain")
 
 	bar.append(
 		button("restart", "back to the start, before the first stitch", () => {
@@ -126,6 +133,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		speedSelect,
 		scrubber,
 		counter,
+		strainLabel,
 	)
 
 	// ── the picture
@@ -190,6 +198,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	status.className = "knitout-animation-status"
 	root.appendChild(status)
 
+	// will it knit: what the check found, each problem going to its op
+	const checks = checker()
+	const panel = checkPanel(stage, problem => {
+		const op = opOf(problem, knitout.ops)
+		if (op == null) return
+		pause()
+		seek(op + 1)
+		dispatch("knitout:select-source", located(handle, knitout.ops[op]))
+	})
+	bar.appendChild(panel.button)
+
 	const errorBar = document.createElement("div")
 	errorBar.className = "knitout-animation-error"
 	errorBar.hidden = true
@@ -200,7 +219,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	let colours = {yarns: [], ink: "#000"}
 	function readYarns() {
 		yarnColours().forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
-		colours = {yarns: yarnColours(), ink: getComputedStyle(root).color}
+		const style = getComputedStyle(root)
+		colours = {
+			yarns: yarnColours(),
+			ink: style.color,
+			danger: style.getPropertyValue("--knitoutjs-danger").trim() || "#d33a4c",
+		}
 	}
 	readYarns()
 	function onColours() {
@@ -281,10 +305,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		held.loops.forEach((loop, at) => {
 			const path = group.children[at]
 			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
-			if (pathData.get(path) === d) return
-			pathData.set(path, d)
+			const pulled = strainBox.checked ? Math.round(strain(fabric, loop.id) * 3) : 0
+			const className = `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
+			if (pathData.get(path) === d + className) return
+			pathData.set(path, d + className)
 			path.setAttribute("d", d)
-			path.setAttribute("class", `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}`)
+			path.setAttribute("class", className)
 			path.setAttribute("data-op", loop.op)
 		})
 	}
@@ -352,14 +378,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const right = camera.x + size.width / scale() + COL
 		const top = camera.y - ROW
 		const bottom = camera.y + size.height / scale() + ROW
-		// [back, front] × yarn, and what's pointed at
-		const paths = Array.from({length: 13}, () => new Path2D())
+		// [back, front] × yarn, what's pointed at, and (showing strain) how
+		// hard each is pulled
+		const paths = Array.from({length: 16}, () => new Path2D())
+		const showStrain = strainBox.checked
 		for (let id = firstLoop(machine); id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
 			if (!(x > left && x < right && y > top && y < bottom)) continue
 			const loop = loops[id]
-			const path = paths[loop.op === pointing ? 12 : (loop.back ? 0 : 6) + loop.yarn]
+			const pulled = showStrain ? Math.round(strain(fabric, id) * 3) : 0
+			const path = paths[loop.op === pointing ? 12 : pulled ? 12 + pulled : (loop.back ? 0 : 6) + loop.yarn]
 			if (loop.back) {
 				path.moveTo(x - 3.8, y + 1.8)
 				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
@@ -373,9 +402,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		c.lineWidth = 2.1
 		c.lineCap = "round"
 		c.lineJoin = "round"
-		for (let at = 0; at < 13; at++) {
-			c.globalAlpha = at < 6 ? 0.4 : 1
-			c.strokeStyle = at === 12 ? colours.ink : colours.yarns[at % 6]
+		for (let at = 0; at < 16; at++) {
+			c.globalAlpha = at < 6 ? 0.4 : at > 12 ? (at - 12) / 3 : 1
+			c.strokeStyle = at === 12 ? colours.ink : at > 12 ? colours.danger : colours.yarns[at % 6]
 			c.stroke(paths[at])
 		}
 		c.globalAlpha = 1
@@ -767,16 +796,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		element.dispatchEvent(new CustomEvent(type, {detail, bubbles: true, composed: true}))
 	}
 
-	// every line an op came from, as {url, line}: the .js first, then the .k
-	function located(op) {
-		if (!op) return null
-		const jsUrl = handle.doc()?.knitoutSource
-		const at = []
-		if (op.jsLine != null && jsUrl) at.push({url: jsUrl, line: op.jsLine})
-		at.push({url: handle.url, line: op.kLine})
-		return {...at[0], at}
-	}
-
 	// while it plays, the line being knitted lights up in the editors (not
 	// every op at speed: a few times a second)
 	function followAlong(now) {
@@ -784,7 +803,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const op = opAt(index)
 		if (!op || op.kLine === lastSent.line || now - lastSent.at < 90) return
 		lastSent = {line: op.kLine, at: now}
-		dispatch("knitout:hover-source", located(op))
+		dispatch("knitout:hover-source", located(handle, op))
 	}
 
 	// the op that made the loop or stitch under the pointer: the one drawn
@@ -825,7 +844,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		}
 		status.textContent = describe(knitout.ops[op])
 		status.classList.remove("is-hint")
-		dispatch("knitout:hover-source", located(knitout.ops[op]))
+		dispatch("knitout:hover-source", located(handle, knitout.ops[op]))
 	}
 
 	function onPointerLeave() {
@@ -884,13 +903,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	}
 	function onPointerUp() {
 		if (drag && !drag.moved && drag.op != null) {
-			dispatch("knitout:select-source", located(knitout.ops[drag.op]))
+			dispatch("knitout:select-source", located(handle, knitout.ops[drag.op]))
 		}
 		drag = null
 	}
 	function onDoubleClick(event) {
 		const op = opUnder(event)
-		if (op != null) dispatch("knitout:goto-source", located(knitout.ops[op]))
+		if (op != null) dispatch("knitout:goto-source", located(handle, knitout.ops[op]))
 	}
 	function onWheel(event) {
 		event.preventDefault()
@@ -934,6 +953,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		picture.addEventListener(type, listener, {passive: false})
 	}
 
+	strainBox.addEventListener("change", requestFrame)
 	speedSelect.addEventListener("change", () => {
 		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
 	})
@@ -970,6 +990,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		drawBeds()
 		// the knitting stays where it was, if it's still that long
 		seek(Math.min(index, knitout.ops.length))
+		checks.check(text).then(panel.show)
 	}
 
 	function scheduleReread() {
@@ -993,6 +1014,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		for (const [type, listener] of Object.entries(pictureListeners)) {
 			picture.removeEventListener(type, listener)
 		}
+		checks.close()
+		panel.remove()
 		root.remove()
 		link.remove()
 	}
