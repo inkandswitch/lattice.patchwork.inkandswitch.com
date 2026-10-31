@@ -7,3 +7,5 @@ minimumReleaseAgeExclude:
   - "@automerge/*"
 overrides:
   "@automerge/automerge": 3.4.1
+fetchTimeout: 3600000
+fetchRetries: 5
