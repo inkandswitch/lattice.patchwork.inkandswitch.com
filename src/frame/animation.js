@@ -1,5 +1,5 @@
 import {docText} from "./files.js"
-import {WALE, newFabric, relax} from "./fabric.js"
+import {WALE, firstLoop, newFabric, relax} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
@@ -25,8 +25,9 @@ const TOP = -56
 // needles either side of the knitting: room for the carriage to run out and
 // turn
 const MARGIN = Math.ceil(OVERRUN + CARRIAGE / COL / 2)
-// how many of the newest stitches are on the page
-const KEEP = 8000
+// how long the fabric gets to settle each frame (ms), playing or not
+const PLAYING_BUDGET = 5
+const STILL_BUDGET = 10
 
 // how long each op takes, in steps (a stitch is one)
 const DURATIONS = {knit: 1, tuck: 1, split: 1, drop: 0.6, miss: 0.35, rack: 0.6}
@@ -66,7 +67,7 @@ function button(text, title, onClick) {
  * a latch needle comes up, catches the yarn from its carrier in its hook, and
  * pulls a new loop through the old one, which drops into the fabric below.
  *
- * the picture is an svg, animated op by op. play, step and scrub through it;
+ * the picture is an svg, animated op by op, over a canvas of the fabric. play, step and scrub through it;
  * while it plays, the line being knitted lights up in the editors. point at
  * a stitch to see which line made it (click: find it, double click: put the
  * cursor there). with the animation paused, moving the cursor in an editor
@@ -133,6 +134,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	stage.className = "knitout-animation-stage"
 	root.appendChild(stage)
 
+	// the fabric's thousands of stitches are drawn on a canvas, under the
+	// svg's machine: as svg they'd be far too many elements to move
+	const canvas = document.createElement("canvas")
+	canvas.className = "knitout-animation-fabric"
+	stage.appendChild(canvas)
+	const context2d = canvas.getContext("2d")
 	const picture = svg("svg", {class: "knitout-animation-svg", tabindex: "0"}, stage)
 	const defs = svg("defs", {}, picture)
 	// a latch needle, hook at the origin and pointing up (the back bed's are
@@ -145,9 +152,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const layers = {}
 	for (const name of [
 		"backBed",
-		"backFabric",
 		"backLoops",
-		"fabric",
 		"frontLoops",
 		"frontBed",
 		"yarns",
@@ -192,11 +197,19 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// ── yarn colours: the same as the kniterate tool's
 
+	let colours = {yarns: [], ink: "#000"}
 	function readYarns() {
 		yarnColours().forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
+		colours = {yarns: yarnColours(), ink: getComputedStyle(root).color}
 	}
 	readYarns()
-	addEventListener(YARNS_CHANGED, readYarns)
+	function onColours() {
+		readYarns()
+		requestFrame()
+	}
+	addEventListener(YARNS_CHANGED, onColours)
+	const scheme = matchMedia("(prefers-color-scheme: dark)")
+	scheme.addEventListener("change", onColours)
 
 	// ── state
 
@@ -213,7 +226,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// the page's side of the machine
 	const restNeedles = new Map() // needle key → <use>
 	const loopElements = new Map() // needle key → <g>
-	const stitchElements = new Map() // loop id → {element, x, y}
+	// where each stitch is drawn, easing towards where the fabric's settled
+	// it (NaN: not drawn yet)
+	let shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
+	const pathData = new WeakMap() // a held loop's <path> → its d
 	const feeders = new Map() // carrier name → {group, yarn}
 
 	// ── drawing what's still
@@ -264,71 +280,110 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const hx = across(machine, needle) * COL
 		held.loops.forEach((loop, at) => {
 			const path = group.children[at]
-			path.setAttribute("d", loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop)))
+			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
+			if (pathData.get(path) === d) return
+			pathData.set(path, d)
+			path.setAttribute("d", d)
 			path.setAttribute("class", `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}`)
 			path.setAttribute("data-op", loop.op)
 		})
-	}
-
-	function stitchElement(loop) {
-		const group = svg("g", {class: `stitch y${loop.yarn}`, "data-op": loop.op})
-		if (loop.back) {
-			svg("path", {d: "M-3.8 1.8 Q0 -4.4 3.8 1.8"}, group)
-		} else {
-			svg("path", {d: "M-3.6 -3.6 L-0.5 3.3"}, group)
-			svg("path", {d: "M3.6 -3.6 L0.5 3.3"}, group)
-		}
-		return group
 	}
 
 	// every stitch where the fabric's settled it (easing there, unless
 	// `instant`), and the loops on the needles reaching down to them. whether
 	// anything's still on its way
 	function syncFabric(instant) {
-		const {loops} = machine
-		const start = Math.max(0, loops.length - KEEP)
-		for (const [id, shown] of stitchElements) {
-			if (id < start || id >= loops.length || fabric.pinned[id]) {
-				shown.element.remove()
-				stitchElements.delete(id)
-			}
+		const count = machine.loops.length
+		if (shown.xs.length < count) {
+			const length = Math.max(1024, fabric.xs.length)
+			const grown = {xs: new Float32Array(length).fill(NaN), ys: new Float32Array(length).fill(NaN)}
+			grown.xs.set(shown.xs)
+			grown.ys.set(shown.ys)
+			shown = grown
 		}
+		const {xs, ys} = shown
 		let unsettled = false
-		for (let id = start; id < loops.length; id++) {
-			if (fabric.pinned[id]) continue
+		for (let id = firstLoop(machine); id < count; id++) {
+			if (fabric.pinned[id]) {
+				xs[id] = NaN
+				continue
+			}
 			const x = pageX(id)
 			const y = pageY(id)
-			let shown = stitchElements.get(id)
-			if (!shown) {
-				const loop = loops[id]
-				shown = {element: stitchElement(loop), x: NaN, y: NaN}
-				;(loop.back ? layers.backFabric : layers.fabric).appendChild(shown.element)
-				stitchElements.set(id, shown)
+			if (instant || Number.isNaN(xs[id])) {
+				xs[id] = x
+				ys[id] = y
+				continue
 			}
-			let nx = x
-			let ny = y
-			if (!instant && Number.isFinite(shown.x)) {
-				nx = shown.x + (x - shown.x) * 0.3
-				ny = shown.y + (y - shown.y) * 0.3
-				if (Math.abs(x - nx) > 0.05 || Math.abs(y - ny) > 0.05) unsettled = true
-				else {
-					nx = x
-					ny = y
-				}
-			}
-			if (nx !== shown.x || ny !== shown.y) {
-				shown.x = nx
-				shown.y = ny
-				shown.element.setAttribute("transform", `translate(${nx.toFixed(2)} ${ny.toFixed(2)})`)
+			const nx = xs[id] + (x - xs[id]) * 0.3
+			const ny = ys[id] + (y - ys[id]) * 0.3
+			if (Math.abs(x - nx) > 0.05 || Math.abs(y - ny) > 0.05) {
+				unsettled = true
+				xs[id] = nx
+				ys[id] = ny
+			} else {
+				xs[id] = x
+				ys[id] = y
 			}
 		}
 		for (const key of machine.held.keys()) drawHeld(key)
 		return unsettled
 	}
 
+	// the stitches, on the canvas: the back bed's faint, behind the front's.
+	// a stitch is a V (or, on the back, the arc of its loop's head), batched
+	// into one path for each yarn on each bed
+	function drawFabric() {
+		const ratio = devicePixelRatio || 1
+		const width = Math.round(size.width * ratio)
+		const height = Math.round(size.height * ratio)
+		if (canvas.width !== width || canvas.height !== height) {
+			canvas.width = width
+			canvas.height = height
+		}
+		const c = context2d
+		c.setTransform(1, 0, 0, 1, 0, 0)
+		c.clearRect(0, 0, width, height)
+		const s = scale() * ratio
+		c.setTransform(s, 0, 0, s, -camera.x * s, -camera.y * s)
+		const {loops} = machine
+		const {xs, ys} = shown
+		const left = camera.x - COL
+		const right = camera.x + size.width / scale() + COL
+		const top = camera.y - ROW
+		const bottom = camera.y + size.height / scale() + ROW
+		// [back, front] × yarn, and what's pointed at
+		const paths = Array.from({length: 13}, () => new Path2D())
+		for (let id = firstLoop(machine); id < loops.length; id++) {
+			const x = xs[id]
+			const y = ys[id]
+			if (!(x > left && x < right && y > top && y < bottom)) continue
+			const loop = loops[id]
+			const path = paths[loop.op === pointing ? 12 : (loop.back ? 0 : 6) + loop.yarn]
+			if (loop.back) {
+				path.moveTo(x - 3.8, y + 1.8)
+				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
+			} else {
+				path.moveTo(x - 3.6, y - 3.6)
+				path.lineTo(x - 0.5, y + 3.3)
+				path.moveTo(x + 3.6, y - 3.6)
+				path.lineTo(x + 0.5, y + 3.3)
+			}
+		}
+		c.lineWidth = 2.1
+		c.lineCap = "round"
+		c.lineJoin = "round"
+		for (let at = 0; at < 13; at++) {
+			c.globalAlpha = at < 6 ? 0.4 : 1
+			c.strokeStyle = at === 12 ? colours.ink : colours.yarns[at % 6]
+			c.stroke(paths[at])
+		}
+		c.globalAlpha = 1
+	}
+
 	// settle the fabric a little more, and show it: whether there's more to do
-	function settle(sweeps) {
-		const moved = relax(fabric, machine, sweeps)
+	function settle(budget) {
+		const moved = relax(fabric, machine, Infinity, {until: performance.now() + budget})
 		return syncFabric(false) || moved > 0.01
 	}
 
@@ -361,11 +416,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// everything from the machine as it is: after a seek, or a new .k
 	function drawAll() {
-		layers.fabric.replaceChildren()
-		layers.backFabric.replaceChildren()
 		layers.backLoops.replaceChildren()
 		layers.frontLoops.replaceChildren()
-		stitchElements.clear()
+		shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
 		loopElements.clear()
 		relax(fabric, machine, 0)
 		syncFabric(true)
@@ -615,10 +668,11 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (index >= knitout.ops.length) pause()
 			followAlong(now)
 		}
-		if (settle(playing ? 3 : 6)) needsFrame = true
+		if (settle(playing ? PLAYING_BUDGET : STILL_BUDGET)) needsFrame = true
 		drawMoving()
 		// at rest, the view goes straight to where it's going
 		placeCamera(playing ? dt : 1)
+		drawFabric()
 		showWhere()
 		if (playing || needsFrame) {
 			needsFrame = false
@@ -744,8 +798,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		// the nearest stitch, the front's fabric first: it's the one in front
 		let nearest = null
 		let best = Infinity
-		for (const [id, shown] of stitchElements) {
-			const away = Math.hypot((at.x - shown.x) / COL, (at.y - shown.y) / ROW) - (machine.loops[id].back ? 0 : 0.2)
+		const {loops} = machine
+		for (let id = firstLoop(machine); id < loops.length; id++) {
+			const dx = (at.x - shown.xs[id]) / COL
+			const dy = (at.y - shown.ys[id]) / ROW
+			if (!(Math.abs(dx) < 1 && Math.abs(dy) < 1)) continue
+			const away = Math.hypot(dx, dy) - (loops[id].back ? 0 : 0.2)
 			if (away < best) {
 				best = away
 				nearest = id
@@ -759,6 +817,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const op = opUnder(event)
 		if (op === pointing) return
 		pointing = op
+		requestFrame()
 		if (op == null) {
 			dispatch("knitout:hover-source", {url: null, at: []})
 			showWhere()
@@ -772,6 +831,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function onPointerLeave() {
 		if (pointing == null) return
 		pointing = null
+		requestFrame()
 		dispatch("knitout:hover-source", {url: null, at: []})
 		showWhere()
 	}
@@ -927,7 +987,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		cancelAnimationFrame(frame)
 		handle.off("change", scheduleReread)
 		events.removeEventListener("knitout:highlight-lines", onHighlightLines)
-		removeEventListener(YARNS_CHANGED, readYarns)
+		removeEventListener(YARNS_CHANGED, onColours)
+		scheme.removeEventListener("change", onColours)
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(pictureListeners)) {
 			picture.removeEventListener(type, listener)

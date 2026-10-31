@@ -82,6 +82,14 @@
 		min-height: 0;
 	}
 
+	& .knitout-animation-fabric {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+	}
+
 	& .knitout-animation-svg {
 		position: absolute;
 		inset: 0;
@@ -128,11 +136,6 @@
 			opacity: 0.7;
 		}
 
-		/* the back bed's fabric, seen through the front's */
-		& .layer-backFabric {
-			opacity: 0.4;
-		}
-
 		& .carriage {
 			& .body {
 				fill: color-mix(in oklab, var(--knitoutjs-chrome) 70%, var(--knitoutjs-ink));
@@ -155,17 +158,6 @@
 			}
 		}
 
-		& .stitch path {
-			stroke: var(--yarn);
-			stroke-width: 2.1;
-		}
-
-		& .stitch .extra {
-			stroke-width: 1.2;
-			opacity: 0.7;
-		}
-
-		& .stitch[data-op]:hover path,
 		& .loop[data-op]:hover {
 			stroke: var(--knitoutjs-ink);
 		}

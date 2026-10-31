@@ -11,17 +11,18 @@ const REPARSE_DELAY = 250
 const ROW = WALE
 const YARN = 0.085
 const SIDES = 6
-const COS = Array.from({length: SIDES}, (_, side) => Math.cos((side / SIDES) * Math.PI * 2))
-const SIN = Array.from({length: SIDES}, (_, side) => Math.sin((side / SIDES) * Math.PI * 2))
 const DEPTH = 0.16 // how far a loop's legs come forward of its head
 const GAP = 0.32 // each bed's fabric, either side of the middle
 const NEEDLE = 6 // a needle's length, down its bed
 const SLOPE = Math.SQRT1_2 // the beds lean 45° away from the gap
 const BED_MARGIN = Math.ceil(OVERRUN + 6)
-// frames the fabric gets to settle in, after a jump
-const SETTLE = 30
-// how many rows down a tube takes to open out round
-const OPENING = 14
+// frames the fabric gets to settle in, after a jump; and how long it gets to
+// settle each frame (ms), playing or not
+const SETTLE = 150
+const PLAYING_BUDGET = 6
+const STILL_BUDGET = 14
+// how far below its head a loop's legs start
+const BASE = 1.6 * ROW
 // at most this many stitches are drawn: the newest rows, when there are more
 const BUDGET = 24000
 
@@ -77,6 +78,10 @@ const LOOP_CURVE = (() => {
 	points.push(LOOP[LOOP.length - 1])
 	return points
 })()
+
+// what each loop tells the gpu, three floats apiece
+const INSTANCE = ["head", "along", "up", "face", "reach", "colour"]
+const INSTANCE_FLOATS = INSTANCE.length * 3
 
 function button(text, title, onClick) {
 	const element = document.createElement("button")
@@ -147,79 +152,6 @@ class Mesh {
 			grown.set(this.indices)
 			this.indices = grown
 		}
-	}
-
-	// a yarn along `count` points (x, y, z, one after another in `points`),
-	// round, SIDES sided
-	tube(points, count, radius, colour) {
-		this.reserve(count * SIDES, (count - 1) * SIDES * 6)
-		const v = this.vertices
-		const first = this.vertexCount
-		let at = first * 9
-		for (let i = 0; i < count; i++) {
-			const b = Math.max(0, i - 1) * 3
-			const a = Math.min(count - 1, i + 1) * 3
-			let tx = points[a] - points[b]
-			let ty = points[a + 1] - points[b + 1]
-			let tz = points[a + 2] - points[b + 2]
-			const tl = Math.hypot(tx, ty, tz) || 1
-			tx /= tl
-			ty /= tl
-			tz /= tl
-			// normal = reference × tangent, the reference being z (or x, if the
-			// yarn's going along z)
-			let nx, ny, nz
-			if (Math.abs(tz) < 0.9) {
-				nx = -ty
-				ny = tx
-				nz = 0
-			} else {
-				nx = 0
-				ny = -tz
-				nz = ty
-			}
-			const nl = Math.hypot(nx, ny, nz) || 1
-			nx /= nl
-			ny /= nl
-			nz /= nl
-			const bx = ty * nz - tz * ny
-			const by = tz * nx - tx * nz
-			const bz = tx * ny - ty * nx
-			const px = points[i * 3]
-			const py = points[i * 3 + 1]
-			const pz = points[i * 3 + 2]
-			for (let side = 0; side < SIDES; side++) {
-				const ox = nx * COS[side] + bx * SIN[side]
-				const oy = ny * COS[side] + by * SIN[side]
-				const oz = nz * COS[side] + bz * SIN[side]
-				v[at] = px + ox * radius
-				v[at + 1] = py + oy * radius
-				v[at + 2] = pz + oz * radius
-				v[at + 3] = ox
-				v[at + 4] = oy
-				v[at + 5] = oz
-				v[at + 6] = colour[0]
-				v[at + 7] = colour[1]
-				v[at + 8] = colour[2]
-				at += 9
-			}
-		}
-		this.vertexCount += count * SIDES
-		const indices = this.indices
-		let k = this.indexCount
-		for (let i = 0; i < count - 1; i++) {
-			for (let side = 0; side < SIDES; side++) {
-				const a = first + i * SIDES + side
-				const b = first + i * SIDES + ((side + 1) % SIDES)
-				indices[k++] = a
-				indices[k++] = a + SIDES
-				indices[k++] = b
-				indices[k++] = b
-				indices[k++] = a + SIDES
-				indices[k++] = b + SIDES
-			}
-		}
-		this.indexCount = k
 	}
 
 	// a box at `centre`, its half sizes along three axes
@@ -303,6 +235,44 @@ function looksLikeTube(ops) {
 	return front > 2 && back > 2 && both < (front + back) / 4
 }
 
+// every loop is the same few hundred triangles of yarn, bent to fit where it
+// is: so the gpu has one, and each loop just says where it goes, as
+// instanced attributes: its head; the way along its row, up its wale, and out
+// of its face; how far its legs reach to the loops below; its colour.
+// the vertices are (a point along LOOP_CURVE, a side round the yarn)
+const LOOP_SHADER = `#version 300 es
+in vec2 corner;
+in vec3 head;
+in vec3 along;
+in vec3 up;
+in vec3 face;
+in vec3 reach;
+in vec3 colour;
+uniform vec4 curve[${LOOP_CURVE.length}];
+uniform mat4 viewProjection;
+out vec3 vNormal;
+out vec3 vColour;
+out vec3 vWorld;
+vec3 at(int k) {
+	vec4 c = curve[k];
+	return head + along * c.x + up * (c.y * ${ROW.toFixed(4)} - ${BASE.toFixed(4)}) + face * (c.z * ${DEPTH.toFixed(4)}) + reach * c.w;
+}
+void main() {
+	int k = int(corner.x);
+	vec3 p = at(k);
+	vec3 t = normalize(at(min(k + 1, ${LOOP_CURVE.length - 1})) - at(max(k - 1, 0)));
+	vec3 reference = abs(dot(t, face)) < 0.9 ? face : up;
+	vec3 n = normalize(cross(reference, t));
+	vec3 b = cross(t, n);
+	float angle = corner.y * ${((Math.PI * 2) / SIDES).toFixed(6)};
+	vec3 o = n * cos(angle) + b * sin(angle);
+	vNormal = o;
+	vColour = colour;
+	vWorld = p + o * ${YARN.toFixed(4)};
+	gl_Position = viewProjection * vec4(vWorld, 1.0);
+}`
+
+// the machine: plain triangles
 const VERTEX_SHADER = `#version 300 es
 in vec3 position;
 in vec3 normal;
@@ -375,13 +345,13 @@ export default function Knit3dTool(handle, element) {
 
 	const roundLabel = document.createElement("label")
 	roundLabel.className = "knit3d-round"
-	roundLabel.title = "open the two beds' fabric out into a tube, or lay them flat together"
+	roundLabel.title = "hanging on the machine, each bed's fabric flat; or off it, free to bulge, a tube blown up round as if it were worn"
 	const roundSlider = document.createElement("input")
 	roundSlider.type = "range"
 	roundSlider.min = "0"
 	roundSlider.max = "1"
 	roundSlider.step = "0.01"
-	roundLabel.append("flat", roundSlider, "round")
+	roundLabel.append("on the machine", roundSlider, "worn")
 
 	const bedLabel = document.createElement("label")
 	bedLabel.className = "knit3d-toggle"
@@ -436,15 +406,72 @@ export default function Knit3dTool(handle, element) {
 		if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader))
 		return shader
 	}
-	const program = gl.createProgram()
-	gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX_SHADER))
-	gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT_SHADER))
-	gl.linkProgram(program)
-	if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program))
+	function linkProgram(vertex, fragment) {
+		const program = gl.createProgram()
+		gl.attachShader(program, compile(gl.VERTEX_SHADER, vertex))
+		gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragment))
+		gl.linkProgram(program)
+		if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program))
+		return program
+	}
+	const program = linkProgram(VERTEX_SHADER, FRAGMENT_SHADER)
 	const uniforms = {
 		viewProjection: gl.getUniformLocation(program, "viewProjection"),
 		eye: gl.getUniformLocation(program, "eye"),
 	}
+	const loopProgram = linkProgram(LOOP_SHADER, FRAGMENT_SHADER)
+	const loopUniforms = {
+		viewProjection: gl.getUniformLocation(loopProgram, "viewProjection"),
+		eye: gl.getUniformLocation(loopProgram, "eye"),
+		curve: gl.getUniformLocation(loopProgram, "curve"),
+	}
+
+	// the one loop: its corners, and their triangles
+	const loopVao = gl.createVertexArray()
+	const cornerBuffer = gl.createBuffer()
+	const loopIndexBuffer = gl.createBuffer()
+	const instanceBuffer = gl.createBuffer()
+	const loopIndexCount = (LOOP_CURVE.length - 1) * SIDES * 6
+	{
+		const corners = new Float32Array(LOOP_CURVE.length * SIDES * 2)
+		for (let k = 0; k < LOOP_CURVE.length; k++) {
+			for (let side = 0; side < SIDES; side++) corners.set([k, side], (k * SIDES + side) * 2)
+		}
+		const indices = new Uint16Array(loopIndexCount)
+		let at = 0
+		for (let k = 0; k < LOOP_CURVE.length - 1; k++) {
+			for (let side = 0; side < SIDES; side++) {
+				const a = k * SIDES + side
+				const b = k * SIDES + ((side + 1) % SIDES)
+				indices.set([a, a + SIDES, b, b, a + SIDES, b + SIDES], at)
+				at += 6
+			}
+		}
+		gl.bindVertexArray(loopVao)
+		gl.bindBuffer(gl.ARRAY_BUFFER, cornerBuffer)
+		gl.bufferData(gl.ARRAY_BUFFER, corners, gl.STATIC_DRAW)
+		const corner = gl.getAttribLocation(loopProgram, "corner")
+		gl.enableVertexAttribArray(corner)
+		gl.vertexAttribPointer(corner, 2, gl.FLOAT, false, 0, 0)
+		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, loopIndexBuffer)
+		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW)
+		gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer)
+		for (const [offset, name] of INSTANCE.entries()) {
+			const location = gl.getAttribLocation(loopProgram, name)
+			gl.enableVertexAttribArray(location)
+			gl.vertexAttribPointer(location, 3, gl.FLOAT, false, INSTANCE_FLOATS * 4, offset * 3 * 4)
+			gl.vertexAttribDivisor(location, 1)
+		}
+		gl.bindVertexArray(null)
+		gl.useProgram(loopProgram)
+		gl.uniform4fv(
+			loopUniforms.curve,
+			LOOP_CURVE.flatMap(([x, y, z]) => [x, y, z, y < 1.12 ? 1 - y / 1.12 : 0]),
+		)
+	}
+	let instances = new Float32Array(INSTANCE_FLOATS * 1024)
+	let instanceCount = 0
+
 	const vao = gl.createVertexArray()
 	const vertexBuffer = gl.createBuffer()
 	const indexBuffer = gl.createBuffer()
@@ -506,47 +533,17 @@ export default function Knit3dTool(handle, element) {
 		for (; done < to; done++) apply(machine, knitout.ops[done], done, yarnOf)
 	}
 
-	// where a point on a bed's fabric goes: (s across, y down, z out of its
-	// face) laid flat, or round a tube
-	function placer() {
-		const [lo, hi] = knitout.range
-		const width = hi - lo + 1
-		const radius = width / Math.PI
-		const middle = (lo + hi) / 2
-		// (written into `out` at `at`)
-		return (back, s, y, z, out, at) => {
-			const flatZ = back ? -GAP - z : GAP + z
-			out[at + 1] = y
-			// pressed flat between the beds, opening out as it hangs
-			const open = round * Math.min(1, Math.max(0, -y / (OPENING * ROW)) ** 1.5)
-			if (!open) {
-				out[at] = s
-				out[at + 2] = flatZ
-				return
-			}
-			const along = Math.max(0, Math.min(width, s - lo + 0.5)) / width
-			const angle = back ? Math.PI + Math.PI * along : Math.PI - Math.PI * along
-			const r = radius + z
-			const roundX = middle + r * Math.cos(angle)
-			const roundZ = r * Math.sin(angle)
-			out[at] = s + (roundX - s) * open
-			out[at + 2] = flatZ + (roundZ - flatZ) * open
-		}
-	}
-
 	let bounds = {min: [0, -10, -1], max: [20, 2, 1]}
 
 	// every loop of the fabric, where it's settled: a knit loop facing out of
-	// its bed's side, leaning with its wale and its row. a loop still on a
-	// needle reaches down to the loops it was pulled through, however far
-	// they've gone
+	// its bed's side (or out of the tube), leaning with its wale and its row. a
+	// loop still on a needle reaches down to the loops it was pulled through,
+	// however far they've gone
 	const mesh = new Mesh()
-	const points = new Float64Array(LOOP_CURVE.length * 3)
-	function build(sweeps) {
-		mesh.reset()
-		const place = placer()
-		const moved = relax(fabric, machine, sweeps)
-		const {xs, ys} = fabric
+	function build(budget) {
+		const until = performance.now() + budget
+		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until})
+		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
 		const count = loops.length
 		const start = Math.max(0, count - BUDGET)
@@ -555,58 +552,127 @@ export default function Knit3dTool(handle, element) {
 			const prev = loops[i].prev
 			if (prev != null && prev >= start) next[prev] = i
 		}
+		if (instances.length < (count - start) * INSTANCE_FLOATS) {
+			instances = new Float32Array(Math.max(instances.length * 2, (count - start) * INSTANCE_FLOATS))
+		}
 
-		let deepest = 0
+		const lo = [Infinity, Infinity, Infinity]
+		const hi = [-Infinity, -Infinity, -Infinity]
+		let at = 0
 		for (let i = start; i < count; i++) {
 			const loop = loops[i]
 			const x = xs[i]
 			const y = ys[i]
-			deepest = Math.min(deepest, y)
-			// along its row, left to right
-			const a = loop.prev != null && loop.prev >= start ? loop.prev : i
-			const b = next[i] >= 0 ? next[i] : i
+			const z = zs[i]
+			lo[0] = Math.min(lo[0], x)
+			lo[1] = Math.min(lo[1], y)
+			lo[2] = Math.min(lo[2], z)
+			hi[0] = Math.max(hi[0], x)
+			hi[2] = Math.max(hi[2], z)
+			// along its row: from the loop before to the one after, but not
+			// round the turn at a row's end, or along yarn that floats
+			const a =
+				loop.prev != null && loop.prev >= start && loops[loop.prev].dir === loop.dir && !slack[i] ? loop.prev : i
+			const b = next[i] >= 0 && loops[next[i]].dir === loop.dir && !slack[next[i]] ? next[i] : i
 			let tx = xs[b] - xs[a]
 			let ty = ys[b] - ys[a]
-			if (tx < 0) {
+			let tz = zs[b] - zs[a]
+			let tl = Math.hypot(tx, ty, tz)
+			if (tl < 1e-6) {
+				tx = loop.dir
+				ty = tz = 0
+				tl = 1
+			}
+			tx /= tl
+			ty /= tl
+			tz /= tl
+			// up its wale, from the loops it was pulled through
+			let px = 0
+			let py = 0
+			let pz = 0
+			let parents = 0
+			for (const parent of loop.parents) {
+				if (parent < start) continue
+				px += xs[parent]
+				py += ys[parent]
+				pz += zs[parent]
+				parents++
+			}
+			let wx = 0
+			let wy = 1
+			let wz = 0
+			if (parents) {
+				px /= parents
+				py /= parents
+				pz /= parents
+				const wl = Math.hypot(x - px, y - py, z - pz)
+				if (wl > 1e-6) {
+					wx = (x - px) / wl
+					wy = (y - py) / wl
+					wz = (z - pz) / wl
+				}
+			}
+			// out of its face: the side its bed's needles pulled it to
+			const side = loop.back ? -loop.dir : loop.dir
+			let fx = (ty * wz - tz * wy) * side
+			let fy = (tz * wx - tx * wz) * side
+			let fz = (tx * wy - ty * wx) * side
+			let fl = Math.hypot(fx, fy, fz)
+			if (fl < 1e-3) {
+				fx = fy = 0
+				fz = loop.back ? -1 : 1
+				fl = 1
+			}
+			fx /= fl
+			fy /= fl
+			fz /= fl
+			// up, square to the other two; and along, flipped to go with it
+			let ux = fy * tz - fz * ty
+			let uy = fz * tx - fx * tz
+			let uz = fx * ty - fy * tx
+			if (ux * wx + uy * wy + uz * wz < 0) {
+				ux = -ux
+				uy = -uy
+				uz = -uz
 				tx = -tx
 				ty = -ty
+				tz = -tz
 			}
-			const length = Math.hypot(tx, ty)
-			// at the end of a row the yarn goes up: the loop stays upright
-			if (length < 1e-6 || tx < length * 0.6) {
-				tx = 1
-				ty = 0
-			} else {
-				tx /= length
-				ty /= length
-			}
-			// its legs reach the loops it was pulled through
-			const parents = loop.parents.filter(parent => parent >= start)
-			let reachX = 0
-			let reachY = 0
-			if (parents.length) {
-				const px = parents.reduce((sum, parent) => sum + xs[parent], 0) / parents.length
-				const py = parents.reduce((sum, parent) => sum + ys[parent], 0) / parents.length
-				reachX = px - x
-				reachY = py + WALE - y
-			}
-			const baseY = y - 1.6 * ROW
-			LOOP_CURVE.forEach(([lx, ly, lz], k) => {
-				const down = ly < 1.12 ? 1 - ly / 1.12 : 0
-				const px = x + tx * lx - ty * ly * ROW + reachX * down
-				const py = baseY + ty * lx + tx * ly * ROW + reachY * down
-				place(loop.back, px, py, lz * DEPTH, points, k * 3)
-			})
-			mesh.tube(points, LOOP_CURVE.length, YARN, palette.yarns[loop.yarn] ?? palette.yarns[0])
+			const colour = palette.yarns[loop.yarn] ?? palette.yarns[0]
+			const v = instances
+			v[at] = x
+			v[at + 1] = y
+			v[at + 2] = z
+			v[at + 3] = tx
+			v[at + 4] = ty
+			v[at + 5] = tz
+			v[at + 6] = ux
+			v[at + 7] = uy
+			v[at + 8] = uz
+			v[at + 9] = fx
+			v[at + 10] = fy
+			v[at + 11] = fz
+			// legs that would land a wale below, moved to land on the parents
+			v[at + 12] = parents ? px + ux * WALE - x : 0
+			v[at + 13] = parents ? py + uy * WALE - y : 0
+			v[at + 14] = parents ? pz + uz * WALE - z : 0
+			v[at + 15] = colour[0]
+			v[at + 16] = colour[1]
+			v[at + 17] = colour[2]
+			at += INSTANCE_FLOATS
 		}
+		instanceCount = count - start
+		gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer)
+		gl.bufferData(gl.ARRAY_BUFFER, instances.subarray(0, at), gl.DYNAMIC_DRAW)
 
-		const [lo, hi] = knitout.range
+		const [left, right] = knitout.range
 		bounds = {
-			min: [lo - 1.5, deepest - 2 * ROW, -GAP - 1],
-			max: [hi + 1.5, 1.5, GAP + 1],
+			min: [Math.min(left, lo[0]) - 1.5, Math.min(0, lo[1]) - 2 * ROW, Math.min(-GAP, lo[2]) - 1],
+			max: [Math.max(right, hi[0]) + 1.5, 1.5, Math.max(GAP, hi[2]) + 1],
 		}
-		if (bedBox.checked) buildMachine(mesh)
 
+		mesh.reset()
+		if (bedBox.checked) buildMachine(mesh)
 		gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
 		gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices.subarray(0, mesh.vertexCount * 9), gl.DYNAMIC_DRAW)
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
@@ -691,19 +757,24 @@ export default function Knit3dTool(handle, element) {
 			target[2] + distance * Math.cos(yaw) * Math.cos(pitch),
 		]
 		const projection = perspective(0.6, width / height, 0.1, distance * 10)
+		const viewProjection = multiply(projection, lookAt(eye, target, [0, 1, 0]))
+		gl.useProgram(loopProgram)
+		gl.uniformMatrix4fv(loopUniforms.viewProjection, false, viewProjection)
+		gl.uniform3fv(loopUniforms.eye, eye)
+		gl.bindVertexArray(loopVao)
+		gl.drawElementsInstanced(gl.TRIANGLES, loopIndexCount, gl.UNSIGNED_SHORT, 0, instanceCount)
 		gl.useProgram(program)
-		gl.uniformMatrix4fv(uniforms.viewProjection, false, multiply(projection, lookAt(eye, target, [0, 1, 0])))
+		gl.uniformMatrix4fv(uniforms.viewProjection, false, viewProjection)
 		gl.uniform3fv(uniforms.eye, eye)
 		gl.bindVertexArray(vao)
 		gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0)
 		gl.bindVertexArray(null)
 	}
 
-	// ── playing: the fabric's rebuilt a few times a second
+	// ── playing: the fabric's rebuilt every frame
 
 	let frame = 0
 	let lastTime = 0
-	let lastBuild = 0
 	let dirty = false
 	let playhead = 0 // where playing's got to, between ops
 
@@ -711,9 +782,9 @@ export default function Knit3dTool(handle, element) {
 	let settling = 0
 	function show() {
 		runTo(upTo)
-		const moved = build(playing ? 6 : 12)
+		const moved = build(playing ? PLAYING_BUDGET : STILL_BUDGET)
 		settling = moved > 0.01 && settling < SETTLE ? settling + 1 : 0
-		if (settling) dirty = true
+		if (settling) refresh()
 		draw()
 		scrubber.max = String(knitout.ops.length)
 		scrubber.value = String(upTo)
@@ -734,12 +805,11 @@ export default function Knit3dTool(handle, element) {
 			if (upTo >= knitout.ops.length) pause()
 			dirty = true
 		}
-		if (dirty && now - lastBuild > (playing ? 90 : 0)) {
+		if (dirty) {
 			dirty = false
-			lastBuild = now
 			show()
 		}
-		if (playing || dirty) frame = requestAnimationFrame(tick)
+		if ((playing || dirty) && !frame) frame = requestAnimationFrame(tick)
 	}
 
 	function refresh() {
@@ -887,6 +957,11 @@ export default function Knit3dTool(handle, element) {
 		gl.deleteBuffer(indexBuffer)
 		gl.deleteVertexArray(vao)
 		gl.deleteProgram(program)
+		gl.deleteBuffer(cornerBuffer)
+		gl.deleteBuffer(loopIndexBuffer)
+		gl.deleteBuffer(instanceBuffer)
+		gl.deleteVertexArray(loopVao)
+		gl.deleteProgram(loopProgram)
 		root.remove()
 		link.remove()
 	}

@@ -95,7 +95,8 @@ export function readKnitout(text) {
 }
 
 // every loop the machine makes, as {id, yarn, op, tuck, n, back (the needle
-// it's on now, or was let go from), x (where across the bed it was made),
+// it's on now, or was let go from), dir (1 knitted going +, −1 going −), x
+// (where across the bed it was made),
 // parents (the loops it was pulled through), prev (the loop its yarn came
 // from), cast (made on an empty needle: the fabric's bottom edge)}: the
 // fabric, as a graph
@@ -147,6 +148,7 @@ export function apply(machine, op, index, yarnOf) {
 			tuck: op.kind === "tuck",
 			n: op.needle.n,
 			back: op.needle.back,
+			dir: op.dir === "-" ? -1 : 1,
 			x: across(machine, op.needle),
 			parents: parents.map(parent => parent.id),
 			prev: machine.lastLoops.get(name)?.id ?? null,
