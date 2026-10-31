@@ -40,6 +40,9 @@ const TAKEDOWN = 0.01
 // further than where it'd hang, though: a long hanging chain of loops, each
 // pulled by the loops below it, would otherwise stretch)
 const GRAVITY = 0.02
+// (pulled further down than that, it springs back up: so much of the way each
+// sweep)
+const SPRING = 0.06
 const LEVEL = 0.25
 const KEEP_TO_NEEDLE = 0.03
 // knitting's stiff pulled, and soft pushed: when there's more of it one side
@@ -239,16 +242,19 @@ export function relax(
 	grow(fabric, count)
 	join(fabric, loops, count)
 	const start = firstLoop(machine, limit)
-	const {xs, ys, flat: zs, out, pinned, home, round, plane, face, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents, waited} =
+	const {xs, ys, flat: zs, out, pinned, home, round, plane, face, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents, waited, child} =
 		fabric
 	// how far loop i is from the loops it was pulled through, at rest: a
 	// wale, or (if they waited on their needles while rows were made beside
 	// them) bunched rows' further, as far as their yarn reaches
 	const rest = i => Math.min(REACH, WALE * (1 + waited[i] * squash))
+	// how much longer loop i's legs are than a wale: pulled long while it
+	// waits on its needle (as far as they reach, as the fabric goes on down),
+	// and staying long once a loop's pulled through it
+	const longer = i => (child[i] >= 0 && child[i] < count ? rest(child[i]) - WALE : pinned[i] ? REACH - WALE : 0)
 	// and how far loop i's yarn can be from the loop before it on its yarn: a
-	// course, or (if one of them's still on its needle, its legs pulled long
-	// as the fabric goes on down) as much further as they reach
-	const reach = i => course[i] + (pinned[i] !== pinned[prev[i]] ? REACH - WALE : 0)
+	// course, and as much further as either's legs are long
+	const reach = i => course[i] + Math.max(longer(i), longer(prev[i]))
 
 	for (let i = start; i < count; i++) {
 		const loop = loops[i]
@@ -380,7 +386,9 @@ export function relax(
 		for (const i of bottom) ys[i] += (level - ys[i]) * LEVEL * hold - TAKEDOWN
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
-			ys[i] = grabbed >= 0 ? ys[i] - GRAVITY : Math.max(floor[i], ys[i] - GRAVITY)
+			if (grabbed >= 0) ys[i] -= GRAVITY
+			else if (ys[i] > floor[i]) ys[i] = Math.max(floor[i], ys[i] - GRAVITY)
+			else ys[i] += (floor[i] - ys[i]) * SPRING
 			xs[i] += (home[i] - xs[i]) * keep
 			zs[i] += (plane[i] - zs[i]) * hold
 			// (and out of its face as far as it's bunched up: which the yarn's

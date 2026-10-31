@@ -299,12 +299,17 @@ void main() {
 	vec3 n = normalize(vNormal);
 	vec3 v = normalize(eye - vWorld);
 	if (dot(n, v) < 0.0) n = -n;
-	vec3 key = normalize(vec3(0.35, 0.8, 0.55));
-	vec3 fill = normalize(vec3(-0.6, 0.15, -0.45));
-	float light = max(dot(n, key), 0.0) * 0.72 + max(dot(n, fill), 0.0) * 0.22;
-	float shine = pow(max(dot(n, normalize(key + v)), 0.0), 28.0) * 0.18;
-	float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.12;
-	outColour = vec4(vColour * (0.32 + light) + shine + rim, 1.0);
+	// lit from the side it's looked at from, whichever that is: a key light
+	// above and to the left of the eye, a softer fill from the right, and the
+	// sky above and the floor below
+	vec3 side = normalize(cross(vec3(0.0, 1.0, 0.0), v));
+	vec3 key = normalize(v + vec3(0.0, 0.9, 0.0) - side * 0.5);
+	vec3 fill = normalize(v + side * 0.8 - vec3(0.0, 0.2, 0.0));
+	float sky = mix(0.22, 0.4, n.y * 0.5 + 0.5);
+	float light = max(dot(n, key), 0.0) * 0.62 + max(dot(n, fill), 0.0) * 0.25;
+	float shine = pow(max(dot(n, normalize(key + v)), 0.0), 28.0) * 0.16;
+	float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0) * 0.1;
+	outColour = vec4(vColour * (sky + light) + shine + rim, 1.0);
 }`
 
 /**
