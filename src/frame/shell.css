@@ -242,6 +242,23 @@
 		color: var(--studio-danger-text, #e45649);
 	}
 
+	/* something the menu can do about what it found: import a panes doc */
+	& .lattice-menu-action {
+		margin-left: 4px;
+		padding: 1px 8px;
+		border: 1px solid var(--lattice-rule);
+		border-radius: var(--studio-radius, 6px);
+		background: var(--studio-fill, #fff);
+		color: var(--studio-chrome-line, var(--studio-line, #383a42));
+		font: 11px var(--studio-family-ui, system-ui, sans-serif);
+		cursor: pointer;
+
+		&:disabled {
+			cursor: progress;
+			opacity: 0.6;
+		}
+	}
+
 	& .lattice-button {
 		padding: 4px 12px;
 		border: 1px solid var(--lattice-rule);

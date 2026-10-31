@@ -118,27 +118,39 @@ export default function LatticeFrameTool(handle, element) {
     return url;
   }
 
-  // before projects, the frame kept its files and layout on the account
-  // doc. they become a project of their own, once
-  async function moveOldWorkspace() {
-    const account = handle.doc();
-    if (!account?.layout && !account?.files?.length) return;
-    const urls = (account.files ?? []).map(String);
+  // a project in /home: a folder linking to some files (the same docs, not
+  // copies), and a workspace with a copy of a layout of them
+  async function addProject(name, urls = [], layout = null) {
     const links = await Promise.all(
       urls.map(async (url) => folderLink(url, (await repo.find(url)).doc())),
     );
     const project = await repo.create2({
       "@patchwork": { type: "folder" },
-      title: "knitting",
+      title: name,
       docs: links,
-      workspace: await newWorkspace(
-        account.layout ? JSON.parse(JSON.stringify(account.layout)) : null,
-      ),
+      workspace: await newWorkspace(layout ? JSON.parse(JSON.stringify(layout)) : null),
     });
     homeHandle.change((doc) => {
       doc.docs ??= [];
-      doc.docs.push({ name: "knitting", type: "folder", url: project.url });
+      doc.docs.push({ name, type: "folder", url: project.url });
     });
+    return project.url;
+  }
+
+  // the files and layout of something from before projects: the account doc
+  // (as the frame kept them there), or a knitoutjs-panes doc
+  function oldFiles(doc) {
+    return (Array.isArray(doc?.files) ? doc.files : [])
+      .map(String)
+      .filter((url) => isValidAutomergeUrl(url));
+  }
+
+  // before projects, the frame kept its files and layout on the account
+  // doc. they become a project of their own, once
+  async function moveOldWorkspace() {
+    const account = handle.doc();
+    if (!account?.layout && !account?.files?.length) return;
+    await addProject("knitting", oldFiles(account), account.layout);
     handle.change((doc) => {
       delete doc.layout;
       delete doc.files;
@@ -161,9 +173,14 @@ export default function LatticeFrameTool(handle, element) {
 
   const [renaming, setRenaming] = createSignal(null);
 
+  // a knitoutjs-panes doc found by its url, which could be a project (see
+  // importPanes)
+  const [panes, setPanes] = createSignal(null);
+
   // a folder from anywhere (someone else's project, say), by its url: it goes
   // in home under its own title. says what was wrong, or nothing
   async function addFolder(text) {
+    setPanes(null);
     const url = urlFromText(text);
     if (!url) return "that isn't an automerge url";
     if (projects().some((project) => project.url === url)) {
@@ -179,6 +196,7 @@ export default function LatticeFrameTool(handle, element) {
       return "couldn't find that doc";
     }
     const type = String(doc?.["@patchwork"]?.type ?? "");
+    if (type === "knitoutjs-panes") setPanes(doc);
     if (type !== "folder") return `that's ${type ? `a ${type}` : "not a folder"}`;
     homeHandle.change((home) => {
       home.docs ??= [];
@@ -188,19 +206,16 @@ export default function LatticeFrameTool(handle, element) {
     return null;
   }
 
+  // a knitoutjs-panes doc is a project from before lattice: its files and
+  // layout become a project of their own (the panes doc stays as it was)
+  async function importPanes(doc) {
+    choose(await addProject(folderTitle(doc), oldFiles(doc), doc.layout));
+  }
+
   async function newProject() {
-    const project = await repo.create2({
-      "@patchwork": { type: "folder" },
-      title: "untitled",
-      docs: [],
-      workspace: await newWorkspace(),
-    });
-    homeHandle.change((doc) => {
-      doc.docs ??= [];
-      doc.docs.push({ name: "untitled", type: "folder", url: project.url });
-    });
-    choose(project.url);
-    setRenaming(project.url);
+    const url = await addProject("untitled");
+    choose(url);
+    setRenaming(url);
   }
 
   // the name shows in /home (the link) and on the folder itself (its title)
@@ -386,6 +401,7 @@ export default function LatticeFrameTool(handle, element) {
 
   function openHomeMenu(event) {
     setAddProblem(null);
+    setPanes(null);
     const rect = event.currentTarget.getBoundingClientRect();
     homeMenu.style.top = `${rect.bottom + 4}px`;
     homeMenu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 280))}px`;
@@ -401,6 +417,16 @@ export default function LatticeFrameTool(handle, element) {
     setAddProblem(problem);
     if (problem) return input.focus();
     input.value = "";
+    homeMenu.hidePopover();
+  }
+
+  async function onImportPanes() {
+    setAdding(true);
+    await importPanes(panes());
+    setAdding(false);
+    setPanes(null);
+    setAddProblem(null);
+    homeMenu.querySelector("input[name=url]").value = "";
     homeMenu.hidePopover();
   }
 
@@ -461,11 +487,25 @@ export default function LatticeFrameTool(handle, element) {
           aria-label="a folder's automerge url"
           autocomplete="off"
           disabled=${adding}
-          onInput=${() => setAddProblem(null)}
+          onInput=${() => (setAddProblem(null), setPanes(null))}
         />
       </form>
-      <p class="knitoutjs-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
+      <p
+        class="knitoutjs-menu-hint"
+        data-problem=${() => (addProblem() && !panes() ? "" : undefined)}
+      >
         ${() => addProblem() ?? (adding() ? "finding it…" : "or a patchwork link to one")}
+        <${Show} when=${panes}>
+          ${" "}
+          <button
+            class="lattice-menu-action"
+            disabled=${adding}
+            title="a new project with its files and layout"
+            onClick=${onImportPanes}
+          >
+            import
+          </button>
+        <//>
       </p>
     </div>`;
   }
