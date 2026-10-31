@@ -94,16 +94,16 @@ export function readKnitout(text) {
 	return {ops, carriers, problems, range: min > max ? [0, 20] : [min, max]}
 }
 
-// the fabric under a needle: each bed knits its own (a tube's two sides, a
-// jacquard's face and its backing), so they're kept apart
-export function columnKey(needle) {
-	return (needle.back ? "b" : "f") + needle.n
-}
-
+// every loop the machine makes, as {id, yarn, op, tuck, n, back (the needle
+// it's on now, or was let go from), x (where across the bed it was made),
+// parents (the loops it was pulled through), prev (the loop its yarn came
+// from), cast (made on an empty needle: the fabric's bottom edge)}: the
+// fabric, as a graph
 export function newMachine() {
 	return {
-		held: new Map(), // needle key → {needle, loops: [{yarn, op, tuck}]}
-		columns: new Map(), // column key → {n, back, stitches: [{yarn, back, extra, op}]}
+		loops: [],
+		lastLoops: new Map(), // carrier name → the last loop its yarn made
+		held: new Map(), // needle key → {needle, loops: [loop]}
 		carriers: new Map(), // name → {x, hang (a needle key), last (the op of its last loop)}
 		rack: 0,
 	}
@@ -121,9 +121,9 @@ export function across(machine, needle) {
 }
 
 // do op `index` to the machine: what it changed, as {touched: [needle keys],
-// stitches: [{key, n, back, stitch}], rack: bool}
+// rack: bool}
 export function apply(machine, op, index, yarnOf) {
-	const change = {touched: [], stitches: [], rack: false}
+	const change = {touched: [], rack: false}
 	const makesLoop = op.kind === "knit" || op.kind === "tuck" || (op.kind === "split" && op.carriers.length)
 	const move = (needle, dir) => {
 		for (const name of op.carriers) {
@@ -136,33 +136,47 @@ export function apply(machine, op, index, yarnOf) {
 			machine.carriers.set(name, carrier)
 		}
 	}
-	const fresh = () =>
-		op.carriers.length ? [{yarn: yarnOf(op.carriers[0]), op: index, tuck: op.kind === "tuck"}] : []
+	// a new loop on op's needle, pulled through `parents`
+	const fresh = parents => {
+		if (!op.carriers.length) return []
+		const [name] = op.carriers
+		const loop = {
+			id: machine.loops.length,
+			yarn: yarnOf(name),
+			op: index,
+			tuck: op.kind === "tuck",
+			n: op.needle.n,
+			back: op.needle.back,
+			x: across(machine, op.needle),
+			parents: parents.map(parent => parent.id),
+			prev: machine.lastLoops.get(name)?.id ?? null,
+			cast: !heldOn(machine, op.needle).loops.length,
+		}
+		machine.loops.push(loop)
+		machine.lastLoops.set(name, loop)
+		return [loop]
+	}
 
 	if (op.kind === "knit" || op.kind === "drop") {
 		const held = heldOn(machine, op.needle)
-		if (held.loops.length) {
-			const [first] = held.loops
-			const stitch = {yarn: first.yarn, back: op.needle.back, extra: held.loops.length - 1, op: first.op}
-			const key = columnKey(op.needle)
-			const column = machine.columns.get(key) ?? {n: op.needle.n, back: op.needle.back, stitches: []}
-			column.stitches.push(stitch)
-			machine.columns.set(key, column)
-			change.stitches.push({key, n: op.needle.n, back: op.needle.back, stitch})
-		}
-		held.loops = fresh()
+		held.loops = op.kind === "drop" ? [] : fresh(held.loops)
 		change.touched.push(op.needle.key)
 		move(op.needle, op.dir)
 	} else if (op.kind === "tuck") {
 		const held = heldOn(machine, op.needle)
-		held.loops.push(...fresh())
+		held.loops.push(...fresh([]))
 		change.touched.push(op.needle.key)
 		move(op.needle, op.dir)
 	} else if (op.kind === "split") {
 		const from = heldOn(machine, op.needle)
 		const to = heldOn(machine, op.to)
-		to.loops.push(...from.loops)
-		from.loops = fresh()
+		for (const loop of from.loops) {
+			loop.n = op.to.n
+			loop.back = op.to.back
+		}
+		const moved = from.loops
+		to.loops.push(...moved)
+		from.loops = fresh(moved)
 		change.touched.push(op.needle.key, op.to.key)
 		move(op.needle, op.dir)
 	} else if (op.kind === "miss") {
@@ -170,7 +184,10 @@ export function apply(machine, op, index, yarnOf) {
 	} else if (op.kind === "in") {
 		for (const name of op.carriers) machine.carriers.set(name, {x: null, hang: null, last: null})
 	} else if (op.kind === "out") {
-		for (const name of op.carriers) machine.carriers.delete(name)
+		for (const name of op.carriers) {
+			machine.carriers.delete(name)
+			machine.lastLoops.delete(name)
+		}
 	} else if (op.kind === "rack") {
 		machine.rack = op.rack
 		change.rack = true

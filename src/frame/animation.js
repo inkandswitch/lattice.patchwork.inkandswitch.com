@@ -1,4 +1,5 @@
 import {docText} from "./files.js"
+import {WALE, newFabric, relax} from "./fabric.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
@@ -24,8 +25,8 @@ const TOP = -56
 // needles either side of the knitting: room for the carriage to run out and
 // turn
 const MARGIN = Math.ceil(OVERRUN + CARRIAGE / COL / 2)
-// how much fabric each needle keeps on the page
-const KEEP = 240
+// how many of the newest stitches are on the page
+const KEEP = 8000
 
 // how long each op takes, in steps (a stitch is one)
 const DURATIONS = {knit: 1, tuck: 1, split: 1, drop: 0.6, miss: 0.35, rack: 0.6}
@@ -202,6 +203,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	let knitout = {ops: [], carriers: [], problems: [], range: [0, 20]}
 	let track = [] // the carriage's run, op by op
 	let machine = newMachine()
+	let fabric = newFabric()
 	let index = 0 // the next op to do
 	let progress = 0 // how far through it, 0–1
 	let playing = false
@@ -211,18 +213,31 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// the page's side of the machine
 	const restNeedles = new Map() // needle key → <use>
 	const loopElements = new Map() // needle key → <g>
-	const columnElements = new Map() // column key → {group, count, n}
+	const stitchElements = new Map() // loop id → {element, x, y}
 	const feeders = new Map() // carrier name → {group, yarn}
 
 	// ── drawing what's still
 
-	// a loop held on a needle: its legs go down into the fabric (or, for a
-	// tuck, only a little way)
-	function loopPath(hx, hy, fx, tuck) {
-		const fy = tuck ? hy + 6 : FABRIC_TOP
-		const fl = tuck ? hx - 2.6 : fx - 3.2
-		const fr = tuck ? hx + 2.6 : fx + 3.2
+	// a stitch's place on the page: where the fabric's settled its loop, the
+	// middle of the stitch it makes
+	const pageX = id => fabric.xs[id] * COL
+	const pageY = id => FABRIC_TOP + (-fabric.ys[id] / WALE - 0.5) * ROW
+
+	// a loop held on a needle: its legs go down into the loops it was pulled
+	// through (or, for a tuck, only a little way)
+	function loopPath(hx, hy, foot) {
+		const fy = foot ? foot.y : hy + 6
+		const fl = foot ? foot.x - 3.2 : hx - 2.6
+		const fr = foot ? foot.x + 3.2 : hx + 2.6
 		return `M${fl} ${fy} L${hx - 1.9} ${hy} Q${hx} ${hy - 3.6} ${hx + 1.9} ${hy} L${fr} ${fy}`
+	}
+
+	function footOf(loop) {
+		const parents = loop.parents.filter(id => id < fabric.count && !fabric.pinned[id])
+		if (!parents.length) return null
+		const x = parents.reduce((sum, id) => sum + pageX(id), 0) / parents.length
+		const y = Math.min(...parents.map(pageY)) - ROW * 0.5
+		return {x, y}
 	}
 
 	function hangY(needle) {
@@ -231,64 +246,90 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	function drawHeld(key) {
 		const held = machine.held.get(key)
-		loopElements.get(key)?.remove()
-		loopElements.delete(key)
-		if (!held?.loops.length) return
+		if (!held?.loops.length) {
+			loopElements.get(key)?.remove()
+			loopElements.delete(key)
+			return
+		}
 		const {needle} = held
-		const group = svg("g", {}, needle.back ? layers.backLoops : layers.frontLoops)
+		let group = loopElements.get(key)
+		const layer = needle.back ? layers.backLoops : layers.frontLoops
+		if (!group || group.parentNode !== layer) {
+			group?.remove()
+			group = svg("g", {}, layer)
+			loopElements.set(key, group)
+		}
+		while (group.childElementCount > held.loops.length) group.lastElementChild.remove()
+		while (group.childElementCount < held.loops.length) svg("path", {}, group)
 		const hx = across(machine, needle) * COL
-		const fx = needle.n * COL
 		held.loops.forEach((loop, at) => {
-			svg(
-				"path",
-				{
-					d: loopPath(hx, hangY(needle) - at * 1.6, fx, loop.tuck && at > 0),
-					class: `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}`,
-					"data-op": loop.op,
-				},
-				group,
-			)
+			const path = group.children[at]
+			path.setAttribute("d", loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop)))
+			path.setAttribute("class", `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}`)
+			path.setAttribute("data-op", loop.op)
 		})
-		loopElements.set(key, group)
 	}
 
-	function stitchElement(stitch, k) {
-		const cy = -(k + 0.5) * ROW
-		const group = svg("g", {class: `stitch y${stitch.yarn}`, "data-op": stitch.op})
-		if (stitch.back) {
-			svg("path", {d: `M-3.8 ${cy + 1.8} Q0 ${cy - 4.4} 3.8 ${cy + 1.8}`}, group)
+	function stitchElement(loop) {
+		const group = svg("g", {class: `stitch y${loop.yarn}`, "data-op": loop.op})
+		if (loop.back) {
+			svg("path", {d: "M-3.8 1.8 Q0 -4.4 3.8 1.8"}, group)
 		} else {
-			svg("path", {d: `M-3.6 ${cy - 3.6} L-0.5 ${cy + 3.3}`}, group)
-			svg("path", {d: `M3.6 ${cy - 3.6} L0.5 ${cy + 3.3}`}, group)
-		}
-		if (stitch.extra) {
-			svg("path", {d: `M-3 ${cy - 2.6} Q0 ${cy - 6.6} 3 ${cy - 2.6}`, class: "extra"}, group)
+			svg("path", {d: "M-3.6 -3.6 L-0.5 3.3"}, group)
+			svg("path", {d: "M3.6 -3.6 L0.5 3.3"}, group)
 		}
 		return group
 	}
 
-	// the back bed's fabric hangs behind the front's: a tube's far side, a
-	// jacquard's backing
-	function columnFor(key, n, back) {
-		let column = columnElements.get(key)
-		if (!column) {
-			const group = svg("g", {class: "column"}, back ? layers.backFabric : layers.fabric)
-			column = {group, count: 0, n}
-			columnElements.set(key, column)
+	// every stitch where the fabric's settled it (easing there, unless
+	// `instant`), and the loops on the needles reaching down to them. whether
+	// anything's still on its way
+	function syncFabric(instant) {
+		const {loops} = machine
+		const start = Math.max(0, loops.length - KEEP)
+		for (const [id, shown] of stitchElements) {
+			if (id < start || id >= loops.length || fabric.pinned[id]) {
+				shown.element.remove()
+				stitchElements.delete(id)
+			}
 		}
-		return column
+		let unsettled = false
+		for (let id = start; id < loops.length; id++) {
+			if (fabric.pinned[id]) continue
+			const x = pageX(id)
+			const y = pageY(id)
+			let shown = stitchElements.get(id)
+			if (!shown) {
+				const loop = loops[id]
+				shown = {element: stitchElement(loop), x: NaN, y: NaN}
+				;(loop.back ? layers.backFabric : layers.fabric).appendChild(shown.element)
+				stitchElements.set(id, shown)
+			}
+			let nx = x
+			let ny = y
+			if (!instant && Number.isFinite(shown.x)) {
+				nx = shown.x + (x - shown.x) * 0.3
+				ny = shown.y + (y - shown.y) * 0.3
+				if (Math.abs(x - nx) > 0.05 || Math.abs(y - ny) > 0.05) unsettled = true
+				else {
+					nx = x
+					ny = y
+				}
+			}
+			if (nx !== shown.x || ny !== shown.y) {
+				shown.x = nx
+				shown.y = ny
+				shown.element.setAttribute("transform", `translate(${nx.toFixed(2)} ${ny.toFixed(2)})`)
+			}
+		}
+		for (const key of machine.held.keys()) drawHeld(key)
+		return unsettled
 	}
 
-	function placeColumn(column) {
-		column.group.style.transform = `translate(${column.n * COL}px, ${FABRIC_TOP + column.count * ROW}px)`
-	}
-
-	function addStitch({key, n, back, stitch}) {
-		const column = columnFor(key, n, back)
-		column.group.appendChild(stitchElement(stitch, column.count))
-		column.count++
-		if (column.group.childElementCount > KEEP) column.group.firstElementChild.remove()
-		placeColumn(column)
+	// settle the fabric a little more, and show it: whether there's more to do
+	function settle(sweeps) {
+		const moved = relax(fabric, machine, sweeps)
+		return syncFabric(false) || moved > 0.01
 	}
 
 	function drawRack() {
@@ -320,25 +361,15 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// everything from the machine as it is: after a seek, or a new .k
 	function drawAll() {
-		root.classList.add("is-instant")
 		layers.fabric.replaceChildren()
 		layers.backFabric.replaceChildren()
 		layers.backLoops.replaceChildren()
 		layers.frontLoops.replaceChildren()
-		columnElements.clear()
+		stitchElements.clear()
 		loopElements.clear()
-		for (const [key, {n, back, stitches}] of machine.columns) {
-			const column = columnFor(key, n, back)
-			const from = Math.max(0, stitches.length - KEEP)
-			for (let k = from; k < stitches.length; k++) {
-				column.group.appendChild(stitchElement(stitches[k], k))
-			}
-			column.count = stitches.length
-			placeColumn(column)
-		}
-		for (const key of machine.held.keys()) drawHeld(key)
+		relax(fabric, machine, 0)
+		syncFabric(true)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
-		requestAnimationFrame(() => root.classList.remove("is-instant"))
 	}
 
 	// ── drawing what moves
@@ -552,7 +583,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function commit() {
 		const op = knitout.ops[index]
 		const change = apply(machine, op, index, yarnOf)
-		for (const added of change.stitches) addStitch(added)
 		for (const key of change.touched) drawHeld(key)
 		if (change.rack) drawRack()
 		index++
@@ -585,6 +615,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (index >= knitout.ops.length) pause()
 			followAlong(now)
 		}
+		if (settle(playing ? 3 : 6)) needsFrame = true
 		drawMoving()
 		// at rest, the view goes straight to where it's going
 		placeCamera(playing ? dt : 1)
@@ -643,6 +674,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function seek(to) {
 		const target = Math.max(0, Math.min(knitout.ops.length, to))
 		machine = newMachine()
+		fabric = newFabric()
 		for (let i = 0; i < target; i++) apply(machine, knitout.ops[i], i, yarnOf)
 		index = target
 		progress = 0
@@ -709,15 +741,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const matrix = picture.getScreenCTM()
 		if (!matrix) return null
 		const at = new DOMPoint(event.clientX, event.clientY).matrixTransform(matrix.inverse())
-		const n = Math.round(at.x / COL)
-		const row = Math.floor((at.y - FABRIC_TOP) / ROW)
-		// the front's fabric first: it's the one in front
-		for (const key of ["f" + n, "b" + n]) {
-			const stitches = machine.columns.get(key)?.stitches
-			const k = stitches ? stitches.length - 1 - row : -1
-			if (k >= 0 && k < stitches.length) return stitches[k].op
+		// the nearest stitch, the front's fabric first: it's the one in front
+		let nearest = null
+		let best = Infinity
+		for (const [id, shown] of stitchElements) {
+			const away = Math.hypot((at.x - shown.x) / COL, (at.y - shown.y) / ROW) - (machine.loops[id].back ? 0 : 0.2)
+			if (away < best) {
+				best = away
+				nearest = id
+			}
 		}
-		return null
+		return best < 0.6 ? machine.loops[nearest].op : null
 	}
 
 	function onPointerMove(event) {

@@ -103,11 +103,6 @@
 			pointer-events: none;
 		}
 
-		/* each column of fabric slides down as a stitch is pulled through */
-		& .column {
-			transition: transform 0.18s ease-out;
-		}
-
 		/* (a <use> is drawn from what it inherits, not from rules on the shape
 		   it copies) */
 		& .rest {
@@ -211,13 +206,6 @@
 		& .y3 { --yarn: var(--yarn-3); }
 		& .y4 { --yarn: var(--yarn-4); }
 		& .y5 { --yarn: var(--yarn-5); }
-	}
-
-	/* seeking draws everything afresh: nothing to slide */
-	&.is-instant .knitout-animation-svg {
-		& .column {
-			transition: none;
-		}
 	}
 
 	& .knitout-animation-empty {

@@ -1,4 +1,5 @@
 import {docText} from "./files.js"
+import {WALE, newFabric, relax} from "./fabric.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {YARNS_CHANGED, yarnColours} from "./yarns.js"
 
@@ -7,14 +8,18 @@ const REPARSE_DELAY = 250
 
 // the world, in needles: a needle's pitch is 1 across (x), the fabric hangs
 // down (−y) from the gap between the beds, the front bed is towards you (+z)
-const ROW = 0.72
+const ROW = WALE
 const YARN = 0.085
 const SIDES = 6
+const COS = Array.from({length: SIDES}, (_, side) => Math.cos((side / SIDES) * Math.PI * 2))
+const SIN = Array.from({length: SIDES}, (_, side) => Math.sin((side / SIDES) * Math.PI * 2))
 const DEPTH = 0.16 // how far a loop's legs come forward of its head
 const GAP = 0.32 // each bed's fabric, either side of the middle
 const NEEDLE = 6 // a needle's length, down its bed
 const SLOPE = Math.SQRT1_2 // the beds lean 45° away from the gap
 const BED_MARGIN = Math.ceil(OVERRUN + 6)
+// frames the fabric gets to settle in, after a jump
+const SETTLE = 30
 // how many rows down a tube takes to open out round
 const OPENING = 14
 // at most this many stitches are drawn: the newest rows, when there are more
@@ -84,10 +89,17 @@ function button(text, title, onClick) {
 
 // ── a mesh, built up a triangle at a time
 
+// (its arrays are kept from one build to the next: the fabric's about as big
+// as it was last time)
 class Mesh {
 	constructor() {
 		this.vertices = new Float32Array(9 * 4096) // position, normal, colour
 		this.indices = new Uint32Array(6 * 4096)
+		this.vertexCount = 0
+		this.indexCount = 0
+	}
+
+	reset() {
 		this.vertexCount = 0
 		this.indexCount = 0
 	}
@@ -123,33 +135,91 @@ class Mesh {
 		this.indices[this.indexCount++] = c
 	}
 
-	// a yarn along `points`, round, SIDES sided
-	tube(points, radius, colour) {
+	// room for so many more vertices and indices
+	reserve(vertices, indices) {
+		if ((this.vertexCount + vertices) * 9 > this.vertices.length) {
+			const grown = new Float32Array(Math.max(this.vertices.length * 2, (this.vertexCount + vertices) * 9))
+			grown.set(this.vertices)
+			this.vertices = grown
+		}
+		if (this.indexCount + indices > this.indices.length) {
+			const grown = new Uint32Array(Math.max(this.indices.length * 2, this.indexCount + indices))
+			grown.set(this.indices)
+			this.indices = grown
+		}
+	}
+
+	// a yarn along `count` points (x, y, z, one after another in `points`),
+	// round, SIDES sided
+	tube(points, count, radius, colour) {
+		this.reserve(count * SIDES, (count - 1) * SIDES * 6)
+		const v = this.vertices
 		const first = this.vertexCount
-		for (let i = 0; i < points.length; i++) {
-			const before = points[Math.max(0, i - 1)]
-			const after = points[Math.min(points.length - 1, i + 1)]
-			const tangent = normalize(sub(after, before))
-			const reference = Math.abs(tangent[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]
-			const normal = normalize(cross(reference, tangent))
-			const binormal = cross(tangent, normal)
+		let at = first * 9
+		for (let i = 0; i < count; i++) {
+			const b = Math.max(0, i - 1) * 3
+			const a = Math.min(count - 1, i + 1) * 3
+			let tx = points[a] - points[b]
+			let ty = points[a + 1] - points[b + 1]
+			let tz = points[a + 2] - points[b + 2]
+			const tl = Math.hypot(tx, ty, tz) || 1
+			tx /= tl
+			ty /= tl
+			tz /= tl
+			// normal = reference × tangent, the reference being z (or x, if the
+			// yarn's going along z)
+			let nx, ny, nz
+			if (Math.abs(tz) < 0.9) {
+				nx = -ty
+				ny = tx
+				nz = 0
+			} else {
+				nx = 0
+				ny = -tz
+				nz = ty
+			}
+			const nl = Math.hypot(nx, ny, nz) || 1
+			nx /= nl
+			ny /= nl
+			nz /= nl
+			const bx = ty * nz - tz * ny
+			const by = tz * nx - tx * nz
+			const bz = tx * ny - ty * nx
+			const px = points[i * 3]
+			const py = points[i * 3 + 1]
+			const pz = points[i * 3 + 2]
 			for (let side = 0; side < SIDES; side++) {
-				const angle = (side / SIDES) * Math.PI * 2
-				const cos = Math.cos(angle)
-				const sin = Math.sin(angle)
-				const out = [0, 1, 2].map(axis => normal[axis] * cos + binormal[axis] * sin)
-				const p = points[i]
-				this.vertex(p[0] + out[0] * radius, p[1] + out[1] * radius, p[2] + out[2] * radius, ...out, colour)
+				const ox = nx * COS[side] + bx * SIN[side]
+				const oy = ny * COS[side] + by * SIN[side]
+				const oz = nz * COS[side] + bz * SIN[side]
+				v[at] = px + ox * radius
+				v[at + 1] = py + oy * radius
+				v[at + 2] = pz + oz * radius
+				v[at + 3] = ox
+				v[at + 4] = oy
+				v[at + 5] = oz
+				v[at + 6] = colour[0]
+				v[at + 7] = colour[1]
+				v[at + 8] = colour[2]
+				at += 9
 			}
 		}
-		for (let i = 0; i < points.length - 1; i++) {
+		this.vertexCount += count * SIDES
+		const indices = this.indices
+		let k = this.indexCount
+		for (let i = 0; i < count - 1; i++) {
 			for (let side = 0; side < SIDES; side++) {
 				const a = first + i * SIDES + side
 				const b = first + i * SIDES + ((side + 1) % SIDES)
-				this.triangle(a, a + SIDES, b)
-				this.triangle(b, a + SIDES, b + SIDES)
+				indices[k++] = a
+				indices[k++] = a + SIDES
+				indices[k++] = b
+				indices[k++] = b
+				indices[k++] = a + SIDES
+				indices[k++] = b + SIDES
 			}
 		}
+		this.indexCount = k
 	}
 
 	// a box at `centre`, its half sizes along three axes
@@ -418,6 +488,7 @@ export default function Knit3dTool(handle, element) {
 	let knitout = {ops: [], carriers: [], problems: [], range: [0, 20]}
 	let track = []
 	let machine = newMachine()
+	let fabric = newFabric()
 	let done = 0 // ops done to the machine
 	let upTo = 0 // ops the picture shows
 	let playing = false
@@ -429,6 +500,7 @@ export default function Knit3dTool(handle, element) {
 		const to = Math.max(0, Math.min(knitout.ops.length, Math.floor(target)))
 		if (to < done) {
 			machine = newMachine()
+			fabric = newFabric()
 			done = 0
 		}
 		for (; done < to; done++) apply(machine, knitout.ops[done], done, yarnOf)
@@ -441,54 +513,96 @@ export default function Knit3dTool(handle, element) {
 		const width = hi - lo + 1
 		const radius = width / Math.PI
 		const middle = (lo + hi) / 2
-		return (back, s, y, z) => {
+		// (written into `out` at `at`)
+		return (back, s, y, z, out, at) => {
 			const flatZ = back ? -GAP - z : GAP + z
+			out[at + 1] = y
 			// pressed flat between the beds, opening out as it hangs
 			const open = round * Math.min(1, Math.max(0, -y / (OPENING * ROW)) ** 1.5)
-			if (!open) return [s, y, flatZ]
+			if (!open) {
+				out[at] = s
+				out[at + 2] = flatZ
+				return
+			}
 			const along = Math.max(0, Math.min(width, s - lo + 0.5)) / width
 			const angle = back ? Math.PI + Math.PI * along : Math.PI - Math.PI * along
 			const r = radius + z
 			const roundX = middle + r * Math.cos(angle)
 			const roundZ = r * Math.sin(angle)
-			return [s + (roundX - s) * open, y, flatZ + (roundZ - flatZ) * open]
+			out[at] = s + (roundX - s) * open
+			out[at + 2] = flatZ + (roundZ - flatZ) * open
 		}
 	}
 
 	let bounds = {min: [0, -10, -1], max: [20, 2, 1]}
 
-	function build() {
-		const mesh = new Mesh()
+	// every loop of the fabric, where it's settled: a knit loop facing out of
+	// its bed's side, leaning with its wale and its row. a loop still on a
+	// needle reaches down to the loops it was pulled through, however far
+	// they've gone
+	const mesh = new Mesh()
+	const points = new Float64Array(LOOP_CURVE.length * 3)
+	function build(sweeps) {
+		mesh.reset()
 		const place = placer()
+		const moved = relax(fabric, machine, sweeps)
+		const {xs, ys} = fabric
+		const {loops} = machine
+		const count = loops.length
+		const start = Math.max(0, count - BUDGET)
+		const next = new Int32Array(count).fill(-1)
+		for (let i = start; i < count; i++) {
+			const prev = loops[i].prev
+			if (prev != null && prev >= start) next[prev] = i
+		}
 
-		// every column of fabric, with the loops still on its needle on top
-		const columns = new Map()
-		for (const [key, column] of machine.columns) {
-			columns.set(key, {n: column.n, back: column.back, loops: column.stitches.map(s => s.yarn)})
-		}
-		for (const [, held] of machine.held) {
-			if (!held.loops.length) continue
-			const key = (held.needle.back ? "b" : "f") + held.needle.n
-			const column = columns.get(key) ?? {n: held.needle.n, back: held.needle.back, loops: []}
-			column.loops = [...column.loops, held.loops[0].yarn]
-			columns.set(key, column)
-		}
-		const rows = Math.max(12, Math.floor(BUDGET / Math.max(1, columns.size)))
 		let deepest = 0
-		for (const {n, back, loops} of columns.values()) {
-			const from = Math.max(0, loops.length - rows)
-			for (let k = from; k < loops.length; k++) {
-				// the newest loop's head reaches up into the needles' hooks
-				const base = -(loops.length - 1 - k) * ROW - 1.6 * ROW
-				deepest = Math.min(deepest, base)
-				const points = LOOP_CURVE.map(([x, y, z]) => place(back, n + x, base + y * ROW, z * DEPTH))
-				mesh.tube(points, YARN, palette.yarns[loops[k]] ?? palette.yarns[0])
+		for (let i = start; i < count; i++) {
+			const loop = loops[i]
+			const x = xs[i]
+			const y = ys[i]
+			deepest = Math.min(deepest, y)
+			// along its row, left to right
+			const a = loop.prev != null && loop.prev >= start ? loop.prev : i
+			const b = next[i] >= 0 ? next[i] : i
+			let tx = xs[b] - xs[a]
+			let ty = ys[b] - ys[a]
+			if (tx < 0) {
+				tx = -tx
+				ty = -ty
 			}
+			const length = Math.hypot(tx, ty)
+			// at the end of a row the yarn goes up: the loop stays upright
+			if (length < 1e-6 || tx < length * 0.6) {
+				tx = 1
+				ty = 0
+			} else {
+				tx /= length
+				ty /= length
+			}
+			// its legs reach the loops it was pulled through
+			const parents = loop.parents.filter(parent => parent >= start)
+			let reachX = 0
+			let reachY = 0
+			if (parents.length) {
+				const px = parents.reduce((sum, parent) => sum + xs[parent], 0) / parents.length
+				const py = parents.reduce((sum, parent) => sum + ys[parent], 0) / parents.length
+				reachX = px - x
+				reachY = py + WALE - y
+			}
+			const baseY = y - 1.6 * ROW
+			LOOP_CURVE.forEach(([lx, ly, lz], k) => {
+				const down = ly < 1.12 ? 1 - ly / 1.12 : 0
+				const px = x + tx * lx - ty * ly * ROW + reachX * down
+				const py = baseY + ty * lx + tx * ly * ROW + reachY * down
+				place(loop.back, px, py, lz * DEPTH, points, k * 3)
+			})
+			mesh.tube(points, LOOP_CURVE.length, YARN, palette.yarns[loop.yarn] ?? palette.yarns[0])
 		}
 
 		const [lo, hi] = knitout.range
 		bounds = {
-			min: [lo - 1.5, deepest - ROW, -GAP - 1],
+			min: [lo - 1.5, deepest - 2 * ROW, -GAP - 1],
 			max: [hi + 1.5, 1.5, GAP + 1],
 		}
 		if (bedBox.checked) buildMachine(mesh)
@@ -498,6 +612,7 @@ export default function Knit3dTool(handle, element) {
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
 		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices.subarray(0, mesh.indexCount), gl.DYNAMIC_DRAW)
 		indexCount = mesh.indexCount
+		return moved
 	}
 
 	// the two beds, leaning away from the gap, their needles' hooks at the
@@ -592,9 +707,13 @@ export default function Knit3dTool(handle, element) {
 	let dirty = false
 	let playhead = 0 // where playing's got to, between ops
 
+	// the fabric settles over a few frames after a jump (at most SETTLE)
+	let settling = 0
 	function show() {
 		runTo(upTo)
-		build()
+		const moved = build(playing ? 6 : 12)
+		settling = moved > 0.01 && settling < SETTLE ? settling + 1 : 0
+		if (settling) dirty = true
 		draw()
 		scrubber.max = String(knitout.ops.length)
 		scrubber.value = String(upTo)
@@ -727,6 +846,7 @@ export default function Knit3dTool(handle, element) {
 		knitout = readKnitout(docText(handle.doc()))
 		track = carriageTrack(knitout.ops)
 		machine = newMachine()
+		fabric = newFabric()
 		done = 0
 		upTo = wasEnd ? knitout.ops.length : Math.min(upTo, knitout.ops.length)
 		empty.hidden = knitout.ops.length > 0
