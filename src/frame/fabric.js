@@ -25,6 +25,11 @@ const LIMIT = 20000
 // so many new loops at once (a seek) and the fabric's laid out afresh
 const COLD = 400
 const COLD_SWEEPS = 50
+// (and how many times over its loops are hung, each pass passing what holds
+// them up or down further along their wales and rows)
+const HANG_PASSES = 8
+// (and knitting, it's eased so much of the way to where it'd hang, each pass)
+const REHANG = 0.5
 // the takedown pulls the fabric's bottom edge down (so far each sweep), and
 // holds it level (so hard); and each loop keeps to the needle it was knitted
 // on (so hard)
@@ -46,12 +51,12 @@ const PRESSURE = 0.03
 const TAUT = 0.04
 // and how stiff a tube's yarn is, round it: it rounds off the folds
 const BEND = 0.15
-// rows bunched closer than a wale apart bulge out of their bed's face, away
-// from the other bed (an ottoman's ridges, a short row's pucker), by so much
-// of how far short they are each sweep; and fabric that isn't bunched
-// flattens back onto its bed, slowly
-const BULGE = 0.3
-const FLATTEN = 0.05
+// a loop bunched closer than a wale to the loop below it bulges out of its
+// bed's face, away from the other bed (an ottoman's ridges, a short row's
+// pucker): BULGE times as far as it's short of a wale. (it eases out, or
+// back, EASE of the way each sweep)
+const BULGE = 1.6
+const EASE = 0.3
 // yarn that can go slack: a float, or yarn carried up the fabric's side
 const FLOAT = 1
 const CARRIED = 2
@@ -63,6 +68,7 @@ const CARRIED = 2
 export function newFabric() {
 	const fabric = {
 		count: 0, // loops laid out
+		hungPass: -1, // the pass it was last eased towards where it'd hang at
 		joined: 0, // loops whose joins are read
 		size: 0,
 		xs: null,
@@ -82,6 +88,12 @@ export function newFabric() {
 		// a stitch's diagonal: the loop below the one before it (when that's
 		// beside the loop below it), and how far apart they are
 		diagonal: null,
+		pass: null, // which pass of the carriage made it
+		child: null, // the first loop pulled through it
+		// how many rows were made, beside the loops it was pulled through,
+		// while they waited on their needles (on the wales their yarn goes on
+		// to): each pulled them that much longer, and they stay long
+		waited: null,
 		span: null,
 		depth: null, // how many rows hang from it: the most made through it, through those, and so on
 		firstParent: null, // its parents are parents[firstParent[i]…firstParent[i + 1]]
@@ -116,6 +128,9 @@ function grow(fabric, size) {
 	fabric.course = sized(Float32Array, fabric.course)
 	fabric.slack = sized(Uint8Array, fabric.slack)
 	fabric.diagonal = sized(Int32Array, fabric.diagonal)
+	fabric.pass = sized(Int32Array, fabric.pass)
+	fabric.child = sized(Int32Array, fabric.child)
+	fabric.waited = sized(Int32Array, fabric.waited)
 	fabric.span = sized(Float32Array, fabric.span)
 	fabric.depth = sized(Int32Array, fabric.depth)
 	// (the joins are read again from the start)
@@ -127,9 +142,22 @@ function grow(fabric, size) {
 
 // read the joins of the loops made since last time
 function join(fabric, loops, count) {
-	const {prev, next, course, slack, diagonal, span, firstParent} = fabric
+	const {prev, next, course, slack, diagonal, span, firstParent, pass, child, waited} = fabric
 	for (let i = fabric.joined; i < count; i++) {
 		const loop = loops[i]
+		const last = i > 0 ? loops[i - 1] : null
+		pass[i] = !last ? 0 : pass[i - 1] + (last.dir !== loop.dir || last.yarn !== loop.yarn ? 1 : 0)
+		child[i] = -1
+		waited[i] = 0
+		for (const parent of loop.parents) {
+			if (child[parent] === -1) child[parent] = i
+			for (const beside of [prev[parent], next[parent]]) {
+				if (beside < 0 || beside === i) continue
+				let rows = 0
+				for (let c = child[beside]; c >= 0 && c !== i && pass[c] < pass[i]; c = child[c]) rows++
+				waited[i] = Math.max(waited[i], rows)
+			}
+		}
 		firstParent[i] = fabric.parentCount
 		if (fabric.parentCount + loop.parents.length > fabric.parents.length) {
 			const grown = new Int32Array(fabric.parents.length * 2 + loop.parents.length)
@@ -201,8 +229,12 @@ export function relax(
 	grow(fabric, count)
 	join(fabric, loops, count)
 	const start = firstLoop(machine, limit)
-	const {xs, ys, zs, pinned, home, round, plane, face, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents} =
+	const {xs, ys, zs, pinned, home, round, plane, face, push, outward, prev, next, course, slack, diagonal, span, firstParent, parents, waited} =
 		fabric
+	// how far loop i is from the loops it was pulled through, at rest: a
+	// wale, or (if they waited on their needles while rows were made beside
+	// them) bunched rows' further, as far as their yarn reaches
+	const rest = i => Math.min(REACH, WALE * (1 + waited[i] * squash))
 
 	for (let i = start; i < count; i++) {
 		const loop = loops[i]
@@ -226,19 +258,15 @@ export function relax(
 	// (sweeps, however long they take)
 	let least = 0
 	if (!fabric.count || count - fabric.count > COLD) {
-		// hang each loop as far down as its wale's deepest: then settle
-		const {depth} = fabric
-		depth.fill(0, 0, count)
-		for (let i = count - 1; i >= start; i--) {
-			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
-				depth[parents[p]] = Math.max(depth[parents[p]], depth[i] + 1)
-			}
-			if (!pinned[i]) {
-				xs[i] = loops[i].x
-				ys[i] = -Math.max(1, depth[i]) * WALE
-				zs[i] = plane[i]
-			}
+		// hang each loop about where it'll settle (see hang), then settle
+		const hung = hang()
+		for (let i = start; i < count; i++) {
+			if (pinned[i]) continue
+			xs[i] = loops[i].x
+			ys[i] = hung[i]
+			zs[i] = plane[i]
 		}
+		fabric.hungPass = fabric.pass[count - 1]
 		least = COLD_SWEEPS
 	} else {
 		for (let i = fabric.count; i < count; i++) {
@@ -247,6 +275,13 @@ export function relax(
 			xs[i] = loops[i].x
 			ys[i] = -WALE
 			zs[i] = plane[i]
+		}
+		// and at each turn of the carriage, it eases towards where it'd hang
+		// (so it's where it'd be laid out afresh, however it got there)
+		if (count && fabric.pass[count - 1] !== fabric.hungPass && !grab) {
+			fabric.hungPass = fabric.pass[count - 1]
+			const hung = hang()
+			for (let i = start; i < count; i++) if (!pinned[i]) ys[i] += (hung[i] - ys[i]) * REHANG
 		}
 	}
 	fabric.count = count
@@ -327,10 +362,16 @@ export function relax(
 		for (let i = start; i < count; i++) {
 			if (pinned[i]) continue
 			xs[i] += (home[i] - xs[i]) * keep
-			// (never into the other bed's fabric, but out of its own face, if
-			// it's bunched up)
-			const out = (zs[i] - plane[i]) * face[i]
-			zs[i] += (plane[i] - zs[i]) * hold * (out > 0 ? FLATTEN : 1)
+			// (out of its own face as far as it's bunched up, and never into the
+			// other bed's fabric)
+			let short = 0
+			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
+				const parent = parents[p]
+				if (parent < start) continue
+				short = Math.max(short, WALE - Math.hypot(xs[i] - xs[parent], ys[i] - ys[parent]))
+			}
+			const out = face[i] * BULGE * short
+			zs[i] += (plane[i] + out - zs[i]) * hold * EASE
 		}
 		if (grabbed >= 0) {
 			xs[grabbed] = grab.x
@@ -342,7 +383,7 @@ export function relax(
 			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
 				const parent = parents[p]
 				if (parent < start) continue
-				nudge(i, parent, WALE, pinned[i] ? GIVE : 1, SOFT)
+				nudge(i, parent, rest(i), pinned[i] ? GIVE : 1, SOFT)
 				// (and no further than its yarn reaches)
 				nudge(i, parent, REACH, 1, 0)
 				// and a parent stays below
@@ -354,11 +395,6 @@ export function relax(
 						ys[i] -= (above * wc) / (wc + wp)
 						ys[parent] += (above * wp) / (wc + wp)
 					}
-				}
-				// and bunched up, it bulges out
-				if (!held(i)) {
-					const short = WALE - Math.hypot(xs[i] - xs[parent], ys[i] - ys[parent], zs[i] - zs[parent])
-					if (short > 0) zs[i] += face[i] * short * BULGE
 				}
 			}
 			// (yarn can go slack, floating, but not be pulled long; and nor
@@ -388,6 +424,66 @@ export function relax(
 		}
 	}
 	return moved
+
+	// how high each loop hangs (its y): about where it'll settle. as far down
+	// as its wale's deepest, but no further than its stitches reach unpulled
+	// (a wale apart, rows level); and never closer to the needles than its
+	// rows can bunch. (where those disagree, as an ottoman's front and back
+	// do, the rows bunch)
+	function hang() {
+		// (how far down, below the needles)
+		const {depth} = fabric
+		const lowest = new Float32Array(count)
+		const highest = new Float32Array(count)
+		depth.fill(0, 0, count)
+		for (let i = count - 1; i >= start; i--) {
+			if (!pinned[i]) lowest[i] = Math.max(WALE, lowest[i])
+			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
+				const parent = parents[p]
+				depth[parent] = Math.max(depth[parent], depth[i] + 1)
+				lowest[parent] = Math.max(lowest[parent], lowest[i] + rest(i))
+			}
+		}
+		for (let i = start; i < count; i++) {
+			if (pinned[i]) lowest[i] = 0
+			highest[i] = pinned[i] ? 0 : WALE * squash
+		}
+		// how far a loop can be above or below the one before it on its yarn
+		const rise = i => {
+			if (prev[i] < start || slack[i] === CARRIED) return -1
+			const along = loops[i].x - loops[prev[i]].x
+			return Math.sqrt(Math.max(0, course[i] * course[i] - along * along))
+		}
+		for (let pass = 0; pass < HANG_PASSES; pass++) {
+			for (let i = count - 1; i >= start; i--) {
+				for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
+					const parent = parents[p]
+					if (parent < start || pinned[parent]) continue
+					lowest[parent] = Math.min(lowest[parent], lowest[i] + rest(i))
+					highest[parent] = Math.max(highest[parent], highest[i] + WALE * squash)
+				}
+			}
+			for (const forward of [true, false]) {
+				for (let k = start; k < count; k++) {
+					const i = forward ? k : count - 1 - k + start
+					const most = rise(i)
+					if (most < 0) continue
+					const before = prev[i]
+					if (!pinned[i]) {
+						lowest[i] = Math.min(lowest[i], lowest[before] + most)
+						highest[i] = Math.max(highest[i], highest[before] - most)
+					}
+					if (!pinned[before]) {
+						lowest[before] = Math.min(lowest[before], lowest[i] + most)
+						highest[before] = Math.max(highest[before], highest[i] - most)
+					}
+				}
+			}
+		}
+		const hung = new Float32Array(count)
+		for (let i = start; i < count; i++) hung[i] = -Math.max(lowest[i], highest[i])
+		return hung
+	}
 
 	// loop i's just been made: the takedown draws the loops it was pulled
 	// through down a row (off the needle), and each loop they were pulled
