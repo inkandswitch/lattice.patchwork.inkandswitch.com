@@ -76,6 +76,7 @@ export function newFabric() {
 		// beside the loop below it), and how far apart they are
 		diagonal: null,
 		span: null,
+		depth: null, // how many rows hang from it: the most made through it, through those, and so on
 		firstParent: null, // its parents are parents[firstParent[i]…firstParent[i + 1]]
 		parents: new Int32Array(1024),
 		parentCount: 0,
@@ -108,6 +109,7 @@ function grow(fabric, size) {
 	fabric.slack = sized(Uint8Array, fabric.slack)
 	fabric.diagonal = sized(Int32Array, fabric.diagonal)
 	fabric.span = sized(Float32Array, fabric.span)
+	fabric.depth = sized(Int32Array, fabric.depth)
 	// (the joins are read again from the start)
 	fabric.firstParent = new Int32Array(length + 1)
 	fabric.size = length
@@ -216,7 +218,8 @@ export function relax(
 	let least = 0
 	if (!fabric.count || count - fabric.count > COLD) {
 		// hang each loop as far down as its wale's deepest: then settle
-		const depth = new Int32Array(count)
+		const {depth} = fabric
+		depth.fill(0, 0, count)
 		for (let i = count - 1; i >= start; i--) {
 			for (let p = firstParent[i]; p < firstParent[i + 1]; p++) {
 				depth[parents[p]] = Math.max(depth[parents[p]], depth[i] + 1)
@@ -230,6 +233,7 @@ export function relax(
 		least = COLD_SWEEPS
 	} else {
 		for (let i = fabric.count; i < count; i++) {
+			takeDown(i)
 			if (pinned[i]) continue
 			xs[i] = loops[i].x
 			ys[i] = -WALE
@@ -340,8 +344,13 @@ export function relax(
 					}
 				}
 			}
-			// (yarn can go slack, floating, but not be pulled long)
-			if (prev[i] >= start && slack[i] !== CARRIED) nudge(i, prev[i], course[i], 1, slack[i] ? 0 : 1)
+			// (yarn can go slack, floating, but not be pulled long; and nor
+			// can yarn going across to the other bed, which needn't be a
+			// wale's length from its loop below it, needles away)
+			if (prev[i] >= start && slack[i] !== CARRIED) {
+				const across = loops[i].back !== loops[prev[i]].back
+				nudge(i, prev[i], course[i], 1, slack[i] || across ? 0 : 1)
+			}
 			const beside = diagonal[i]
 			if (beside >= start && prev[i] >= start) {
 				const below = parents[firstParent[i]]
@@ -362,6 +371,29 @@ export function relax(
 		}
 	}
 	return moved
+
+	// loop i's just been made: the takedown draws the loops it was pulled
+	// through down a row (off the needle), and each loop they were pulled
+	// through, and so on. (it pulls the fabric down by the rows made, however
+	// few sweeps it gets between them, so it doesn't bunch up under the
+	// needles; and a wale that's made more rows than the one beside it is
+	// further down, as the fabric is laid out afresh)
+	function takeDown(i) {
+		const {depth} = fabric
+		depth[i] = 0
+		const todo = [i]
+		while (todo.length) {
+			const j = todo.pop()
+			for (let p = firstParent[j]; p < firstParent[j + 1]; p++) {
+				const parent = parents[p]
+				const deeper = depth[j] + 1 - depth[parent]
+				if (parent < start || deeper <= 0) continue
+				depth[parent] += deeper
+				if (!pinned[parent]) ys[parent] -= deeper * WALE
+				todo.push(parent)
+			}
+		}
+	}
 
 	// how much longer the yarn either side of i is than it would be
 	function stretch(i) {
