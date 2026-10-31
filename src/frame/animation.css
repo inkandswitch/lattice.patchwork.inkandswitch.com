@@ -49,11 +49,11 @@
 	}
 
 	/* the one button that does something */
-	/* (white on black: the ink and the page swapped) */
+	/* (white on blue) */
 	& .knitout-animation-play {
 		min-width: 5em;
-		background: var(--knitoutjs-ink);
-		color: var(--knitoutjs-sheet);
+		background: var(--knitoutjs-accent);
+		color: #fff;
 	}
 
 	/* seen from behind */
