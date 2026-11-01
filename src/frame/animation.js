@@ -5,6 +5,7 @@ import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 import {icon} from "./icons.js"
+import {stylesheet} from "./stylesheet.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
 const SVG = "http://www.w3.org/2000/svg"
@@ -22,12 +23,6 @@ const DEPTH = 0.4
 // (where the fabric bulges out, on the whole, more than BULGING, its layers
 // go from its face to twice its usual depth)
 const BULGING = 0.2
-// and a stitch the stitches above and below it bulge out past is in their
-// shade: darker, the further they're out past it (SHADOW out, as dark as
-// SHADE), in SHADES steps
-const SHADOW = 0.8
-const SHADE = 0.6
-const SHADES = 3
 const BACK_HOOK = -5
 const FRONT_HOOK = 5
 const NEEDLE = 20
@@ -105,14 +100,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const events = context.events ?? element
 	const id = `knit-${++instances}`
 
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
-	element.appendChild(link)
-
 	const root = document.createElement("div")
 	root.className = "knitoutjs-editor-tool knitout-animation"
-	element.appendChild(root)
+	const link = stylesheet(STYLESHEET, root)
+	element.append(link, root)
 
 	// ── the controls
 
@@ -400,10 +391,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// the stitches, on the canvas: the far bed's faint, behind the near one's,
 	// and the near one's nearest last (so a ridge, bulging out, hides the rows
-	// it rises from), the ones in its shade darker. a stitch is a V, its legs
-	// reaching down to the loops it was pulled through (or, on the far bed, the
-	// arc of its loop's head), batched into one path for each yarn at each
-	// depth, and one for each depth of shade at each depth
+	// it rises from). a stitch is a V, its legs reaching down to the loops it
+	// was pulled through (or, on the far bed, the arc of its loop's head),
+	// batched into one path for each yarn at each depth
 	function drawFabric() {
 		const ratio = devicePixelRatio || 1
 		const width = Math.round(size.width * ratio)
@@ -431,7 +421,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		// and (showing strain) how hard each is pulled
 		const marks = 6 + DEPTHS * 6
 		const paths = Array.from({length: marks + 4}, () => new Path2D())
-		const shade = Array.from({length: DEPTHS * SHADES}, () => new Path2D())
 		const showStrain = strainBox.checked
 		const back = f < 0
 		const first = firstLoop(machine)
@@ -445,22 +434,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		}
 		const usual = near ? sum / near : 0
 		const layer = usual > BULGING ? (2 * usual) / DEPTHS : DEPTH
-		// how far the stitches a couple of rows above and below a stitch, in
-		// its wale, bulge out past it
-		const {child} = fabric
-		const shadowOver = id => {
-			const own = nearness(id)
-			let most = own
-			let up = id
-			let down = id
-			for (let step = 0; step < 2; step++) {
-				up = up >= 0 ? child[up] : -1
-				if (up >= 0 && up < loops.length && !Number.isNaN(xs[up])) most = Math.max(most, nearness(up))
-				down = down >= 0 && loops[down].parents.length ? loops[down].parents[0] : -1
-				if (down >= first && !Number.isNaN(xs[down])) most = Math.max(most, nearness(down))
-			}
-			return most - own
-		}
 		for (let id = first; id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
@@ -494,13 +467,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				footY = Math.max(footY, highest - 3.7)
 			}
 			const half = Math.max(1.2, (3.6 * 6.9) / (footY - y + 3.6))
-			const dark = Math.min(SHADES, Math.round((shadowOver(id) / SHADOW) * SHADES))
-			for (const p of dark && path !== paths[marks] ? [path, shade[depth * SHADES + dark - 1]] : [path]) {
-				p.moveTo(x - half, y - 3.6)
-				p.lineTo(footX - 0.5, footY)
-				p.moveTo(x + half, y - 3.6)
-				p.lineTo(footX + 0.5, footY)
-			}
+			path.moveTo(x - half, y - 3.6)
+			path.lineTo(footX - 0.5, footY)
+			path.moveTo(x + half, y - 3.6)
+			path.lineTo(footX + 0.5, footY)
 		}
 		c.lineWidth = 2.1
 		c.lineCap = "round"
@@ -509,15 +479,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			c.globalAlpha = at < 6 ? 0.4 : at > marks ? (at - marks) / 3 : 1
 			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % 6]
 			c.stroke(paths[at])
-			// (and once a depth's stitches are down, the ones in shade darkened)
-			if (at >= 6 && at < marks && at % 6 === 5) {
-				const depth = (at - 11) / 6
-				c.strokeStyle = "#000"
-				for (let dark = 1; dark <= SHADES; dark++) {
-					c.globalAlpha = (SHADE * dark) / SHADES
-					c.stroke(shade[depth * SHADES + dark - 1])
-				}
-			}
 		}
 		c.globalAlpha = 1
 	}

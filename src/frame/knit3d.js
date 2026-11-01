@@ -5,6 +5,7 @@ import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 import {icon, withIcon} from "./icons.js"
+import {stylesheet} from "./stylesheet.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250
@@ -321,14 +322,10 @@ void main() {
  * to watch the fabric grow
  */
 export default function Knit3dTool(handle, element) {
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
-	element.appendChild(link)
-
 	const root = document.createElement("div")
 	root.className = "knitoutjs-editor-tool knit3d"
-	element.appendChild(root)
+	const link = stylesheet(STYLESHEET, root)
+	element.append(link, root)
 
 	// ── the controls
 

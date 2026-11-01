@@ -46,6 +46,7 @@ const K_SPRING = 0.3 // ...and does, quickly, when it's let go
 const STEP = 0.6 // the most a pass moves a loop
 const HOLD = 0.35 // the most the wale limits move a loop in a pass
 const SETTLED = 0.0005
+const EASED = 0.01 // (z's settled closer than this to where it's going)
 const BULGE = 1.1
 const SLACK = 0.12 // the yarn from one loop to the next, longer than its pitch by this at most
 const GRASP = 6 // taking hold of a stitch takes hold of the fabric at least this far either side (in pitches)
@@ -62,6 +63,7 @@ export function newFabric() {
 		// (what follows is relax's own)
 		px: new Float32Array(0), // where each loop is, before inflating
 		py: new Float32Array(0),
+		pz: new Float32Array(0), // (and its z, before)
 		x0: new Float32Array(0), // where each loop was made
 		ax: new Float32Array(0),
 		ay: new Float32Array(0),
@@ -104,6 +106,7 @@ function grow(f, need) {
 	f.zs = bigger(f.zs, Float32Array)
 	f.px = bigger(f.px, Float32Array)
 	f.py = bigger(f.py, Float32Array)
+	f.pz = bigger(f.pz, Float32Array)
 	f.x0 = bigger(f.x0, Float32Array)
 	f.ax = bigger(f.ax, Float32Array)
 	f.ay = bigger(f.ay, Float32Array)
@@ -490,10 +493,38 @@ function buckle(f, first, n, squash) {
 	}
 }
 
+// which loops are in a tube: a tube's yarn goes round both beds without
+// turning, so (which way it's knitted) × (which bed) stays the same along it.
+// each run of yarn going round one way (a row that turns at its end is a
+// run; a tube's spiral is one long run) is a tube if it goes all the way
+// round, from one bed to the other and back. (a row knitted across both beds
+// at once, as a rib or an ottoman's join is, turns round at every loop: it's
+// one fabric. and a row along the front and then one back along the back is
+// only half way round: as often as not it's moved onto one bed after)
+function tubes(machine, first, n) {
+	const {loops} = machine
+	const run = new Int32Array(n)
+	const crossed = new Uint8Array(n)
+	const way = i => loops[i].dir * (loops[i].back ? -1 : 1)
+	for (let i = first; i < n; i++) {
+		const p = loops[i].prev
+		const on = p != null && p >= first && way(p) === way(i)
+		run[i] = on ? run[p] : i
+		if (on && loops[p].back !== loops[i].back && crossed[run[i]] < 2) crossed[run[i]]++
+	}
+	const tube = new Uint8Array(n)
+	for (let i = first; i < n; i++) tube[i] = crossed[run[i]] === 2 ? 1 : 0
+	return tube
+}
+
 // show: bed side, plus bulge (smoothed along the wale so ridges are round),
-// plus, worn, the beds blown round into a tube
+// plus, worn, off the machine: a tube's beds blown round into it, and any
+// other fabric's beds come together into one cloth. (z eases there: how far
+// it's still to go)
 function show(f, machine, first, n, gap, inflate) {
-	const {px, py, xs, ys, zs, bed, bulge, child} = f // (machine unused)
+	const {px, py, pz, xs, ys, zs, bed, bulge, child} = f
+	const tube = inflate > 0 ? tubes(machine, first, n) : null
+	let easing = 0
 	for (let i = first; i < n; i++) {
 		let b = bulge[i]
 		const c = child[i]
@@ -503,8 +534,11 @@ function show(f, machine, first, n, gap, inflate) {
 		if (p >= first) b += bulge[p] * 0.25
 		else b += bulge[i] * 0.25
 		// (a held loop: flat)
-		const target = bed[i] * (gap + BULGE * b * (f.pinned[i] ? 0 : 1))
-		zs[i] = f.settledZ ? zs[i] + (target - zs[i]) * 0.35 : target
+		const apart = tube && !tube[i] && !f.pinned[i] ? gap * (1 - inflate) : gap
+		const target = bed[i] * (apart + BULGE * b * (f.pinned[i] ? 0 : 1))
+		pz[i] = f.settledZ ? pz[i] + (target - pz[i]) * 0.35 : target
+		easing = Math.max(easing, Math.abs(target - pz[i]))
+		zs[i] = pz[i]
 		xs[i] = px[i]
 		ys[i] = py[i]
 	}
@@ -514,27 +548,30 @@ function show(f, machine, first, n, gap, inflate) {
 		let front = 0
 		let back = 0
 		for (let i = first; i < n; i++) {
+			if (!tube[i]) continue
 			if (px[i] < lo) lo = px[i]
 			if (px[i] > hi) hi = px[i]
 			if (bed[i] > 0) front++
 			else back++
 		}
 		const w = hi - lo
-		if (front > n * 0.1 && back > n * 0.1 && w > 2) {
+		if (front && back && w > 2) {
 			const r = w / Math.PI
 			const mid = (lo + hi) / 2
 			for (let i = first; i < n; i++) {
+				if (!tube[i]) continue
 				const u = (px[i] - mid) / (w / 2)
 				const t = (u * Math.PI) / 2
 				const round = mid + r * Math.sin(t)
-				const out = bed[i] * (r * Math.cos(t) - r + gap) + (zs[i] - bed[i] * gap)
+				// (round the tube's middle, between the beds: its bed's
+				// side, out as far as the tube's round there, and bulging)
+				const out = bed[i] * r * Math.cos(t) + (pz[i] - bed[i] * gap)
 				xs[i] = px[i] + (round - px[i]) * inflate
 				zs[i] = zs[i] + (out - zs[i]) * inflate
 			}
-		} else {
-			for (let i = first; i < n; i++) zs[i] += bed[i] * inflate * 0.3
 		}
 	}
+	return easing
 }
 
 export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinity, limit = 20000, squash = SQUASH, grab = null} = {}) {
@@ -557,6 +594,8 @@ export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinit
 	f.settledZ = !fresh
 	f.settled = false
 	f.grabbed = !!grab
+	// (a setting's changed: it all starts settling again)
+	if (f.key !== key) f.age = 0
 	f.key = key
 	const grabbed = grab && grab.id >= first && grab.id < n ? grab.id : -1
 	const added = n - from
@@ -615,6 +654,8 @@ export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinit
 		f.homing = 0
 	}
 	buckle(f, first, n, squash)
-	show(f, machine, first, n, gap, inflate)
-	return most
+	// (and not settled till its z is where it's going)
+	const easing = show(f, machine, first, n, gap, inflate)
+	if (easing > EASED && f.age <= 400) f.settled = false
+	return Math.max(most, easing > EASED ? easing : 0)
 }

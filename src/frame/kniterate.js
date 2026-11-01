@@ -2,6 +2,7 @@ import {checkPanel, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 import {withIcon} from "./icons.js"
+import {stylesheet} from "./stylesheet.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -214,14 +215,10 @@ function button(text, title, onClick) {
 export default function KniterateTool(handle, element, context = {}) {
 	const events = context.events ?? element
 
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
-	element.appendChild(link)
-
 	const root = document.createElement("div")
 	root.className = "knitoutjs-editor-tool kniterate"
-	element.appendChild(root)
+	const link = stylesheet(STYLESHEET, root)
+	element.append(link, root)
 
 	// ── the toolbar: which side to look from, the yarns, and the buttons
 

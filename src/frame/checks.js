@@ -2,6 +2,7 @@ import {moduleWorker} from "./files.js"
 import {icon} from "./icons.js"
 import {KNITERATE, holdRows} from "./knitcheck.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
+import {stylesheet} from "./stylesheet.js"
 
 const WORKER_URL = new URL("./knitcheck-worker.js", import.meta.url)
 const STYLESHEET = new URL("./checks.css", import.meta.url).href
@@ -102,9 +103,7 @@ export function checkPanel(stage, onPick) {
 	const checks = checker()
 	let text = null
 
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
+	const link = stylesheet(STYLESHEET)
 	stage.appendChild(link)
 
 	const button = document.createElement("button")

@@ -3,6 +3,8 @@
 // screen as ephemeral messages on it, and keys typed here go back the same
 // way (see latticex/README.md for what the messages are)
 
+import {stylesheet} from "./stylesheet.js"
+
 const STYLESHEET = new URL("./terminal.css", import.meta.url).href
 // ask again this often while there's no screen, or it's gone quiet
 const HELLO_EVERY = 2000
@@ -111,13 +113,10 @@ function inputFor(event) {
 }
 
 export default function LatticexTerminalTool(handle, element) {
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
-	element.appendChild(link)
-
 	const root = document.createElement("div")
 	root.className = "latticex-terminal"
+	const link = stylesheet(STYLESHEET, root)
+	element.appendChild(link)
 	root.innerHTML = `
 		<div class="latticex-status">
 			<span class="latticex-dot"></span>

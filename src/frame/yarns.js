@@ -1,3 +1,5 @@
+import {stylesheet} from "./stylesheet.js"
+
 // the colours of carriers 1–6: the kniterate editor's, until someone picks
 // their own. what they pick is theirs alone (it's kept in this browser), and
 // every tool showing yarns hears about it
@@ -39,9 +41,7 @@ export function yarnPicker() {
 	const element = document.createElement("div")
 	element.className = "yarn-picker"
 
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
+	const link = stylesheet(STYLESHEET)
 
 	const picker = document.createElement("input")
 	picker.type = "color"

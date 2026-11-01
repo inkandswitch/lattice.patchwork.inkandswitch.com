@@ -3,6 +3,7 @@ import {docText, moduleWorker, saveFile} from "./files.js"
 import {parseSource, highlighter} from "./stitch-source.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 import {withIcon} from "./icons.js"
+import {stylesheet} from "./stylesheet.js"
 
 const STYLESHEET = new URL("./visualizer.css", import.meta.url).href
 const WORKER_URL = new URL("./visualizer-worker.js", import.meta.url)
@@ -170,14 +171,10 @@ async function pageRenderer(canvas, {onHover, onGoto}) {
 export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	const events = context.events ?? element
 
-	const link = document.createElement("link")
-	link.rel = "stylesheet"
-	link.href = STYLESHEET
-	element.appendChild(link)
-
 	const root = document.createElement("div")
 	root.className = "knitoutjs-editor-tool knitout-visualizer"
-	element.appendChild(root)
+	const link = stylesheet(STYLESHEET, root)
+	element.append(link, root)
 
 	// watch the canvas, not root: root can already fill the pane before the
 	// stylesheet loads, while the canvas is still 300x150 until it does
