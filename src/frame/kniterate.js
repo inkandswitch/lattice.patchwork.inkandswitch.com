@@ -1,6 +1,7 @@
 import {checkPanel, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {withIcon} from "./icons.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -253,11 +254,17 @@ export default function KniterateTool(handle, element, context = {}) {
 		yarns.element,
 		spacer,
 		warningsBadge,
-		button("reset zoom", "fit the knitting in view again (scroll to move around, pinch or ctrl+scroll to zoom)", () => {
-			fit()
-			requestDraw()
-		}),
-		button("export kcode", "save this as a .kc file: kcode, the format a Kniterate machine reads", exportKcode),
+		withIcon(
+			"fit",
+			button("reset zoom", "fit the knitting in view again (scroll to move around, pinch or ctrl+scroll to zoom)", () => {
+				fit()
+				requestDraw()
+			}),
+		),
+		withIcon(
+			"download",
+			button("export kcode", "save this as a .kc file: kcode, the format a Kniterate machine reads", exportKcode),
+		),
 	)
 
 	const stage = document.createElement("div")

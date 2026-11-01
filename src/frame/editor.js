@@ -288,7 +288,7 @@ export default function KnitoutEditorTool(handle, element, context) {
         : "build the pattern: it writes its knitout into the .k file chosen on the right (⌘↵)"}
         onClick=${() => (run.running() ? run.stop() : run.now())}
       >
-        ${() => (run.running() ? "stop" : "build")}
+        ${() => (run.running() ? [icon("stop"), " stop"] : [icon("build"), " build"])}
       </button>
       <label
         class="knitoutjs-auto"
@@ -336,7 +336,7 @@ export default function KnitoutEditorTool(handle, element, context) {
         onPointerEnter=${() => hover(run.target())}
         onPointerLeave=${() => hover(null)}
       >
-        <span class="knitoutjs-target-label">writes to →</span>
+        <span class="knitoutjs-target-label">writes to ${icon("arrow-right")}</span>
         <span class="knitoutjs-swatch"></span>
         <select onChange=${onPick}>
           <option value="" disabled selected=${() => !run.target()}>
@@ -362,7 +362,7 @@ export default function KnitoutEditorTool(handle, element, context) {
         disabled=${() => !run.target()}
         onClick=${() => open(run.target(), element, "right")}
       >
-        open
+        ${icon("beside")} open
       </button>
     </div>`;
   }
@@ -381,7 +381,7 @@ export default function KnitoutEditorTool(handle, element, context) {
       >
         <div class="knitoutjs-readonly">
           <span>
-                read only: ${() =>
+                ${icon("lock")} read only: ${() =>
                   writer() ?? "a pattern"} writes this file each
                 time it's built
               </span>
@@ -390,7 +390,7 @@ export default function KnitoutEditorTool(handle, element, context) {
             title="make a copy of this .k as text you can change by hand"
             onClick=${() => editableCopy(handle.url, element)}
           >
-                make an editable copy
+                ${icon("pencil")} make an editable copy
               </button>
         </div>
         <//>

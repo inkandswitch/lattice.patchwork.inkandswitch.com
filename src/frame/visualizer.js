@@ -2,6 +2,7 @@ import {convertKnitout} from "./vendor/knitout-to-kcode.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {parseSource, highlighter} from "./stitch-source.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {withIcon} from "./icons.js"
 
 const STYLESHEET = new URL("./visualizer.css", import.meta.url).href
 const WORKER_URL = new URL("./visualizer-worker.js", import.meta.url)
@@ -186,8 +187,8 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	resizeObserver.observe(canvas)
 
 	const yarns = yarnPicker()
-	const resetButton = button("knitout-button", "reset zoom", () => renderer?.resetZoom())
-	const exportButton = button("knitout-button", "export kcode", exportKcode)
+	const resetButton = withIcon("fit", button("knitout-button", "reset zoom", () => renderer?.resetZoom()))
+	const exportButton = withIcon("download", button("knitout-button", "export kcode", exportKcode))
 	const actions = document.createElement("div")
 	actions.className = "knitout-visualizer-actions"
 	actions.append(yarns.element, resetButton, exportButton)

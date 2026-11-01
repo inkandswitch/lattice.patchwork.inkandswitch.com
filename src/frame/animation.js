@@ -1,6 +1,6 @@
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
+import {WALE, firstLoop, newFabric, relax, strain} from "./loopsim.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
@@ -143,7 +143,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const strainBox = document.createElement("input")
 	strainBox.type = "checkbox"
 	strainLabel.append(strainBox, "strain")
-	const flipButton = button("flip", "", () => flip())
+	const flipButton = button("", "", () => flip())
+	flipButton.append(icon("flip"), " flip")
 	flipButton.classList.add("knitout-animation-flip")
 	const yarns = yarnPicker()
 

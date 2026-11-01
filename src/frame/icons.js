@@ -14,6 +14,29 @@ const PATHS = {
   step: "M6 4l4 4-4 4",
   "open-new":
     "M9 2.5h4.5V7M13.5 2.5 7 9M11.5 9.5v3.5a.5.5 0 0 1-.5.5H3a.5.5 0 0 1-.5-.5V5a.5.5 0 0 1 .5-.5h3.5",
+  // a wand, sparkling
+  build: "M2.5 13.5l7-7M11.5 1.5V3M14.5 4.5H13M13.6 2.4l-1 1M13.6 6.6l-1-1M9.4 2.4l1 1",
+  stop: "M4.5 4.5h7v7h-7Z",
+  // a window with a pane open on its right
+  beside: "M2.5 3.5h11v9h-11ZM8.5 3.5v9",
+  "arrow-right": "M3 8h10M9.5 4.5 13 8l-3.5 3.5",
+  copy: "M5.5 5.5h7v7h-7ZM10.5 5.5v-2h-7v7h2",
+  check: "M3.5 8.5l3 3 6-7",
+  rebuild: "M13 8a5 5 0 1 1-1.46-3.54M8.8 4.46h2.74V1.72",
+  lock: "M4 7.5h8v6H4ZM5.5 7.5v-2a2.5 2.5 0 0 1 5 0v2",
+  pencil: "M10.5 3 13 5.5 6 12.5 3 13l.5-3ZM9 4.5 11.5 7",
+  file: "M4 2.5h5l3 3v8H4ZM9 2.5v3h3",
+  text: "M4 2.5h5l3 3v8H4ZM9 2.5v3h3M6 8.5h4M6 10.5h3",
+  terminal: "M2.5 3.5h11v9h-11ZM5 6.5 7 8l-2 1.5M8.5 10H11",
+  folder:
+    "M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z",
+  link:
+    "M7 9a2.5 2.5 0 0 0 3.5 0l2-2A2.5 2.5 0 0 0 9 3.5l-.75.75M9 7a2.5 2.5 0 0 0-3.5 0l-2 2A2.5 2.5 0 0 0 7 12.5l.75-.75",
+  download: "M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10",
+  // four corners: everything back in view
+  fit: "M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10",
+  flip: "M2.5 5.5h10L10 3M13.5 10.5h-10L6 13",
+  comment: "M3 3.5h10v7H7.5l-3 2.5v-2.5H3Z",
 };
 
 /**
@@ -39,4 +62,10 @@ export function icon(name, size = "1em") {
   path.setAttribute("stroke-linejoin", "round");
   svg.append(path);
   return svg;
+}
+
+// put an icon before a button's words
+export function withIcon(name, button) {
+  button.prepend(icon(name), " ");
+  return button;
 }

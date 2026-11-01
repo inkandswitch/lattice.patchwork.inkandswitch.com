@@ -1,5 +1,6 @@
 import { createMemo, createSignal, For, onCleanup } from "solid-js";
 import html from "solid-js/html";
+import { icon } from "./icons.js";
 import { parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { subscribe } from "@inkandswitch/patchwork-providers";
 
@@ -66,7 +67,7 @@ export function CommentsInspector(props) {
           onClick=${() => open?.(group.url)}
         >
           ${group.name}
-          <span class="lattice-comments-count">${group.threads.length}</span>
+          <span class="lattice-comments-count">${icon("comment")} ${group.threads.length}</span>
         </button>
         <${For} each=${() => group.threads}>${(url) => html`<${Thread} url=${url} />`}<//>
       </section>`}

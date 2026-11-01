@@ -458,10 +458,12 @@ export default function LatticeFrameTool(handle, element) {
         class="knitoutjs-menu-item"
         onClick=${() => copyFromMenu(shareUrl(menuProject().url))}
       >
+        ${icon("link")}
         copy share url
         <small>a link to it on this site</small>
       </button>
       <button class="knitoutjs-menu-item" onClick=${() => copyFromMenu(menuProject().url)}>
+        ${icon("copy")}
         copy automerge url
         <small>${() => menuProject()?.url.slice(0, 20)}…</small>
       </button>
@@ -477,6 +479,7 @@ export default function LatticeFrameTool(handle, element) {
           newProject();
         }}
       >
+        ${icon("folder")}
         new project
         <small>an empty folder in projects</small>
       </button>
@@ -553,7 +556,9 @@ export default function LatticeFrameTool(handle, element) {
     return html`<div class="lattice-no-project">
       <p>${() => (home() ? "no projects yet" : "finding projects…")}</p>
       <${Show} when=${home}>
-        <button class="lattice-button" onClick=${() => newProject()}>new project</button>
+        <button class="lattice-button" onClick=${() => newProject()}>
+          ${icon("plus")} new project
+        </button>
       <//>
     </div>`;
   }

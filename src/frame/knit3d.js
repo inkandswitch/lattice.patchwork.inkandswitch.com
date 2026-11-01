@@ -1,10 +1,10 @@
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, strain} from "./fabric.js"
+import {WALE, firstLoop, newFabric, relax, strain} from "./loopsim.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
-import {icon} from "./icons.js"
+import {icon, withIcon} from "./icons.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250
@@ -384,10 +384,13 @@ export default function Knit3dTool(handle, element) {
 		bedLabel,
 		strainLabel,
 		yarns.element,
-		button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () => {
-			resetCamera()
-			draw()
-		}),
+		withIcon(
+			"fit",
+			button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () => {
+				resetCamera()
+				draw()
+			}),
+		),
 	)
 
 	const stage = document.createElement("div")

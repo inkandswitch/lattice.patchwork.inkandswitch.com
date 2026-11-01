@@ -199,7 +199,7 @@ export function checkPanel(stage, onPick) {
 		const risks = count("risk")
 		const all = errors + risks + count("note")
 		button.dataset.level = errors ? "error" : risks ? "risk" : all ? "note" : "ok"
-		button.textContent = all ? `${all} to check` : "kniterate: ok"
+		button.replaceChildren(icon(all ? "warning" : "check"), all ? ` ${all} to check` : " kniterate: ok")
 
 		const heading = document.createElement("div")
 		heading.className = "checks-heading"

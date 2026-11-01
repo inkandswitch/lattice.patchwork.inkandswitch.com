@@ -1076,7 +1076,7 @@ export function mountWorkspace(
         onPointerLeave=${unhover}
       >
         <span class="knitoutjs-swatch"></span>
-        ${() => (copied() ? "copied" : shortUrl(panel.url))}
+        ${() => (copied() ? [icon("check"), " copied"] : shortUrl(panel.url))}
       </button>
       ${() =>
         info.copyOf &&
@@ -1153,7 +1153,7 @@ export function mountWorkspace(
                   title="build it again from its .js"
                   onClick=${() => rebuild(info.source, panel.url)}
                 >
-                  rebuild
+                  ${icon("rebuild")} rebuild
                 </button>`;
             default:
               return () => (info.builtAt ? `generated ${ago(info.builtAt, clock())}` : "generated");
@@ -1170,10 +1170,10 @@ export function mountWorkspace(
         <p>drag a .js, a .k, or anything else in from the files, or</p>
         <div class="knitoutjs-empty-actions">
           <button class="knitoutjs-button" onClick=${() => newPattern()}>
-            new pattern
+            ${icon("plus")} new pattern
           </button>
           <button class="knitoutjs-button" onClick=${(event) => openMenu(event, null)}>
-            open…
+            ${icon("folder")} open…
           </button>
         </div>
         <${Show} when=${() => notice() && !notice().groupId}>
@@ -1184,10 +1184,11 @@ export function mountWorkspace(
   }
 
   function Menu() {
-    const item = (label, detail, onClick) => html`<button
+    const item = (name, label, detail, onClick) => html`<button
       class="knitoutjs-menu-item"
       onClick=${onClick}
     >
+      ${icon(name)}
       ${label}
       <small>${detail}</small>
     </button>`;
@@ -1199,11 +1200,11 @@ export function mountWorkspace(
       onToggle=${(event) => event.newState === "closed" && setMenuFor(null)}
     >
       <div class="knitoutjs-menu-heading">new</div>
-      ${item(".js file", "", fromMenu((groupId) => newFile(groupId, "untitled.knitout.js")))}
-      ${item(".k file", "", fromMenu((groupId) => newFile(groupId, "untitled.k")))}
-      ${item("markdown", "", fromMenu((groupId) => newDoc(groupId, "markdown")))}
+      ${item("file", ".js file", "", fromMenu((groupId) => newFile(groupId, "untitled.knitout.js")))}
+      ${item("file", ".k file", "", fromMenu((groupId) => newFile(groupId, "untitled.k")))}
+      ${item("text", "markdown", "", fromMenu((groupId) => newDoc(groupId, "markdown")))}
       <${Show} when=${altHeld}>
-        ${item("terminal", "shared from your computer with latticex", fromMenu(newTerminal))}
+        ${item("terminal", "terminal", "shared from your computer with latticex", fromMenu(newTerminal))}
       <//>
       <form class="knitoutjs-menu-url" onSubmit=${onOpenUrl}>
         <input
