@@ -48,6 +48,7 @@ const HOLD = 0.35 // the most the wale limits move a loop in a pass
 const SETTLED = 0.0005
 const BULGE = 1.1
 const SLACK = 0.12 // the yarn from one loop to the next, longer than its pitch by this at most
+const GRASP = 6 // taking hold of a stitch takes hold of the fabric at least this far either side (in pitches)
 
 export function newFabric() {
 	return {
@@ -74,6 +75,8 @@ export function newFabric() {
 		py0: new Float32Array(0),
 		hx: new Float32Array(0), // where it was before it was pulled on
 		hy: new Float32Array(0),
+		hold: new Float32Array(0), // how much of the pull each loop gets: 1 in the hand, 0 out of reach
+		grasped: [], // the loops with any
 		age: 0,
 		released: [], // the loops that just came off needles
 		homing: 0, // 1: being pulled on, 2: let go, coming back
@@ -110,6 +113,7 @@ function grow(f, need) {
 	f.py0 = bigger(f.py0, Float32Array)
 	f.hx = bigger(f.hx, Float32Array)
 	f.hy = bigger(f.hy, Float32Array)
+	f.hold = bigger(f.hold, Float32Array)
 	f.px0 = bigger(f.px0, Float32Array)
 	f.pinned = bigger(f.pinned, Uint8Array)
 	f.slack = bigger(f.slack, Uint8Array)
@@ -353,6 +357,41 @@ function dragCarry(f, first, n, grab) {
 	}
 }
 
+// taking hold of a stitch takes hold of the fabric round it, the way a hand
+// pulling on a hanging sheet does: what's above the hand is stretched evenly
+// up to the needles (so a loop goes as far as it hangs from them, of how far
+// the hand's gone), what hangs below it goes with it, and either side it
+// tails off, as far out as the hand is down
+function grasp(f, first, n, grab) {
+	const {hx, hy, hold, pinned} = f
+	for (const i of f.grasped) hold[i] = 0
+	f.grasped = []
+	const hand = Math.min(hy[grab], -WALE)
+	const spread = Math.max(GRASP, -hand)
+	for (let i = first; i < n; i++) {
+		if (pinned[i]) continue
+		const u = Math.abs(hx[i] - hx[grab]) / spread
+		if (u >= 1) continue
+		const down = hy[i] > hand ? Math.max(0, hy[i] / hand) : 1
+		if (down <= 0) continue
+		hold[i] = down * (1 - u * u) * (1 - u * u)
+		f.grasped.push(i)
+	}
+}
+
+// and pulling it: what's in the hand goes as far as the stitch was moved,
+// as much as it's held (and the yarn round it follows, as it can)
+function haul(f, grab) {
+	const {px, py, hx, hy, hold} = f
+	const ox = px[grab] - hx[grab]
+	const oy = py[grab] - hy[grab]
+	for (const i of f.grasped) {
+		const w = hold[i]
+		px[i] += (hx[i] + ox * w - px[i]) * w
+		py[i] += (hy[i] + oy * w - py[i]) * w
+	}
+}
+
 // hang: from the newest loop down, a loop falls to one wale under the loop
 // pulled through it, if it's above that. the whole fabric hangs in one pass
 function fall(f, first, n, grab) {
@@ -520,17 +559,22 @@ export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinit
 	f.grabbed = !!grab
 	f.key = key
 	const grabbed = grab && grab.id >= first && grab.id < n ? grab.id : -1
-	if (grabbed >= 0) {
-		f.px[grabbed] = grab.x
-		f.py[grabbed] = grab.y
-	}
 	const added = n - from
 	if (grab && !f.grabbed0) {
 		f.hx.set(f.px.subarray(first, n), first)
 		f.hy.set(f.py.subarray(first, n), first)
 		f.homing = 1
-	} else if (!grab && f.grabbed0) f.homing = 2
+		if (grabbed >= 0) grasp(f, first, n, grabbed)
+	} else if (!grab && f.grabbed0) {
+		f.homing = 2
+		for (const i of f.grasped) f.hold[i] = 0
+		f.grasped = []
+	}
 	f.grabbed0 = !!grab
+	if (grabbed >= 0) {
+		f.px[grabbed] = grab.x
+		f.py[grabbed] = grab.y
+	}
 	if (added > 0) f.homing = 0
 	if (pinsMoved) carry(f, first, n)
 	// (a jump: it has to be good at once)
@@ -555,6 +599,7 @@ export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinit
 		pass(f, first, n, squash, grabbed)
 		bounds(f, first, n, squash, grabbed, false)
 		bounds(f, first, n, squash, grabbed, true)
+		if (grabbed >= 0) haul(f, grabbed)
 		last = moved(f, first, n)
 		if (last > most) most = last
 		if (last < SETTLED) break
