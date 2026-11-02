@@ -1,6 +1,6 @@
 import {REACH, SQUASH, WALE} from "./fabric.js"
 import {across, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
-import {RELAXED, STITCH, fabricOf, grams, onBody, stitchSize, tightness} from "./size.js"
+import {FIBRES, RELAXED, STITCH, fabricOf, grams, onBody, stitchSize, tightness} from "./size.js"
 
 // will a .k knit on a kniterate, and where might it go wrong: it's played on
 // a pretend machine, looking for what drops stitches, breaks yarn, or stops
@@ -362,7 +362,7 @@ function sizeOfFabric(fabric, sizes, passes, tall, rows) {
 		around,
 		length,
 		stitches,
-		relaxed: RELAXED[fabric.relax].name,
+		relaxed: `${FIBRES[fabric.fibre].name}, ${RELAXED[fabric.relax].name}`,
 		// (only a tube goes round anything)
 		on: body && around && length.mm ? {body, ...onBody(fabric, around.mm, body, length.mm)} : null,
 	}

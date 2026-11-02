@@ -2,7 +2,7 @@ import {moduleWorker} from "./files.js"
 import {icon} from "./icons.js"
 import {KNITERATE, holdRows} from "./knitcheck.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
-import {RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
+import {FIBRES, RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
 import {stylesheet} from "./stylesheet.js"
 
 const WORKER_URL = new URL("./knitcheck-worker.js", import.meta.url)
@@ -221,6 +221,13 @@ export function checkPanel(stage, onPick) {
 	const relax = document.createElement("select")
 	for (const [name, {name: label}] of Object.entries(RELAXED)) relax.append(new Option(label, name))
 	relax.addEventListener("change", () => storeFabric({relax: relax.value}))
+	relax.title =
+		"off the machine: left to lie a day or two. washed: soaked half a day in lukewarm water, spun, dried flat (as Munden did). washed hot & tumbled: as far as it'll go"
+
+	const fibre = document.createElement("select")
+	for (const [name, {name: label}] of Object.entries(FIBRES)) fibre.append(new Option(label, name))
+	fibre.addEventListener("change", () => storeFabric({fibre: fibre.value}))
+	fibre.title = "what it's spun from: it changes how much it relaxes washed. (filament nylon never relaxes to the usual shape: measure it)"
 
 	const tex = amount("any", "the yarn's tex: grams a kilometre of it weighs (Nm 2/30 is 67 tex; tex = 1000 ÷ Nm)", value => storeFabric({tex: value}))
 	const strands = amount("1", "strands knitted together", value => storeFabric({strands: value ?? 1}))
@@ -245,7 +252,11 @@ export function checkPanel(stage, onPick) {
 						storeFabric({stitches})
 					}
 					const inputs = {
-						loop: amount("0.1", `the yarn in one stitch at stitch number ${number}, in mm: knit a row across 100 needles in another yarn, pull it out, measure it, ÷ 100`, v => store("loop", v)),
+						loop: amount(
+							"0.1",
+							`the yarn in one stitch at stitch number ${number}, in mm: knit a row across 100 needles in another yarn, pull it out, measure it pulled just straight (10 g or so), ÷ 100. it's this yarn's: measure again for another`,
+							v => store("loop", v),
+						),
 						across: amount("0.5", `a swatch at stitch number ${number}, relaxed: stitches across 10 cm`, v => store("across", v)),
 						up: amount("0.5", `a swatch at stitch number ${number}, relaxed: rows up 10 cm`, v => store("up", v)),
 					}
@@ -275,7 +286,12 @@ export function checkPanel(stage, onPick) {
 	fabricBox.append(
 		fabricSummary,
 		setting("relaxed", "how it's been let relax before it's measured: the sizes are for the same", relax),
-		setting("yarn", "the yarn: for its tightness, and what it weighs", tex, unit("tex ×"), null, null, [strands, unit("strands")]),
+		setting("yarn", "the yarn: what it's spun from, and its tex (for its tightness, and what it weighs)", fibre, null, null, null, [
+			tex,
+			unit("tex ×"),
+			strands,
+			unit("strands"),
+		]),
 		stitchRows,
 		setting("stretched", "how much shorter a tube gets as it's stretched round something", unit("10% wider, it's"), null, null, null, [shorten, unit("% shorter")]),
 		setting("goes round", "what a tube's to go round", around, unit("cm (a foot, say)")),
@@ -284,6 +300,7 @@ export function checkPanel(stage, onPick) {
 	function readFabric() {
 		const fabric = fabricOf(readSettings())
 		relax.value = fabric.relax
+		fibre.value = fabric.fibre
 		setValue(tex, fabric.tex)
 		setValue(strands, fabric.strands)
 		setValue(shorten, fabric.shorten == null ? null : Math.round(fabric.shorten * 100) / 10)

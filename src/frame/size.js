@@ -2,15 +2,20 @@
 // yarn, and what the yarn makes of the fabric
 //
 // a stitch number (x-stitch-number, 0–9 or A–Z) is only a name for a row of
-// the kniterate's own stitch table: what it pulls through is the machine's,
-// so it's measured, not known. what's measured is the loop: the yarn knitted
-// into each stitch (knit a row across 100 needles in another yarn, pull it
-// out, measure it: that ÷ 100). from the loop, plain knitting's size follows
-// Munden (1959, "the geometry and dimensional properties of plain-knit
-// fabrics"): relaxed, rows per mm × loop ≈ kc and stitches per mm × loop ≈
-// kw, the same for any yarn of a kind, whatever its thickness. a swatch,
-// measured, is better than that: it's used as it is, and (with its loop) it
-// tells kc and kw for the yarn, for the stitch numbers without a swatch
+// the kniterate's own stitch table: what it pulls through is the machine's
+// and the yarn's (its tension and friction change it as much as 20%, Munden
+// found), so it's measured, not known, and measured again for another yarn.
+// what's measured is the loop: the yarn knitted into each stitch (knit a row
+// across 100 needles in another yarn, pull it out, measure it pulled just
+// straight, under 10 g or so: that ÷ 100). from the loop, plain knitting's
+// size follows Munden (1959, "the geometry and dimensional properties of
+// plain-knit fabrics"): relaxed, a loop takes the same shape whatever it's
+// knitted from, so rows per mm × loop ≈ kc and stitches per mm × loop ≈ kw,
+// whatever the yarn's thickness, or the needles. a swatch, measured, is
+// better than that: it's used as it is, and (with its loop) it tells kc and
+// kw for the yarn, for the stitch numbers without a swatch. (filament nylon,
+// set out of shape as it's knitted, never takes that shape: none of this
+// holds for it)
 //
 // stretched, a stitch's yarn stays as long as it was: it's pulled from its
 // rows into its width. Poincloux, Adda-Bedia & Lechenault (2018, "geometry
@@ -18,12 +23,23 @@
 // keep c + δw, so stretched ε around it's (c/w)/δ × ε shorter
 
 // kc and kw for plain-knit wool, by how far it's relaxed: as it comes off the
-// machine (dry: Munden), washed and dried flat (wet: Munden), and washed hot
-// and tumbled (full: Knapton et al., 1968)
+// machine and left to lie (dry: Munden), soaked half a day and dried flat
+// (wet: Munden), and washed hot and tumbled (full: Knapton et al., 1968)
 export const RELAXED = {
 	dry: {kc: 5.0, kw: 3.8, name: "off the machine"},
 	wet: {kc: 5.3, kw: 4.1, name: "washed"},
 	full: {kc: 5.5, kw: 4.2, name: "washed hot & tumbled"},
+}
+// and for the rest, Munden's stitches per area × loop² (ks = kc × kw), dry
+// and wet: kc and kw are wool's, in the same proportion (the loop's the same
+// shape), times as much bigger as ks is. yarns that don't take up water
+// relax no further for washing. (cotton never quite relaxes dry: it keeps
+// some of the stretch the take-down gave it till it's washed. only wool's
+// been measured fully relaxed: the rest are as washed)
+export const FIBRES = {
+	wool: {dry: 19.0, wet: 21.6, name: "wool"},
+	cotton: {dry: 19.0, wet: 22.6, name: "cotton"},
+	synthetic: {dry: 18.5, wet: 18.5, name: "acrylic, spun nylon"},
 }
 // δ, for plain knitting (Poincloux et al.'s, freely sliding)
 export const DELTA = 0.71
@@ -35,16 +51,27 @@ export const STITCH = "5"
 // (stitches per 10 cm, measured), up (rows per 10 cm, measured)}}, shorten
 // (measured: how many times as much shorter it gets as it's stretched
 // around), around (cm: what it's to go round, a foot, say)}
-export const FABRIC = {relax: "dry", tex: null, strands: 1, stitches: {}, shorten: null, around: null}
+export const FABRIC = {relax: "dry", fibre: "wool", tex: null, strands: 1, stitches: {}, shorten: null, around: null}
 
 export function fabricOf(settings) {
 	const fabric = {...FABRIC, ...(settings?.fabric ?? {})}
 	if (!RELAXED[fabric.relax]) fabric.relax = FABRIC.relax
+	if (!FIBRES[fabric.fibre]) fabric.fibre = FABRIC.fibre
 	if (!fabric.stitches || typeof fabric.stitches !== "object") fabric.stitches = {}
 	return fabric
 }
 
 const measured = value => (Number.isFinite(value) && value > 0 ? value : null)
+
+// Munden's kc and kw for the fibre, relaxed so far
+export function munden(fabric) {
+	const wool = RELAXED[fabric.relax]
+	if (fabric.fibre === "wool" || !FIBRES[fabric.fibre]) return wool
+	const fibre = FIBRES[fabric.fibre]
+	const scale = Math.sqrt(fibre[fabric.relax === "dry" ? "dry" : "wet"] / FIBRES.wool[fabric.relax === "dry" ? "dry" : "wet"])
+	const shape = fabric.relax === "full" ? RELAXED.wet : wool
+	return {kc: shape.kc * scale, kw: shape.kw * scale}
+}
 
 // kc and kw for this yarn: from the swatches that have their loop, or else
 // Munden's
@@ -58,10 +85,10 @@ export function constants(fabric) {
 		if (measured(entry.across)) kws.push((loop * entry.across) / 100)
 	}
 	const mean = list => list.reduce((sum, k) => sum + k, 0) / list.length
-	const munden = RELAXED[fabric.relax]
+	const known = munden(fabric)
 	return {
-		kc: kcs.length ? mean(kcs) : munden.kc,
-		kw: kws.length ? mean(kws) : munden.kw,
+		kc: kcs.length ? mean(kcs) : known.kc,
+		kw: kws.length ? mean(kws) : known.kw,
 		fitted: kcs.length > 0 || kws.length > 0,
 	}
 }
@@ -82,8 +109,9 @@ export function stitchSize(fabric, number, pitch) {
 	return {loop: guess, across: guess / kw, up: guess / kc, from: across || up ? "swatch" : "guess"}
 }
 
-// how tight it's knitted: √tex / loop (cm). plain knitting's usually about
-// 14.7 (Munden's commercial jersey); a lot less is sleazy, a lot more stiff
+// how tight it's knitted: √tex / loop (cm). commercial plain knitting's
+// usually about 14.7 (as textile course notes have it: not Munden's 1959
+// paper); a lot less is sleazy, a lot more stiff
 export const USUAL_TIGHTNESS = 14.7
 export function tightness(fabric, size) {
 	const tex = measured(fabric.tex)
