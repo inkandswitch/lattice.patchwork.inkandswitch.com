@@ -98,7 +98,8 @@ export function readKnitout(text) {
 // it's on now, or was let go from), dir (1 knitted going +, −1 going −), x
 // (where across the bed it was made),
 // parents (the loops it was pulled through), prev (the loop its yarn came
-// from), cast (made on an empty needle: the fabric's bottom edge)}: the
+// from), cast (made on an empty needle: the fabric's bottom edge), off (the
+// op that dropped it, if one did)}: the
 // fabric, as a graph
 export function newMachine() {
 	return {
@@ -161,6 +162,7 @@ export function apply(machine, op, index, yarnOf) {
 
 	if (op.kind === "knit" || op.kind === "drop") {
 		const held = heldOn(machine, op.needle)
+		if (op.kind === "drop") for (const loop of held.loops) loop.off = index
 		held.loops = op.kind === "drop" ? [] : fresh(held.loops)
 		change.touched.push(op.needle.key)
 		move(op.needle, op.dir)

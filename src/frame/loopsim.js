@@ -72,6 +72,9 @@ export function newFabric() {
 		rest: new Float32Array(0), // and how far it should be
 		poff: new Int32Array(1), // parents, flat: loop i's are pidx[poff[i]..poff[i + 1]]
 		pidx: new Int32Array(0),
+		// (and whether each was moved over from another needle to be pulled
+		// through: it lies across, level with the loop, not under it)
+		pside: new Uint8Array(0),
 		bed: new Int8Array(0), // +1 front, −1 back
 		bulge: new Float32Array(0),
 		py0: new Float32Array(0),
@@ -163,11 +166,21 @@ function layout(f, machine, from, to, first) {
 		// parents, flat
 		let at = f.poff[i]
 		if (f.pidx.length < at + loop.parents.length) {
-			const bigger = new Int32Array(Math.max(4096, (at + loop.parents.length) * 2))
+			const size = Math.max(4096, (at + loop.parents.length) * 2)
+			const bigger = new Int32Array(size)
 			bigger.set(f.pidx)
 			f.pidx = bigger
+			const side = new Uint8Array(size)
+			side.set(f.pside)
+			f.pside = side
 		}
+		// a loop moved over from another needle onto one whose own loop it's
+		// pulled through with (a bind-off's chain, the top of a decrease)
+		// lies across: the new loop's only kept within reach of it, not above
+		// it. (moved with nothing else, it's the loop's wale as ever)
+		const stays = loop.parents.some(p => loops[p].x === loop.x)
 		for (const p of loop.parents) {
+			f.pside[at] = stays && loops[p].x !== loop.x ? 1 : 0
 			f.pidx[at++] = p
 			if (child[p] < 0) child[p] = i
 		}
@@ -176,7 +189,13 @@ function layout(f, machine, from, to, first) {
 		if (loop.prev != null) {
 			const before = loops[loop.prev]
 			const dx = Math.abs(loop.x - before.x)
-			if (before.dir !== loop.dir) {
+			if (i - loop.prev > 1) {
+				// other yarns made loops in between (a stripe, a heel in
+				// another colour): this one was carried up the side past
+				// them, or floated behind, as far as it needed, the carrier
+				// feeding it
+				slack[i] = 1
+			} else if (before.dir !== loop.dir) {
 				// the turn at a row's end: it joins this row's end to the last's
 				link[i] = loop.prev
 				rest[i] = before.back === loop.back ? WALE : 0.4
@@ -217,6 +236,20 @@ function pin(f, machine, n) {
 			at.push(x)
 		}
 	}
+	// nothing on the needles: the knitting's come off. it stays as it was when
+	// they let it go, hanging from the loops dropped at the end (after the
+	// last loop was made), where their needles were. (with nothing to hang
+	// from, there's nowhere it would settle)
+	if (!now.length && n) {
+		const end = machine.loops[n - 1].op
+		for (let i = 0; i < n; i++) {
+			const loop = machine.loops[i]
+			if (loop.off > end) {
+				now.push(i)
+				at.push(across(machine, loop))
+			}
+		}
+	}
 	let changed = now.length !== f.held.length
 	if (!changed) for (let k = 0; k < now.length; k++) if (now[k] !== f.held[k] || at[k] !== f.heldAt[k]) changed = true
 	if (!changed) return false
@@ -241,7 +274,7 @@ function pin(f, machine, n) {
 function pass(f, first, n, squash, grab) {
 	const kBack = f.homing === 1 ? K_BACK : f.homing === 2 ? K_SPRING : 0
 	const {hx, hy} = f
-	const {px, py, x0, ax, ay, link, rest, pinned, poff, pidx} = f
+	const {px, py, x0, ax, ay, link, rest, pinned, poff, pidx, pside} = f
 	ax.fill(0, first, n)
 	ay.fill(0, first, n)
 	const lo = WALE * squash
@@ -281,7 +314,8 @@ function pass(f, first, n, squash, grab) {
 				const d = Math.hypot(dx, dy)
 				if (d > 1e-5) {
 					const err = d - WALE
-					const e = ((err * (err > 0 ? K_WALE_LONG : K_WALE)) / d) * w / share
+					// (a loop lying across isn't pushed under it)
+					const e = ((err * (err > 0 ? K_WALE_LONG : pside[k] ? 0 : K_WALE)) / d) * w / share
 					ax[i] -= freeI * (dx * e)
 					ay[i] -= freeI * dy * e
 					ax[p] += freeP * (dx * e)
@@ -398,11 +432,11 @@ function haul(f, grab) {
 // hang: from the newest loop down, a loop falls to one wale under the loop
 // pulled through it, if it's above that. the whole fabric hangs in one pass
 function fall(f, first, n, grab) {
-	const {py, pinned, poff, pidx} = f
+	const {py, pinned, poff, pidx, pside} = f
 	for (let i = n - 1; i >= first; i--) {
 		for (let k = poff[i]; k < poff[i + 1]; k++) {
 			const p = pidx[k]
-			if (p < first || pinned[p] || p === grab) continue
+			if (p < first || pinned[p] || p === grab || pside[k]) continue
 			const rest = py[i] - WALE
 			if (py[p] > rest) py[p] = rest
 		}
@@ -416,12 +450,13 @@ function fall(f, first, n, grab) {
 // above than the yarn reaches, whatever's pulling it, and a hang or a drag
 // goes all the way up or down a wale in one sweep.)
 //  - from a parent: a loop is above it by at least squashed and at most REACH
+//    (or, from a parent lying across, within REACH of it either way)
 //  - from the loop before it on the yarn: at most a little way off its height
 // down, from the newest: a loop below a loop is pulled up to within REACH or
 // pushed down to squashed, and kept with the loops on its yarn. up, from the
 // oldest: a loop is held within what's below and beside it
 function bounds(f, first, n, squash, grab, down) {
-	const {py, pinned, poff, pidx, link} = f
+	const {py, pinned, poff, pidx, pside, link} = f
 	const lo = WALE * squash
 	if (down) {
 		for (let i = n - 1; i >= first; i--) {
@@ -429,7 +464,8 @@ function bounds(f, first, n, squash, grab, down) {
 			for (let k = poff[i]; k < poff[i + 1]; k++) {
 				const p = pidx[k]
 				if (p < first || pinned[p] || p === grab) continue
-				if (py[p] > y - lo) py[p] = y - lo
+				const top = pside[k] ? y + REACH : y - lo
+				if (py[p] > top) py[p] = top
 				else if (py[p] < y - REACH) py[p] = y - REACH
 			}
 		}
@@ -441,7 +477,8 @@ function bounds(f, first, n, squash, grab, down) {
 			for (let k = poff[i]; k < poff[i + 1]; k++) {
 				const p = pidx[k]
 				if (p < first) continue
-				if (py[p] + lo > up) up = py[p] + lo
+				const least = pside[k] ? py[p] - REACH : py[p] + lo
+				if (least > up) up = least
 				if (py[p] + REACH < dn) dn = py[p] + REACH
 			}
 			if (py[i] < up) py[i] = up
