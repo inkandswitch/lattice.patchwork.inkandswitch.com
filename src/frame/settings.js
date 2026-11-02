@@ -1,7 +1,8 @@
 // how the machine and yarn are taken to be, by the views and the check: the
 // kniterate's gauge, how tightly rows can bunch, and how much time the
-// fabric gets to settle. what someone picks is theirs alone (it's kept in
-// this browser), and every tool hears about it
+// fabric gets to settle; and (as `fabric`, see size.js) what's been measured
+// of the yarn, which the reset leaves be. what someone picks is theirs alone
+// (it's kept in this browser), and every tool hears about it
 export const DEFAULTS = {
 	gauge: 7, // needles to the inch
 	squash: 0.3, // how close bunched rows can get, as a share of a row

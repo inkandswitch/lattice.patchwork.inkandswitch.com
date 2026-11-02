@@ -2,6 +2,7 @@ import {moduleWorker} from "./files.js"
 import {icon} from "./icons.js"
 import {KNITERATE, holdRows} from "./knitcheck.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
+import {RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
 import {stylesheet} from "./stylesheet.js"
 
 const WORKER_URL = new URL("./knitcheck-worker.js", import.meta.url)
@@ -152,6 +153,7 @@ export function checkPanel(stage, onPick) {
 	reset.className = "checks-reset"
 	reset.textContent = "as it comes"
 	reset.title = "a kniterate as it comes: 7 gauge, rows bunching to 0.3 of a row, the usual settling"
+	// (the machine's settings: not what's been measured of the yarn)
 	reset.addEventListener("click", () => {
 		for (const [name, value] of Object.entries(DEFAULTS)) storeSetting(name, value)
 	})
@@ -184,9 +186,116 @@ export function checkPanel(stage, onPick) {
 	}
 	readBack()
 
+	// ── the yarn, and what's been measured of it: kept, whatever the reset
+
+	const fabricBox = document.createElement("details")
+	fabricBox.className = "checks-settings checks-fabric"
+	const fabricSummary = document.createElement("summary")
+	fabricSummary.textContent = "the yarn, and how big it comes out"
+	fabricSummary.title = "measure a swatch, or a loop, and say so here: the sizes come from it"
+
+	const storeFabric = patch => storeSetting("fabric", {...fabricOf(readSettings()), ...patch})
+	// a number box, blank for not known
+	const amount = (step, title, onValue) => {
+		const input = document.createElement("input")
+		input.type = "number"
+		input.min = "0"
+		input.step = step
+		input.title = title
+		input.addEventListener("change", () => {
+			const value = input.value === "" ? null : Number(input.value)
+			onValue(Number.isFinite(value) && value > 0 ? value : null)
+		})
+		return input
+	}
+	const unit = text => {
+		const span = document.createElement("span")
+		span.className = "checks-hint"
+		span.textContent = text
+		return span
+	}
+	const setValue = (input, value) => {
+		if (document.activeElement !== input) input.value = value == null ? "" : String(value)
+	}
+
+	const relax = document.createElement("select")
+	for (const [name, {name: label}] of Object.entries(RELAXED)) relax.append(new Option(label, name))
+	relax.addEventListener("change", () => storeFabric({relax: relax.value}))
+
+	const tex = amount("any", "the yarn's tex: grams a kilometre of it weighs (Nm 2/30 is 67 tex; tex = 1000 ÷ Nm)", value => storeFabric({tex: value}))
+	const strands = amount("1", "strands knitted together", value => storeFabric({strands: value ?? 1}))
+
+	const stitchRows = document.createElement("div")
+	stitchRows.className = "checks-stitches"
+	let stitchNumbers = ""
+	let stitchInputs = {} // stitch number → {loop, across, up}
+	function showStitches(used) {
+		const fabric = fabricOf(readSettings())
+		const numbers = [...used, ...Object.keys(fabric.stitches)].filter((number, i, all) => all.indexOf(number) === i).sort()
+		if (numbers.join() !== stitchNumbers) {
+			stitchNumbers = numbers.join()
+			stitchInputs = {}
+			stitchRows.replaceChildren(
+				...numbers.map(number => {
+					const store = (key, value) => {
+						const stitches = {...fabricOf(readSettings()).stitches}
+						const entry = {...stitches[number], [key]: value}
+						if (Object.values(entry).every(v => v == null)) delete stitches[number]
+						else stitches[number] = entry
+						storeFabric({stitches})
+					}
+					const inputs = {
+						loop: amount("0.1", `the yarn in one stitch at stitch number ${number}, in mm: knit a row across 100 needles in another yarn, pull it out, measure it, ÷ 100`, v => store("loop", v)),
+						across: amount("0.5", `a swatch at stitch number ${number}, relaxed: stitches across 10 cm`, v => store("across", v)),
+						up: amount("0.5", `a swatch at stitch number ${number}, relaxed: rows up 10 cm`, v => store("up", v)),
+					}
+					stitchInputs[number] = inputs
+					return setting(`stitch ${number}`, `what's measured of stitch number ${number}`, inputs.loop, null, null, null, [
+						unit("mm a loop ·"),
+						inputs.across,
+						unit("stitches,"),
+						inputs.up,
+						unit("rows in 10 cm"),
+					])
+				}),
+			)
+		}
+		for (const [number, inputs] of Object.entries(stitchInputs)) {
+			const entry = fabric.stitches[number] ?? {}
+			for (const key of ["loop", "across", "up"]) setValue(inputs[key], entry[key])
+		}
+	}
+	let used = [STITCH]
+
+	const shorten = amount("1", "stretch a swatch 10% wider, and measure how much shorter it gets, in %", value =>
+		storeFabric({shorten: value == null ? null : value / 10}),
+	)
+	const around = amount("0.5", "what it's to go round, relaxed, in cm: a foot, round the ball of it, say", value => storeFabric({around: value}))
+
+	fabricBox.append(
+		fabricSummary,
+		setting("relaxed", "how it's been let relax before it's measured: the sizes are for the same", relax),
+		setting("yarn", "the yarn: for its tightness, and what it weighs", tex, unit("tex ×"), null, null, [strands, unit("strands")]),
+		stitchRows,
+		setting("stretched", "how much shorter a tube gets as it's stretched round something", unit("10% wider, it's"), null, null, null, [shorten, unit("% shorter")]),
+		setting("goes round", "what a tube's to go round", around, unit("cm (a foot, say)")),
+	)
+
+	function readFabric() {
+		const fabric = fabricOf(readSettings())
+		relax.value = fabric.relax
+		setValue(tex, fabric.tex)
+		setValue(strands, fabric.strands)
+		setValue(shorten, fabric.shorten == null ? null : Math.round(fabric.shorten * 100) / 10)
+		shorten.placeholder = String(Math.round(shortening(fabric).shorten * 10))
+		setValue(around, fabric.around)
+		showStitches(used)
+	}
+	readFabric()
+
 	const results = document.createElement("div")
 	results.className = "checks-results"
-	panel.append(settingsBox, results)
+	panel.append(settingsBox, fabricBox, results)
 
 	// ── what the check found
 
@@ -216,11 +325,18 @@ export function checkPanel(stage, onPick) {
 		close.addEventListener("click", () => (panel.hidden = true))
 		const facts = document.createElement("div")
 		facts.className = "checks-facts"
-		const metres = yarn.map(({carrier, metres}) => `carrier ${carrier} ≈ ${metres < 10 ? metres.toFixed(1) : Math.round(metres)} m`)
+		const guessed = result.size.stitches.some(stitch => stitch.from === "guess")
+		const metres = yarn.map(
+			({carrier, metres, grams}) =>
+				`carrier ${carrier} ≈ ${metres < 10 ? metres.toFixed(1) : Math.round(metres)} m` +
+				(grams == null ? "" : ` (${grams < 10 ? grams.toFixed(1) : Math.round(grams)} g)`),
+		)
 		facts.textContent =
 			`${width} of the kniterate's ${KNITERATE.needles} needles` +
-			(metres.length ? ` · yarn, at a middling stitch size: ${metres.join(", ")}` : "")
-		heading.append(verdict, close, facts)
+			(metres.length ? ` · yarn${guessed ? ", at a middling stitch size" : ""}: ${metres.join(", ")}` : "")
+		heading.append(verdict, close, facts, sizeFacts(result.size))
+		used = result.size.stitches.map(stitch => stitch.number)
+		showStitches(used)
 
 		const list = document.createElement("ol")
 		list.className = "checks-list"
@@ -260,6 +376,7 @@ export function checkPanel(stage, onPick) {
 
 	function onSettings() {
 		readBack()
+		readFabric()
 		check()
 	}
 	addEventListener(SETTINGS_CHANGED, onSettings)
@@ -276,9 +393,56 @@ export function checkPanel(stage, onPick) {
 	}
 }
 
+// how big it comes out, as lines for the panel's heading: its size, relaxed;
+// each stitch number's stitch, and where that's from; and, round what it's to
+// go round, how stretched it is and how long that leaves it
+const FROM = {
+	swatch: "from your swatch",
+	loop: "from its loop, by Munden's constants",
+	guess: "a guess: measure a swatch, or a loop, below",
+}
+function sizeFacts(size) {
+	const box = document.createElement("div")
+	box.className = "checks-size"
+	if (!size.length.mm) return box
+	const cm = mm => (mm / 10).toFixed(mm < 100 ? 1 : 0)
+	const line = text => {
+		const div = document.createElement("div")
+		div.textContent = text
+		box.appendChild(div)
+		return div
+	}
+	const across = size.around
+		? `${cm(size.around.mm)} cm round (${size.around.stitches} stitches)`
+		: size.width
+			? `${cm(size.width.mm)} cm wide (${size.width.stitches} stitches)`
+			: null
+	line(`about ${across ? `${across} × ` : ""}${cm(size.length.mm)} cm long (${size.length.rows} rows), ${size.relaxed}`).className =
+		"checks-size-main"
+	for (const stitch of size.stitches) {
+		const tight = stitch.tightness == null ? "" : ` · tightness ${stitch.tightness.toFixed(1)} (plain knitting's usually about ${USUAL_TIGHTNESS})`
+		const gsm = stitch.grams == null ? "" : ` · ${Math.round(stitch.grams)} g/m²`
+		const div = line(
+			`stitch ${stitch.number}: ${stitch.across.toFixed(1)} mm wide, ${stitch.up.toFixed(1)} mm tall, ${stitch.loop.toFixed(1)} mm of yarn${tight}${gsm} · ${FROM[stitch.from]}`,
+		)
+		div.dataset.from = stitch.from
+	}
+	if (size.on) {
+		const {body, stretch, length, shorter, jammed} = size.on
+		line(
+			stretch <= 0
+				? `on ${cm(body)} cm round: ${Math.round(-stretch * 100)}% looser than it, not stretched`
+				: jammed
+					? `on ${cm(body)} cm round: stretched ${Math.round(stretch * 100)}%, further than it'll go: the stitches jam`
+					: `on ${cm(body)} cm round: stretched ${Math.round(stretch * 100)}%, so about ${Math.round(shorter * 100)}% shorter: ${cm(length)} cm long`,
+		).className = "checks-size-on"
+	}
+	return box
+}
+
 // a setting's row: its name, its control, and (for a slider) what each end
-// means
-function setting(name, title, control, after = null, low = null, high = null) {
+// means; and anything to go after it (`more`)
+function setting(name, title, control, after = null, low = null, high = null, more = []) {
 	const row = document.createElement("label")
 	row.className = "checks-setting"
 	row.title = title
@@ -291,6 +455,7 @@ function setting(name, title, control, after = null, low = null, high = null) {
 	field.append(control)
 	if (high) field.append(high)
 	if (after) field.append(after)
+	field.append(...more)
 	row.append(label, field)
 	return row
 }

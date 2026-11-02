@@ -1,5 +1,6 @@
-import {LOOP, REACH, SQUASH, WALE} from "./fabric.js"
+import {REACH, SQUASH, WALE} from "./fabric.js"
 import {across, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
+import {RELAXED, STITCH, fabricOf, grams, onBody, stitchSize, tightness} from "./size.js"
 
 // will a .k knit on a kniterate, and where might it go wrong: it's played on
 // a pretend machine, looking for what drops stitches, breaks yarn, or stops
@@ -29,9 +30,15 @@ const RACK_SLACK = 2
 // at most so many problems are kept
 const MOST = 300
 
-// `settings`: {gauge (needles to the inch), squash}, as settings.js has them
-export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH} = {}) {
+// `settings`: {gauge (needles to the inch), squash, fabric}, as settings.js
+// has them
+export function checkKnitout(text, converted = null, settings = {}) {
+	const {gauge = 7, squash = SQUASH} = settings
 	const pitch = 25.4 / gauge // mm
+	const fabric = fabricOf(settings)
+	const sizes = {} // stitch number → its stitch (see size.js), and how many
+	const sizeOf = number => (sizes[number] ??= {...stitchSize(fabric, number, pitch), count: 0})
+	let stitch = STITCH
 	const HOLD_ROWS = holdRows(squash)
 	const knitout = readKnitout(text)
 	const {ops} = knitout
@@ -69,7 +76,13 @@ export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH
 	const knitsOn = new Map() // needle key → knits it's done
 	const besideAt = new Map() // loop id → [knits on the needles beside it, when it was made]
 	const active = new Set()
-	const yarn = new Map() // carrier → {loops, floats (needles)}
+	const yarn = new Map() // carrier → {loops (mm of yarn), floats (needles)}
+	// how long each loop's wale is, from the bottom edge up to it (mm, and
+	// rows): its own height on the longest of the loops it's pulled through
+	const tall = []
+	const rows = []
+	// each pass's knitting, as wide as its stitches are, on each bed
+	const passes = [] // pass → {carrier, front: {mm, stitches}, back: {…}}
 	let pass = 0
 	let lastMaking = -1
 	ops.forEach((op, i) => {
@@ -138,6 +151,7 @@ export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH
 
 		// carriers
 		const name = op.text.split(/\s+/)[0]
+		if (name === "x-stitch-number") stitch = op.text.split(/\s+/)[1] ?? stitch
 		if (name === "inhook" || name === "outhook" || name === "releasehook") {
 			report("error", i, `the kniterate has no yarn inserting hook: use ${name === "inhook" ? "in" : "out"} instead of ${name}`, "hook")
 		}
@@ -194,7 +208,7 @@ export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH
 			for (const c of op.carriers.slice(0, 1)) {
 				const last = machine.lastLoops.get(c)
 				const usage = yarn.get(c) ?? {loops: 0, floats: 0}
-				usage.loops++
+				usage.loops += sizeOf(stitch).loop
 				if (last) {
 					const gap = Math.abs(across(machine, op.needle) - last.x)
 					usage.floats += Math.max(0, gap - 1)
@@ -223,6 +237,22 @@ export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH
 		}
 		for (let id = before; id < machine.loops.length; id++) {
 			const loop = machine.loops[id]
+			const size = sizeOf(stitch)
+			size.count++
+			let below = 0
+			let rowsBelow = 0
+			for (const parent of loop.parents) {
+				if (tall[parent] > below) below = tall[parent]
+				if (rows[parent] > rowsBelow) rowsBelow = rows[parent]
+			}
+			tall[id] = below + size.up
+			rows[id] = rowsBelow + 1
+			if (op.kind === "knit") {
+				const row = (passes[pass] ??= {carrier: op.carriers[0], front: {mm: 0, stitches: 0}, back: {mm: 0, stitches: 0}})
+				const bed = loop.back ? row.back : row.front
+				bed.mm += size.across
+				bed.stitches++
+			}
 			children[id] = 0
 			for (const parent of loop.parents) children[parent] = (children[parent] ?? 0) + 1
 			arrive(loop)
@@ -281,15 +311,60 @@ export function checkKnitout(text, converted = null, {gauge = 7, squash = SQUASH
 
 	const order = {error: 0, risk: 1, note: 2}
 	problems.sort((a, b) => order[a.level] - order[b.level] || (a.line ?? 0) - (b.line ?? 0))
+	const strands = Number.isFinite(fabric.strands) && fabric.strands > 0 ? fabric.strands : 1
 	return {
 		problems,
 		width,
 		holdRows: HOLD_ROWS,
-		// yarn each carrier uses: its loops, and its floats
-		yarn: [...yarn].map(([carrier, {loops, floats}]) => ({
-			carrier,
-			metres: ((loops * LOOP + floats) * pitch) / 1000,
-		})),
+		// yarn each carrier uses: its loops, and its floats (and what that
+		// weighs, if the yarn's tex is known)
+		yarn: [...yarn].map(([carrier, {loops, floats}]) => {
+			const metres = (loops + floats * pitch) / 1000
+			return {carrier, metres, grams: fabric.tex > 0 ? (metres * fabric.tex * strands) / 1000 : null}
+		}),
+		size: sizeOfFabric(fabric, sizes, passes, tall, rows),
+	}
+}
+
+// how big it comes out, relaxed: {width, around (if it's knitted as a tube),
+// length (mm, and stitches or rows), stitches (each stitch number's), relaxed,
+// on (stretched round what it's to go round, if that's set)}
+function sizeOfFabric(fabric, sizes, passes, tall, rows) {
+	let length = {mm: 0, rows: 0}
+	for (let id = 0; id < tall.length; id++) {
+		if (tall[id] > length.mm) length = {mm: tall[id], rows: rows[id]}
+	}
+	// the bed a pass knitted on, if it knitted on only one
+	const onlyOn = row => (row.front.stitches && !row.back.stitches ? "front" : row.back.stitches && !row.front.stitches ? "back" : null)
+	let width = null
+	// a tube: a pass on one bed, then the same yarn's next pass on the other
+	let around = null
+	const last = {} // carrier → its last pass's knitting
+	for (const row of passes) {
+		if (!row) continue
+		for (const bed of [row.front, row.back]) if (bed.stitches && bed.mm > (width?.mm ?? 0)) width = {...bed}
+		const before = last[row.carrier]
+		const only = onlyOn(row)
+		const beforeOnly = before && onlyOn(before)
+		if (only && beforeOnly && only !== beforeOnly) {
+			const round = {mm: row[only].mm + before[beforeOnly].mm, stitches: row[only].stitches + before[beforeOnly].stitches}
+			if (round.mm > (around?.mm ?? 0)) around = round
+		}
+		last[row.carrier] = row
+	}
+	const stitches = Object.entries(sizes)
+		.filter(([, size]) => size.count)
+		.sort(([, a], [, b]) => b.count - a.count)
+		.map(([number, size]) => ({number, ...size, tightness: tightness(fabric, size), grams: grams(fabric, size)}))
+	const body = Number.isFinite(fabric.around) && fabric.around > 0 ? fabric.around * 10 : null
+	return {
+		width,
+		around,
+		length,
+		stitches,
+		relaxed: RELAXED[fabric.relax].name,
+		// (only a tube goes round anything)
+		on: body && around && length.mm ? {body, ...onBody(fabric, around.mm, body, length.mm)} : null,
 	}
 }
 

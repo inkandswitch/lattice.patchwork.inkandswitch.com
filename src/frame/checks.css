@@ -97,6 +97,42 @@
 	cursor: pointer;
 }
 
+/* what's measured of the yarn: folded away till it's wanted */
+.checks-fabric {
+	& summary {
+		color: var(--knitoutjs-muted);
+		cursor: pointer;
+	}
+
+	&[open] summary {
+		margin-bottom: 2px;
+	}
+}
+
+.checks-stitches {
+	display: grid;
+	gap: 4px;
+}
+
+.checks-size {
+	grid-column: 1 / -1;
+	display: grid;
+	gap: 1px;
+	margin-top: 4px;
+	color: var(--knitoutjs-muted);
+	font-size: 11px;
+	line-height: 1.35;
+
+	& .checks-size-main,
+	& .checks-size-on {
+		color: var(--knitoutjs-ink);
+	}
+
+	& [data-from="guess"] {
+		font-style: italic;
+	}
+}
+
 .checks-results {
 	display: flex;
 	flex: 1 1 auto;
