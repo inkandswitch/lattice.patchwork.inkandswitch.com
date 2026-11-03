@@ -1,6 +1,6 @@
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, strain} from "./loopsim.js"
+import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
@@ -486,7 +486,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// settle the fabric a little more, and show it: whether there's more to do
 	function settle(budget) {
 		const until = performance.now() + budget * settings.speed
-		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash, grab: pulledTo()})
+		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash, grab: pulledTo(), size: loopSize})
 		return syncFabric(false) || moved > 0.01
 	}
 
@@ -532,7 +532,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		layers.frontLoops.replaceChildren()
 		shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
 		loopElements.clear()
-		relax(fabric, machine, 0, {squash: settings.squash})
+		relax(fabric, machine, 0, {squash: settings.squash, size: loopSize})
 		syncFabric(true)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
 	}
@@ -1120,8 +1120,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	strainBox.addEventListener("change", requestFrame)
 	// the machine and yarn, as they're set (see settings.js)
 	let settings = readSettings()
+	let loopSize = sizer(settings)
 	function onSettings() {
 		settings = readSettings()
+		loopSize = sizer(settings)
 		requestFrame()
 	}
 	addEventListener(SETTINGS_CHANGED, onSettings)

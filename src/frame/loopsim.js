@@ -26,9 +26,27 @@
 //    plane, the way the patent's bending terms curl a stitch.
 //
 // there's no gravity as a force: the fabric hangs because nothing is allowed
-// to be above the loop it was pulled through, and a wale at rest is one WALE.
+// to be above the loop it was pulled through, and a wale at rest is one row.
+//
+// how big a row and a stitch are is Munden's (1959): relaxed, a loop takes
+// the same shape whatever it's knitted from, so a row's as tall as its loop's
+// yarn ÷ kc and a stitch as wide as it ÷ kw, and the yarn in a loop is what
+// its stitch number pulls through (see size.js: measured, or else as WALE
+// and a needle's pitch have it). each loop is its own size: knit a row at
+// another stitch number and its rows are taller, its stitches wider. and a
+// stitch keeps its yarn (Poincloux, Adda-Bedia & Lechenault 2018: its width
+// and δ × its height, together, are as long as they were relaxed), so a
+// stitch pulled long is drawn in narrower, and rows crowded together spread.
+//
+// worn (inflated), a tube's blown up round, as wide as its stitches are, and
+// where one side of it has more rows than the other (a short-row heel, or
+// toe), it turns: each loop's wale is as long as its rows, so a tube whose
+// back's longer than its front bends round towards its front, as far as the
+// back's longer, over the tube's width. short rows knitted from a tube are
+// part of it, on its side: a heel cups out of the leg, not into it.
 
 import {across} from "./knitting.js"
+import {DELTA, STITCH, fabricOf, stitchSize} from "./size.js"
 
 export const LOOP = 3.8
 export const WALE = LOOP / 5
@@ -70,6 +88,15 @@ export function newFabric() {
 		link: new Int32Array(0), // the loop before on its yarn, if it's a regular course
 		reach: new Float32Array(0),
 		rest: new Float32Array(0), // and how far it should be
+		// each loop's own size, in pitches (see size.js): how far above the
+		// loops it's pulled through it sits relaxed (its row), at most (its
+		// yarn's reach: half the loop, legs straight), and how wide it is; and
+		// how long its wale is, relaxed, from the bottom of the fabric up to it
+		wale: new Float32Array(0),
+		far: new Float32Array(0),
+		wide: new Float32Array(0),
+		along: new Float32Array(0),
+		sizeKey: "",
 		poff: new Int32Array(1), // parents, flat: loop i's are pidx[poff[i]..poff[i + 1]]
 		pidx: new Int32Array(0),
 		// (and whether each was moved over from another needle to be pulled
@@ -114,6 +141,10 @@ function grow(f, need) {
 	f.ax = bigger(f.ax, Float32Array)
 	f.ay = bigger(f.ay, Float32Array)
 	f.rest = bigger(f.rest, Float32Array)
+	f.wale = bigger(f.wale, Float32Array)
+	f.far = bigger(f.far, Float32Array)
+	f.wide = bigger(f.wide, Float32Array)
+	f.along = bigger(f.along, Float32Array)
 	f.reach = bigger(f.reach, Float32Array)
 	f.bulge = bigger(f.bulge, Float32Array)
 	f.py0 = bigger(f.py0, Float32Array)
@@ -131,6 +162,23 @@ function grow(f, need) {
 	f.poff = poff
 }
 
+// a loop's size in pitches, from the settings (see size.js): `fabric` (or,
+// per yarn, `yarns[yarn]`) and the gauge. as WALE and REACH have it, and a
+// needle's pitch wide, till anything's measured
+export function sizer({fabric = null, yarns = null, gauge = 7} = {}) {
+	const pitch = 25.4 / gauge
+	const known = {}
+	const size = (number, yarn = 0) => {
+		const key = `${number}|${yarn}`
+		if (known[key]) return known[key]
+		const s = stitchSize(fabricOf({fabric: yarns?.[yarn] ?? fabric}), number, pitch)
+		return (known[key] = {up: s.up / pitch, far: s.loop / pitch / 2, across: s.across / pitch})
+	}
+	size.key = JSON.stringify([fabric, yarns, gauge])
+	return size
+}
+const PLAIN = sizer()
+
 export function firstLoop(machine, limit = 20000) {
 	return Math.max(0, machine.loops.length - limit)
 }
@@ -145,7 +193,33 @@ export function strain(f, i) {
 		far += Math.hypot(f.xs[i] - f.xs[p], f.ys[i] - f.ys[p])
 	}
 	far /= b - a
-	return Math.max(0, Math.min(1, (far - WALE) / (REACH - WALE)))
+	return Math.max(0, Math.min(1, (far - f.wale[i]) / (f.far[i] - f.wale[i])))
+}
+
+// each loop's size, from its stitch number and its yarn (`size(number,
+// yarn)`: {up, far, across} in pitches): from `from` on (all of them, when
+// the sizes have changed)
+function sizes(f, machine, from, to, size) {
+	const {loops} = machine
+	const {wale, far, wide} = f
+	for (let i = from; i < to; i++) {
+		const s = size(loops[i].stitch ?? STITCH, loops[i].yarn)
+		wale[i] = s.up
+		far[i] = Math.max(s.far, s.up)
+		wide[i] = s.across
+	}
+}
+
+// how long each loop's wale is, relaxed, from the bottom of the fabric up to
+// it: the longest of the loops it's pulled through, and its own row. (a loop
+// lying across adds nothing to the wale it's on)
+function alongs(f, from, to) {
+	const {wale, along, poff, pidx, pside} = f
+	for (let i = from; i < to; i++) {
+		let below = 0
+		for (let k = poff[i]; k < poff[i + 1]; k++) if (!pside[k] && along[pidx[k]] > below) below = along[pidx[k]]
+		along[i] = below + wale[i]
+	}
 }
 
 // loops added since last time: where they start
@@ -198,13 +272,14 @@ function layout(f, machine, from, to, first) {
 			} else if (before.dir !== loop.dir) {
 				// the turn at a row's end: it joins this row's end to the last's
 				link[i] = loop.prev
-				rest[i] = before.back === loop.back ? WALE : 0.4
+				rest[i] = before.back === loop.back ? f.wale[i] : 0.4
 				f.reach[i] = rest[i] + SLACK
 			} else if (dx > MIN_COURSE) {
 				slack[i] = 1
 			} else {
+				// (as far apart as the stitches are wide)
 				link[i] = loop.prev
-				rest[i] = dx
+				rest[i] = dx * f.wide[i]
 				f.reach[i] = SLACK
 			}
 		}
@@ -213,7 +288,7 @@ function layout(f, machine, from, to, first) {
 	// later, so from the newest back); a loop on a needle is at the hooks
 	for (let i = to - 1; i >= from; i--) {
 		if (f.pinned[i]) continue
-		if (child[i] >= 0 && child[i] < to) py[i] = py[child[i]] - WALE
+		if (child[i] >= 0 && child[i] < to) py[i] = py[child[i]] - f.wale[child[i]]
 	}
 	// a loop with nothing pulled through it: level with the loop before it
 	for (let i = from; i < to; i++) {
@@ -221,6 +296,21 @@ function layout(f, machine, from, to, first) {
 		const l = f.link[i]
 		py[i] = l >= 0 && l < i && !Number.isNaN(py[l]) ? py[l] : i > first ? py[i - 1] : 0
 		if (Number.isNaN(py[i])) py[i] = 0
+	}
+}
+
+// the rows' rests again, the stitches having changed size
+function relink(f, machine, from, to) {
+	const {loops} = machine
+	for (let i = from; i < to; i++) {
+		const l = f.link[i]
+		if (l < 0) continue
+		const before = loops[l]
+		const loop = loops[i]
+		if (before.dir !== loop.dir) {
+			f.rest[i] = before.back === loop.back ? f.wale[i] : 0.4
+			f.reach[i] = f.rest[i] + SLACK
+		} else f.rest[i] = Math.abs(loop.x - before.x) * f.wide[i]
 	}
 }
 
@@ -274,10 +364,9 @@ function pin(f, machine, n) {
 function pass(f, first, n, squash, grab) {
 	const kBack = f.homing === 1 ? K_BACK : f.homing === 2 ? K_SPRING : 0
 	const {hx, hy} = f
-	const {px, py, x0, ax, ay, link, rest, pinned, poff, pidx, pside} = f
+	const {px, py, x0, ax, ay, link, pinned, poff, pidx, pside, wale} = f
 	ax.fill(0, first, n)
 	ay.fill(0, first, n)
-	const lo = WALE * squash
 	for (let i = first; i < n; i++) {
 		const freeI = pinned[i] || i === grab ? 0 : 1
 		// the yarn from the loop before
@@ -290,7 +379,7 @@ function pass(f, first, n, squash, grab) {
 				const dy = py[i] - py[l]
 				const d = Math.hypot(dx, dy)
 				if (d > 1e-5) {
-					const e = ((d - rest[i]) * K_COURSE) / d / share
+					const e = ((d - courseRest(f, i, l, first)) * K_COURSE) / d / share
 					ax[i] -= freeI * dx * e
 					ay[i] -= freeI * dy * e
 					ax[l] += freeL * dx * e
@@ -313,7 +402,7 @@ function pass(f, first, n, squash, grab) {
 				const dy = py[i] - py[p]
 				const d = Math.hypot(dx, dy)
 				if (d > 1e-5) {
-					const err = d - WALE
+					const err = d - wale[i]
 					// (a loop lying across isn't pushed under it)
 					const e = ((err * (err > 0 ? K_WALE_LONG : pside[k] ? 0 : K_WALE)) / d) * w / share
 					ax[i] -= freeI * (dx * e)
@@ -348,6 +437,31 @@ function pass(f, first, n, squash, grab) {
 	return Math.min(most, STEP)
 }
 
+// how far a loop sits from the loop before it on a row: its stitch's width
+// (as many as there are needles between), less δ × however much longer its
+// wale is than its row, relaxed: the yarn that's gone into the wale's come out
+// of the stitch's width, and crowded rows give theirs back (Poincloux et al.:
+// a stitch's width + δ × its height stays as long as it was). a turn at a
+// row's end, a pitch across or a row up, is as it was laid out
+function courseRest(f, i, l, first) {
+	const {rest, wale, wide, py, px, poff, pidx, pside} = f
+	const dx = Math.abs(f.x0[i] - f.x0[l])
+	const {loops} = f.machine
+	if (!dx || loops[i].dir !== loops[l].dir) return rest[i]
+	let tall = 0
+	let c = 0
+	for (let k = poff[i]; k < poff[i + 1]; k++) {
+		const p = pidx[k]
+		if (p < first || pside[k]) continue
+		tall += Math.hypot(px[i] - px[p], py[i] - py[p])
+		c++
+	}
+	if (!c) return rest[i]
+	const width = wide[i] - DELTA * (tall / c - wale[i])
+	// (no narrower than a third of it, nor wider than all its yarn laid across)
+	return dx * Math.min(wide[i] + DELTA * wale[i], Math.max(wide[i] / 3, width))
+}
+
 // a loop that's come off its needle drops to a wale under the loop pulled
 // through it, and the fabric hanging from it goes down with it, just as far
 // (so settled loops stay as they are, only moved by what's changed)
@@ -359,7 +473,7 @@ function carry(f, first, n) {
 		if (r < first || r >= n || f.pinned[r]) continue
 		const c = child[r]
 		if (c < 0 || c >= n) continue
-		const drop = py[c] - WALE - py[r]
+		const drop = py[c] - f.wale[c] - py[r]
 		if (drop < 0) {
 			ax[r] = drop
 			if (r > top) top = r
@@ -437,7 +551,7 @@ function fall(f, first, n, grab) {
 		for (let k = poff[i]; k < poff[i + 1]; k++) {
 			const p = pidx[k]
 			if (p < first || pinned[p] || p === grab || pside[k]) continue
-			const rest = py[i] - WALE
+			const rest = py[i] - f.wale[i]
 			if (py[p] > rest) py[p] = rest
 		}
 	}
@@ -449,37 +563,40 @@ function fall(f, first, n, grab) {
 // Kim, Chentanez and Müller 2012: a loop's never further from the loops
 // above than the yarn reaches, whatever's pulling it, and a hang or a drag
 // goes all the way up or down a wale in one sweep.)
-//  - from a parent: a loop is above it by at least squashed and at most REACH
-//    (or, from a parent lying across, within REACH of it either way)
+//  - from a parent: a loop is above it by at least squashed and at most its
+//    reach (or, from a parent lying across, within reach of it either way)
 //  - from the loop before it on the yarn: at most a little way off its height
-// down, from the newest: a loop below a loop is pulled up to within REACH or
+// down, from the newest: a loop below a loop is pulled up to within reach or
 // pushed down to squashed, and kept with the loops on its yarn. up, from the
 // oldest: a loop is held within what's below and beside it
 function bounds(f, first, n, squash, grab, down) {
-	const {py, pinned, poff, pidx, pside, link} = f
-	const lo = WALE * squash
+	const {py, pinned, poff, pidx, pside, link, wale, far} = f
 	if (down) {
 		for (let i = n - 1; i >= first; i--) {
 			const y = py[i]
+			const lo = wale[i] * squash
+			const reach = far[i]
 			for (let k = poff[i]; k < poff[i + 1]; k++) {
 				const p = pidx[k]
 				if (p < first || pinned[p] || p === grab) continue
-				const top = pside[k] ? y + REACH : y - lo
+				const top = pside[k] ? y + reach : y - lo
 				if (py[p] > top) py[p] = top
-				else if (py[p] < y - REACH) py[p] = y - REACH
+				else if (py[p] < y - reach) py[p] = y - reach
 			}
 		}
 	} else {
 		for (let i = first; i < n; i++) {
 			if (pinned[i] || i === grab) continue
+			const lo = wale[i] * squash
+			const reach = far[i]
 			let up = -Infinity
 			let dn = Infinity
 			for (let k = poff[i]; k < poff[i + 1]; k++) {
 				const p = pidx[k]
 				if (p < first) continue
-				const least = pside[k] ? py[p] - REACH : py[p] + lo
+				const least = pside[k] ? py[p] - reach : py[p] + lo
 				if (least > up) up = least
-				if (py[p] + REACH < dn) dn = py[p] + REACH
+				if (py[p] + reach < dn) dn = py[p] + reach
 			}
 			if (py[i] < up) py[i] = up
 			else if (py[i] > dn) py[i] = dn
@@ -511,9 +628,10 @@ function moved(f, first, n) {
 
 // how far each loop bulges out of its bed: rows crowded together buckle
 function buckle(f, first, n, squash) {
-	const {py, child, bulge, poff, pidx} = f
-	const squashed = WALE * (1 - squash)
+	const {py, child, bulge, poff, pidx, wale} = f
 	for (let i = first; i < n; i++) {
+		const rest = wale[i]
+		const squashed = rest * (1 - squash)
 		// the gap to the loop above and below
 		let s = 0
 		let c = 0
@@ -525,8 +643,8 @@ function buckle(f, first, n, squash) {
 			s += py[i] - py[pidx[poff[i]]]
 			c++
 		}
-		const gap = c ? s / c : WALE
-		bulge[i] = gap < WALE ? Math.min(1, (WALE - gap) / squashed) : 0
+		const gap = c ? s / c : rest
+		bulge[i] = gap < rest ? Math.min(1, (rest - gap) / squashed) : 0
 	}
 }
 
@@ -554,13 +672,120 @@ function tubes(machine, first, n) {
 	return tube
 }
 
+// what's part of a tube: its loops, and what's knitted from them on one bed
+// (short rows, a heel's or a toe's: they're on the tube's side, where they
+// were knitted, not a cloth of their own)
+function onTube(f, machine, first, n, tube) {
+	const surface = new Uint8Array(n)
+	for (let i = first; i < n; i++) {
+		if (tube[i]) {
+			surface[i] = 1
+			continue
+		}
+		for (let k = f.poff[i]; k < f.poff[i + 1]; k++) {
+			const p = f.pidx[k]
+			if (p >= first && !f.pside[k] && surface[p]) surface[i] = 1
+		}
+	}
+	return surface
+}
+
+// how a tube bends, worn: each round of it (once round, both beds) has its
+// wales so long, relaxed (along), each as far out towards the back as it is
+// (ρ). bent θ, a wale ρ out is ρθ longer than the tube's middle is (σ): so
+// along = σ + ρθ, fitted to each round's loops. where the back's longer than
+// the front (a short-row heel), θ grows, and the tube turns towards its front.
+// `at(i)`: where on the middle loop i is, which way that's facing, and how far
+// it's turned (from the top: the newest knitting stays as it hangs). a round's
+// loops are where it is; a short row's, where along = σ + ρθ puts them
+function bending(f, machine, first, n, tube, rhoOf) {
+	const {loops} = machine
+	const {along, py} = f
+	const rounds = []
+	const roundOf = new Int32Array(n).fill(-1)
+	let r = null
+	for (let i = first; i < n; i++) {
+		if (!tube[i]) continue
+		const p = loops[i].prev
+		const fresh = !r || p == null || !tube[p] || (bedOf(loops[p]) < 0 && bedOf(loops[i]) > 0)
+		if (fresh) rounds.push((r = {s1: 0, sr: 0, srr: 0, ss: 0, srs: 0, y: 0, front: 0, back: 0}))
+		roundOf[i] = rounds.length - 1
+		const rho = rhoOf(i)
+		if (loops[i].back) r.back++
+		else r.front++
+		r.s1++
+		r.sr += rho
+		r.srr += rho * rho
+		r.ss += along[i]
+		r.srs += rho * along[i]
+		r.y += py[i]
+	}
+	const fit = []
+	// (a round's both beds: a pass along one, as a heel's last runs on into the
+	// foot, is only half way round)
+	for (const round of rounds) {
+		const {s1, sr, srr, ss, srs, y, front, back} = round
+		const det = s1 * srr - sr * sr
+		if (front < 2 || back < 2 || det < 1e-6 * s1 * s1) continue
+		const theta = (s1 * srs - sr * ss) / det
+		fit.push((round.fit = {sigma: (ss - theta * sr) / s1, theta, y: y / s1}))
+	}
+	if (fit.length < 2) return null
+	fit.sort((a, b) => a.sigma - b.sigma)
+	// (the middle, from the top down: each round's where the one above it is,
+	// less as far down the middle as they're apart, turned as they are)
+	const top = fit[fit.length - 1]
+	const turned = theta => theta - top.theta
+	top.cy = top.y
+	top.cz = 0
+	for (let k = fit.length - 2; k >= 0; k--) {
+		const a = fit[k]
+		const b = fit[k + 1]
+		const t = turned((a.theta + b.theta) / 2)
+		const ds = b.sigma - a.sigma
+		a.cy = b.cy - Math.cos(t) * ds
+		a.cz = b.cz - Math.sin(t) * ds
+	}
+	const thetaAt = sigma => {
+		if (sigma <= fit[0].sigma) return fit[0].theta
+		if (sigma >= top.sigma) return top.theta
+		let k = 0
+		while (fit[k + 1].sigma < sigma) k++
+		const a = fit[k]
+		const b = fit[k + 1]
+		return a.theta + ((b.theta - a.theta) * (sigma - a.sigma)) / (b.sigma - a.sigma || 1)
+	}
+	return i => {
+		const fitted = roundOf[i] >= 0 ? rounds[roundOf[i]].fit : null
+		let sigma = along[i]
+		if (fitted) sigma = fitted.sigma
+		else for (let it = 0; it < 8; it++) sigma = along[i] - rhoOf(i) * thetaAt(sigma)
+		const angle = turned(thetaAt(sigma))
+		// (past the first or last round: on along, straight)
+		const end = sigma <= fit[0].sigma ? fit[0] : sigma >= top.sigma ? top : null
+		if (end) {
+			const t = turned(end.theta)
+			const ds = sigma - end.sigma
+			return {y: end.cy + Math.cos(t) * ds, z: end.cz + Math.sin(t) * ds, angle}
+		}
+		let k = 0
+		while (fit[k + 1].sigma < sigma) k++
+		const a = fit[k]
+		const b = fit[k + 1]
+		const u = (sigma - a.sigma) / (b.sigma - a.sigma || 1)
+		return {y: a.cy + (b.cy - a.cy) * u, z: a.cz + (b.cz - a.cz) * u, angle}
+	}
+}
+const bedOf = loop => (loop.back ? -1 : 1)
+
 // show: bed side, plus bulge (smoothed along the wale so ridges are round),
-// plus, worn, off the machine: a tube's beds blown round into it, and any
-// other fabric's beds come together into one cloth. (z eases there: how far
-// it's still to go)
+// plus, worn, off the machine: a tube's beds blown round into it (and bent,
+// where one side's longer), and any other fabric's beds come together into
+// one cloth. (z eases there: how far it's still to go)
 function show(f, machine, first, n, gap, inflate) {
 	const {px, py, pz, xs, ys, zs, bed, bulge, child} = f
 	const tube = inflate > 0 ? tubes(machine, first, n) : null
+	const surface = tube ? onTube(f, machine, first, n, tube) : null
 	let easing = 0
 	for (let i = first; i < n; i++) {
 		let b = bulge[i]
@@ -571,7 +796,7 @@ function show(f, machine, first, n, gap, inflate) {
 		if (p >= first) b += bulge[p] * 0.25
 		else b += bulge[i] * 0.25
 		// (a held loop: flat)
-		const apart = tube && !tube[i] && !f.pinned[i] ? gap * (1 - inflate) : gap
+		const apart = tube && !surface[i] && !f.pinned[i] ? gap * (1 - inflate) : gap
 		const target = bed[i] * (apart + BULGE * b * (f.pinned[i] ? 0 : 1))
 		pz[i] = f.settledZ ? pz[i] + (target - pz[i]) * 0.35 : target
 		easing = Math.max(easing, Math.abs(target - pz[i]))
@@ -593,25 +818,45 @@ function show(f, machine, first, n, gap, inflate) {
 		}
 		const w = hi - lo
 		if (front && back && w > 2) {
-			const r = w / Math.PI
+			// (as big round as its stitches are wide: half way round's as many
+			// stitches as a bed has)
+			let wide = 0
+			for (let i = first; i < n; i++) if (tube[i]) wide += f.wide[i]
+			const r = (w * (wide / (front + back))) / Math.PI
 			const mid = (lo + hi) / 2
+			const turnOf = i => (Math.max(-1, Math.min(1, (px[i] - mid) / (w / 2))) * Math.PI) / 2
+			// (how far out towards the back a loop is)
+			const rhoOf = i => -bed[i] * r * Math.cos(turnOf(i))
+			const bent = bending(f, machine, first, n, tube, rhoOf)
 			for (let i = first; i < n; i++) {
-				if (!tube[i]) continue
-				const u = (px[i] - mid) / (w / 2)
-				const t = (u * Math.PI) / 2
+				if (!surface[i]) continue
+				const t = turnOf(i)
 				const round = mid + r * Math.sin(t)
 				// (round the tube's middle, between the beds: its bed's
 				// side, out as far as the tube's round there, and bulging)
 				const out = bed[i] * r * Math.cos(t) + (pz[i] - bed[i] * gap)
-				xs[i] = px[i] + (round - px[i]) * inflate
-				zs[i] = zs[i] + (out - zs[i]) * inflate
+				if (bent) {
+					// and the middle bent: out's along its front, turned
+					const {y, z, angle} = bent(i)
+					xs[i] = px[i] + (round - px[i]) * inflate
+					ys[i] = py[i] + (y - Math.sin(angle) * out - py[i]) * inflate
+					zs[i] = zs[i] + (z + Math.cos(angle) * out - zs[i]) * inflate
+				} else {
+					xs[i] = px[i] + (round - px[i]) * inflate
+					zs[i] = zs[i] + (out - zs[i]) * inflate
+				}
 			}
 		}
 	}
 	return easing
 }
 
-export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinity, limit = 20000, squash = SQUASH, grab = null} = {}) {
+export function relax(
+	f,
+	machine,
+	sweeps,
+	{gap = 0, inflate = 0, until = Infinity, limit = 20000, squash = SQUASH, grab = null, size = PLAIN} = {},
+) {
 	const n = machine.loops.length
 	let fresh = false
 	if (n < f.count || f.machine !== machine) {
@@ -624,9 +869,15 @@ export function relax(f, machine, sweeps, {gap = 0, inflate = 0, until = Infinit
 	const from = f.count
 	grow(f, n)
 	const pinsMoved = pin(f, machine, n)
-	const key = `${n}|${machine.rack}|${gap}|${inflate}|${limit}|${squash}`
+	const key = `${n}|${machine.rack}|${gap}|${inflate}|${limit}|${squash}|${size.key}`
 	if (!grab && !f.grabbed && f.settled && f.key === key && !pinsMoved) return 0
+	// (the sizes changed: every loop's resized, and its row's laid out again)
+	const resized = f.sizeKey !== size.key
+	f.sizeKey = size.key
+	sizes(f, machine, resized ? 0 : from, n, size)
+	if (resized && from > 0) relink(f, machine, 0, from)
 	if (n > from) layout(f, machine, from, n, first)
+	alongs(f, resized ? 0 : from, n)
 	f.count = n
 	f.settledZ = !fresh
 	f.settled = false

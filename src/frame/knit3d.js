@@ -1,6 +1,6 @@
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, strain} from "./loopsim.js"
+import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
@@ -574,7 +574,7 @@ export default function Knit3dTool(handle, element) {
 	const mesh = new Mesh()
 	function build(budget) {
 		const until = performance.now() + budget * settings.speed
-		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until, squash: settings.squash})
+		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until, squash: settings.squash, size: loopSize})
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
 		const count = loops.length
@@ -933,10 +933,13 @@ export default function Knit3dTool(handle, element) {
 	})
 	bedBox.addEventListener("change", refresh)
 	strainBox.addEventListener("change", refresh)
-	// the machine and yarn, as they're set (see settings.js)
+	// the machine and yarn, as they're set (see settings.js), and so how big
+	// each stitch is
 	let settings = readSettings()
+	let loopSize = sizer(settings)
 	function onSettings() {
 		settings = readSettings()
+		loopSize = sizer(settings)
 		settling = 0
 		refresh()
 	}

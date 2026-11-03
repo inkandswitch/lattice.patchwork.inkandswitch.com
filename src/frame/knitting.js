@@ -1,3 +1,5 @@
+import {STITCH} from "./size.js"
+
 // a .k's knitting, op by op, on a pretend machine: what the animation and the
 // 3d view both play out
 
@@ -10,11 +12,12 @@ function needleOf(token) {
 	return {bed, back: bed[0] === "b", n: Number(match[2]), key: token}
 }
 
-// every op in a .k, as {kind, dir, needle, to, carriers, rack, kLine, jsLine,
-// text}, with the carriers it names (in the order the header gives them) and
-// the needles it uses
+// every op in a .k, as {kind, dir, needle, to, carriers, rack, stitch (the
+// x-stitch-number it's knitted at), kLine, jsLine, text}, with the carriers
+// it names (in the order the header gives them) and the needles it uses
 export function readKnitout(text) {
 	const ops = []
+	let stitch = STITCH
 	const carriers = []
 	const problems = []
 	let min = Infinity
@@ -41,7 +44,7 @@ export function readKnitout(text) {
 		if (!opText) return
 		const source = raw.match(/;!source:(-?\d+)/)
 		const [name, ...args] = opText.split(/\s+/)
-		const op = {kLine, jsLine: source ? Number(source[1]) : null, text: opText, carriers: []}
+		const op = {kLine, jsLine: source ? Number(source[1]) : null, text: opText, carriers: [], stitch}
 		try {
 			if (name === "knit" || name === "tuck" || name === "miss") {
 				op.kind = name
@@ -74,8 +77,10 @@ export function readKnitout(text) {
 				op.rack = Number(args[0])
 				if (!Number.isFinite(op.rack)) throw `"${args[0]}" isn't a racking`
 			} else {
-				// stitch, pause, releasehook, x-…: nothing to see
+				// stitch, pause, releasehook, x-…: nothing to see (but the
+				// stitch number's kept: the loops after are that size)
 				op.kind = "other"
+				if (name === "x-stitch-number" && args[0]) op.stitch = stitch = args[0]
 			}
 		} catch (problem) {
 			problems.push({line: kLine, text: String(problem)})
@@ -94,7 +99,8 @@ export function readKnitout(text) {
 	return {ops, carriers, problems, range: min > max ? [0, 20] : [min, max]}
 }
 
-// every loop the machine makes, as {id, yarn, op, tuck, n, back (the needle
+// every loop the machine makes, as {id, yarn, op, tuck, stitch (its stitch
+// number), n, back (the needle
 // it's on now, or was let go from), dir (1 knitted going +, −1 going −), x
 // (where across the bed it was made),
 // parents (the loops it was pulled through), prev (the loop its yarn came
@@ -147,6 +153,7 @@ export function apply(machine, op, index, yarnOf) {
 			yarn: yarnOf(name),
 			op: index,
 			tuck: op.kind === "tuck",
+			stitch: op.stitch ?? STITCH,
 			n: op.needle.n,
 			back: op.needle.back,
 			dir: op.dir === "-" ? -1 : 1,

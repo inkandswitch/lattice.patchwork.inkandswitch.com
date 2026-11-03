@@ -38,7 +38,6 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	const fabric = fabricOf(settings)
 	const sizes = {} // stitch number → its stitch (see size.js), and how many
 	const sizeOf = number => (sizes[number] ??= {...stitchSize(fabric, number, pitch), count: 0})
-	let stitch = STITCH
 	const HOLD_ROWS = holdRows(squash)
 	const knitout = readKnitout(text)
 	const {ops} = knitout
@@ -151,7 +150,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 
 		// carriers
 		const name = op.text.split(/\s+/)[0]
-		if (name === "x-stitch-number") stitch = op.text.split(/\s+/)[1] ?? stitch
+		const stitch = op.stitch ?? STITCH
 		if (name === "inhook" || name === "outhook" || name === "releasehook") {
 			report("error", i, `the kniterate has no yarn inserting hook: use ${name === "inhook" ? "in" : "out"} instead of ${name}`, "hook")
 		}
