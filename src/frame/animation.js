@@ -504,9 +504,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			// first
 			const roll = rollOf(loop)
 			const out = Math.sin(roll) * STRAND
-			const top = onTop(loop)
-			legs(nearPath(depth, 1, loop.yarn + 6 * (1 - top)), top ? out : -out)
-			legs(nearPath(depth, 2, loop.yarn + 6 * top), top ? -out : out)
+			const above = onTop(loop)
+			legs(nearPath(depth, 1, loop.yarn + 6 * (1 - above)), above ? out : -out)
+			legs(nearPath(depth, 2, loop.yarn + 6 * above), above ? -out : out)
 		}
 		c.lineCap = "round"
 		c.lineJoin = "round"
