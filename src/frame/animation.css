@@ -233,6 +233,11 @@
 				stroke-width: 1.1;
 			}
 
+			/* a second strand, fed in with the first: in and out of it */
+			& .yarn.second {
+				stroke-dasharray: 1.6 1.6;
+			}
+
 			& text {
 				fill: var(--knitoutjs-muted);
 				stroke: none;
@@ -248,6 +253,14 @@
 		& .y3 { --yarn: var(--yarn-3); }
 		& .y4 { --yarn: var(--yarn-4); }
 		& .y5 { --yarn: var(--yarn-5); }
+		/* and their second strands', 6…11, if they've two (what's shown of a
+		   loop on a needle is the strand on top: see strands.js) */
+		& .y6 { --yarn: var(--yarn-6); }
+		& .y7 { --yarn: var(--yarn-7); }
+		& .y8 { --yarn: var(--yarn-8); }
+		& .y9 { --yarn: var(--yarn-9); }
+		& .y10 { --yarn: var(--yarn-10); }
+		& .y11 { --yarn: var(--yarn-11); }
 	}
 
 	& .knitout-animation-empty {

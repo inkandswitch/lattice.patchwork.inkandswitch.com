@@ -15,10 +15,11 @@
 // yarns"; and untwisted, with the tension varying, it comes and goes in bars,
 // not dots). so φ is a random walk along the yarn: from loop to loop it turns
 // by a normal step of TWIST radians, and over n loops it's turned √n × TWIST
-// or so, which keeps a strand on top for about (π/2 ÷ TWIST)² loops at a
-// time: a stitch or three, a few in a row now and then. TWIST is a guess till
-// it's measured: knit a swatch held double, count how long the runs of one
-// colour are, and put TWIST at π/2 ÷ √(that).
+// or so: so how long a strand stays on top goes as 1 ÷ TWIST². at 0.9 it's
+// five loops along the yarn, on average (counted, on a swatch of the walk):
+// bars, short ones. TWIST is a guess till it's measured: knit a swatch held
+// double, count how many stitches along a row one colour stays on top, on
+// average, and put TWIST at 0.9 × √(5 ÷ that).
 //
 // plated (one strand through the carrier's hole, the other through its
 // plating slit: kniterate's "plating" guide), the carrier holds φ: one's

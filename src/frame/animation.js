@@ -3,7 +3,8 @@ import {docText} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
-import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {turnOf} from "./strands.js"
+import {YARNS_CHANGED, yarnPicker, yarnStrands} from "./yarns.js"
 import {icon} from "./icons.js"
 import {stylesheet} from "./stylesheet.js"
 
@@ -19,6 +20,9 @@ const ROW = 7
 // the near bed's stitches are drawn in layers, nearest last: so many, each so
 // many needles' pitch deeper than the last
 const DEPTHS = 6
+// two strands in one carrier: how thick each is drawn, half as thick again as
+// the pair's drawn apart, side by side
+const STRAND = 0.7
 const DEPTH = 0.4
 // (where the fabric bulges out, on the whole, more than BULGING, its layers
 // go from its face to twice its usual depth)
@@ -137,7 +141,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const flipButton = button("", "", () => flip())
 	flipButton.append(icon("flip"), " flip")
 	flipButton.classList.add("knitout-animation-flip")
-	const yarns = yarnPicker()
+	const yarns = yarnPicker({strands: true})
 
 	bar.append(
 		iconButton("restart", "restart", "back to the start, before the first stitch", () => {
@@ -238,12 +242,17 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	// ── yarn colours: the same as the kniterate tool's
 
-	let colours = {yarns: [], ink: "#000"}
+	// (each carrier's first strand's, 0–5, then its second's, 6–11: the same
+	// as its first, if it's only the one)
+	let colours = {yarns: [], strands: [], ink: "#000"}
 	function readYarns() {
-		yarnColours().forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
+		const strands = yarnStrands()
+		const yarns = [...strands.map(({colours}) => colours[0]), ...strands.map(({colours}) => colours[1] ?? colours[0])]
+		yarns.forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
 		const style = getComputedStyle(root)
 		colours = {
-			yarns: yarnColours(),
+			yarns,
+			strands,
 			ink: style.color,
 			danger: style.getPropertyValue("--knitoutjs-danger").trim() || "#d33a4c",
 		}
@@ -256,6 +265,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	addEventListener(YARNS_CHANGED, onColours)
 	const scheme = matchMedia("(prefers-color-scheme: dark)")
 	scheme.addEventListener("change", onColours)
+
+	// two strands in a carrier: how a loop's yarn's rolled (see strands.js),
+	// and which of them is on top, seen from its face (or, behind, its back)
+	const twoStrands = loop => (colours.strands[loop.yarn]?.colours.length ?? 1) > 1
+	const rollOf = loop => turnOf(loop, colours.strands[loop.yarn]?.plated)
+	const onTop = (loop, behind = false) => (twoStrands(loop) && Math.cos(rollOf(loop)) < 0 !== behind ? 1 : 0)
+	// (and the colour it shows: its yarn's, or its second strand's)
+	const shownYarn = (loop, behind = false) => loop.yarn + 6 * onTop(loop, behind)
 
 	// ── state
 
@@ -339,7 +356,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const path = group.children[at]
 			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
 			const pulled = strainBox.checked ? Math.round(strain(fabric, loop.id) * 3) : 0
-			const className = `loop y${loop.yarn}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
+			const className = `loop y${shownYarn(loop)}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
 			if (pathData.get(path) === d + className) return
 			pathData.set(path, d + className)
 			path.setAttribute("d", d)
@@ -417,10 +434,15 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const right = middle + reach + COL
 		const top = camera.y - ROW
 		const bottom = camera.y + size.height / scale() + ROW
-		// the far bed × yarn, the near bed × depth × yarn, what's pointed at,
-		// and (showing strain) how hard each is pulled
-		const marks = 6 + DEPTHS * 6
+		// the far bed × yarn, the near bed × depth × (a yarn of one strand, the
+		// strand underneath of two, and the strand on top) × yarn, what's
+		// pointed at, and (showing strain) how hard each is pulled. (a yarn's
+		// a colour of colours.yarns: a carrier's first strand, or its second)
+		const YARNS = 12
+		const STRANDS = 3
+		const marks = YARNS + DEPTHS * STRANDS * YARNS
 		const paths = Array.from({length: marks + 4}, () => new Path2D())
+		const nearPath = (depth, strand, yarn) => paths[YARNS + (depth * STRANDS + strand) * YARNS + yarn]
 		const showStrain = strainBox.checked
 		const back = f < 0
 		const first = firstLoop(machine)
@@ -442,8 +464,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const far = loop.back !== back
 			const pulled = showStrain ? Math.round(strain(fabric, id) * 3) : 0
 			const depth = Math.max(0, Math.min(DEPTHS - 1, Math.floor(nearness(id) / layer)))
-			const path =
-				paths[loop.op === pointing ? marks : pulled ? marks + pulled : far ? loop.yarn : 6 + depth * 6 + loop.yarn]
+			const marked = loop.op === pointing ? marks : pulled ? marks + pulled : null
+			const path = paths[marked ?? (far ? shownYarn(loop, true) : depth * STRANDS * YARNS + YARNS + loop.yarn)]
 			if (far) {
 				path.moveTo(x - 3.8, y + 1.8)
 				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
@@ -467,17 +489,32 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				footY = Math.max(footY, highest - 3.7)
 			}
 			const half = Math.max(1.2, (3.6 * 6.9) / (footY - y + 3.6))
-			path.moveTo(x - half, y - 3.6)
-			path.lineTo(footX - 0.5, footY)
-			path.moveTo(x + half, y - 3.6)
-			path.lineTo(footX + 0.5, footY)
+			const legs = (path, out) => {
+				path.moveTo(x - half - out, y - 3.6)
+				path.lineTo(footX - 0.5 - out, footY)
+				path.moveTo(x + half + out, y - 3.6)
+				path.lineTo(footX + 0.5 + out, footY)
+			}
+			if (marked != null || !twoStrands(loop)) {
+				legs(path, 0)
+				continue
+			}
+			// two strands: each thinner, and as far apart, sideways, as the
+			// pair's rolled from one on top of the other; the one underneath
+			// first
+			const roll = rollOf(loop)
+			const out = Math.sin(roll) * STRAND
+			const top = onTop(loop)
+			legs(nearPath(depth, 1, loop.yarn + 6 * (1 - top)), top ? out : -out)
+			legs(nearPath(depth, 2, loop.yarn + 6 * top), top ? -out : out)
 		}
-		c.lineWidth = 2.1
 		c.lineCap = "round"
 		c.lineJoin = "round"
 		for (let at = 0; at < paths.length; at++) {
-			c.globalAlpha = at < 6 ? 0.4 : at > marks ? (at - marks) / 3 : 1
-			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % 6]
+			const strand = at >= YARNS && at < marks ? Math.floor((at - YARNS) / YARNS) % STRANDS : 0
+			c.lineWidth = strand ? 2 * STRAND : 2.1
+			c.globalAlpha = at < YARNS ? 0.4 : at > marks ? (at - marks) / 3 : 1
+			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % YARNS]
 			c.stroke(paths[at])
 		}
 		c.globalAlpha = 1
@@ -605,7 +642,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 						"d",
 						`M${lx - 2.6} ${ly + 5} L${lx - 1.9} ${ly} Q${lx} ${ly - 3.6} ${lx + 1.9} ${ly} L${lx + 2.6} ${ly + 5}`,
 					)
-					travelling.setAttribute("class", `loop travelling y${held.loops[0].yarn}`)
+					travelling.setAttribute("class", `loop travelling y${shownYarn(held.loops[0])}`)
 					travelling.setAttribute("visibility", "visible")
 				}
 				if (op.carriers.length && t > 0.5) caught = from
@@ -669,10 +706,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (!feeder) {
 				const group = svg("g", {class: `feeder y${yarnOf(name)}`}, layers.yarns)
 				const yarn = svg("path", {class: "yarn"}, group)
+				// (and a second strand fed in with it, if there is one)
+				const second = svg("path", {class: "yarn second"}, group)
 				svg("rect", {x: -1.8, y: FEEDER - 11, width: 3.6, height: 11, rx: 1}, group)
 				const label = svg("text", {x: 0, y: FEEDER - 13, "text-anchor": "middle"}, group)
 				label.textContent = name
-				feeder = {group, yarn}
+				feeder = {group, yarn, second}
 				feeders.set(name, feeder)
 			}
 			const fx = x * COL
@@ -688,10 +727,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				const held = lastLoop(machine, carrier)
 				if (held) end = {x: across(machine, held.needle) * COL, y: hangY(held.needle)}
 			}
-			feeder.yarn.setAttribute(
-				"d",
-				end ? `M${fx} ${FEEDER} Q${fx} ${end.y} ${end.x} ${end.y}` : `M${fx} ${FEEDER} L${fx} ${FEEDER + 4}`,
-			)
+			const d = end ? `M${fx} ${FEEDER} Q${fx} ${end.y} ${end.x} ${end.y}` : `M${fx} ${FEEDER} L${fx} ${FEEDER + 4}`
+			feeder.yarn.setAttribute("d", d)
+			const yarn = yarnOf(name)
+			const two = (colours.strands[yarn]?.colours.length ?? 1) > 1
+			feeder.second.setAttribute("d", two ? d : "")
+			feeder.second.style.stroke = colours.yarns[yarn + 6]
 		}
 		for (const [name, feeder] of feeders) {
 			if (!seen.has(name)) {
