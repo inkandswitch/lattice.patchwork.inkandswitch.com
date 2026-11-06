@@ -9,6 +9,8 @@ export const plugins = [
     name: "Lattice Frame",
     icon: "Shirt",
     supportedDatatypes: ["folder", "account"],
+    // offered as a frame wherever it's installed
+    tags: ["frame-tool"],
     async load() {
       const { default: KnitoutFrameTool } = await import("./frame.js");
       return KnitoutFrameTool;
