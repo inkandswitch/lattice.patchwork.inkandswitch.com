@@ -212,19 +212,39 @@ function multiply(a, b) {
 }
 
 // does this knitting look like a tube: passes on one bed and then the other,
-// rather than both at once (a rib, a jacquard)
+// rather than both at once (a rib, a jacquard), and going round from one to
+// the other: not moved over between (garter's rows are on one bed and then
+// the other, but each is moved onto the other bed before the next)
 function looksLikeTube(ops) {
 	let front = 0
 	let back = 0
 	let both = 0
+	let round = 0
+	let moved = 0
 	let pass = null
+	let bed = null
+	let xfers = false
 	const finish = () => {
 		if (!pass) return
 		if (pass.front && pass.back) both++
 		else if (pass.front) front++
 		else if (pass.back) back++
+		const now = pass.front && pass.back ? null : pass.back ? "back" : "front"
+		if (now && bed && now !== bed) {
+			if (xfers) moved++
+			else round++
+		}
+		if (now) {
+			bed = now
+			xfers = false
+		}
 	}
 	for (const op of ops) {
+		if (op.kind === "split" && !op.carriers.length) {
+			finish()
+			pass = null
+			xfers = true
+		}
 		if (op.kind !== "knit") continue
 		const carrier = op.carriers.join(" ")
 		if (!pass || pass.dir !== op.dir || pass.carrier !== carrier) {
@@ -234,7 +254,7 @@ function looksLikeTube(ops) {
 		pass[op.needle.back ? "back" : "front"] = true
 	}
 	finish()
-	return front > 2 && back > 2 && both < (front + back) / 4
+	return front > 2 && back > 2 && both < (front + back) / 4 && round > moved
 }
 
 // every loop is the same few hundred triangles of yarn, bent to fit where it

@@ -655,7 +655,10 @@ function buckle(f, first, n, squash) {
 // round, from one bed to the other and back. (a row knitted across both beds
 // at once, as a rib or an ottoman's join is, turns round at every loop: it's
 // one fabric. and a row along the front and then one back along the back is
-// only half way round: as often as not it's moved onto one bed after)
+// only half way round: as often as not it's moved onto one bed after.) it's
+// the bed the loop before was on as the yarn left it that counts, not where
+// it's been moved since: garter's rows are knitted front, back, front, but
+// each is moved over before the next, so its yarn never goes round
 function tubes(machine, first, n) {
 	const {loops} = machine
 	const run = new Int32Array(n)
@@ -665,7 +668,7 @@ function tubes(machine, first, n) {
 		const p = loops[i].prev
 		const on = p != null && p >= first && way(p) === way(i)
 		run[i] = on ? run[p] : i
-		if (on && loops[p].back !== loops[i].back && crossed[run[i]] < 2) crossed[run[i]]++
+		if (on && loops[i].crossed && crossed[run[i]] < 2) crossed[run[i]]++
 	}
 	const tube = new Uint8Array(n)
 	for (let i = first; i < n; i++) tube[i] = crossed[run[i]] === 2 ? 1 : 0

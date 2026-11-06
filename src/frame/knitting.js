@@ -104,7 +104,7 @@ export function readKnitout(text) {
 // it's on now, or was let go from), dir (1 knitted going +, −1 going −), x
 // (where across the bed it was made),
 // parents (the loops it was pulled through), prev (the loop its yarn came
-// from), cast (made on an empty needle: the fabric's bottom edge), off (the
+// from), crossed (prev was on the other bed when it was made), cast (made on an empty needle: the fabric's bottom edge), off (the
 // op that dropped it, if one did)}: the
 // fabric, as a graph
 export function newMachine() {
@@ -148,6 +148,7 @@ export function apply(machine, op, index, yarnOf) {
 	const fresh = parents => {
 		if (!op.carriers.length) return []
 		const [name] = op.carriers
+		const before = machine.lastLoops.get(name)
 		const loop = {
 			id: machine.loops.length,
 			yarn: yarnOf(name),
@@ -159,7 +160,10 @@ export function apply(machine, op, index, yarnOf) {
 			dir: op.dir === "-" ? -1 : 1,
 			x: across(machine, op.needle),
 			parents: parents.map(parent => parent.id),
-			prev: machine.lastLoops.get(name)?.id ?? null,
+			prev: before?.id ?? null,
+			// (whether its yarn came over from the other bed: the loop before
+			// was there as this one was made, not moved over first)
+			crossed: before != null && before.back !== op.needle.back,
 			cast: !heldOn(machine, op.needle).loops.length,
 		}
 		machine.loops.push(loop)
