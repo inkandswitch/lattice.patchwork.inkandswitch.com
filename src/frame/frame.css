@@ -12,7 +12,7 @@
 	& [theme] {
 		--knitoutjs-ink: var(--studio-line, #1c1a17);
 		--knitoutjs-fill: var(--studio-fill, #fffdf5);
-		--knitoutjs-muted: var(--studio-line-offset-50, color-mix(in oklab, var(--knitoutjs-ink) 55%, transparent));
+		--knitoutjs-muted: var(--studio-line-offset-30, color-mix(in oklab, var(--knitoutjs-ink) 55%, transparent));
 		--knitoutjs-line: var(--studio-chrome-line, var(--knitoutjs-ink));
 		--knitoutjs-line-soft: var(--studio-fill-offset-20, color-mix(in oklab, var(--knitoutjs-ink) 16%, transparent));
 

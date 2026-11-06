@@ -1,47 +1,56 @@
-/* plain desktop-software themes: one light/one dark palettes, system fonts,
-   macos accent blue. each theme only sets the --lattice-* palette; the block
-   below maps it onto the studio, editor and syntax tokens once for both. */
+/* plain desktop-software themes with a little bamboo-and-cocoa character:
+   surfaces carry a faint plum tint, the accent is a pink, and the syntax
+   colours are an even-contrast pastel set (light: inked, dark: soft). every
+   ink and syntax colour clears 4.5:1 on the window and the chrome (comments
+   included), and the accent's own ink clears 4.5:1 on it. each theme only
+   sets the --lattice-* palette; the block below maps it onto the studio,
+   editor and syntax tokens once for both. */
 
 [theme="lattice-light"] {
 	color-scheme: light;
 
-	--lattice-window: #fafafa;
-	--lattice-chrome: #eaeaeb;
-	--lattice-ink: #383a42;
-	--lattice-ink-mute: #696c77;
-	--lattice-ink-faint: #a0a1a7;
-	--lattice-accent: #007aff;
-	--lattice-cursor: #526fff;
-	--lattice-selection: #add6ffcc;
+	--lattice-window: #fcfaff;
+	--lattice-chrome: #f1eef8;
+	--lattice-ink: #2d2b39;
+	--lattice-ink-mute: #555363;
+	--lattice-ink-faint: #6b6a7a;
+	--lattice-accent: #c13c86;
+	--lattice-accent-ink: white;
+	--lattice-cursor: var(--lattice-accent);
+	--lattice-selection: #d6c8f7cc;
 
-	--lattice-red: #e45649;
-	--lattice-orange: #986801;
-	--lattice-yellow: #c18401;
-	--lattice-green: #50a14f;
-	--lattice-cyan: #0184bc;
-	--lattice-blue: #4078f2;
-	--lattice-purple: #a626a4;
+	--lattice-red: #bc4044;
+	--lattice-orange: #b44c00;
+	--lattice-yellow: #8b6500;
+	--lattice-green: #007c3d;
+	--lattice-cyan: #00768a;
+	--lattice-blue: #286ac7;
+	--lattice-purple: #8055be;
+	--lattice-pink: #b2417f;
 }
 
 [theme="lattice-dark"] {
 	color-scheme: dark;
 
-	--lattice-window: #282c34;
-	--lattice-chrome: #21252b;
-	--lattice-ink: #abb2bf;
-	--lattice-ink-mute: #828997;
-	--lattice-ink-faint: #5c6370;
-	--lattice-accent: #0a84ff;
-	--lattice-cursor: #528bff;
-	--lattice-selection: #264f78cc;
+	--lattice-window: #22212d;
+	--lattice-chrome: #1a1923;
+	--lattice-ink: #d7d5e7;
+	--lattice-ink-mute: #a6a4b6;
+	--lattice-ink-faint: #8a899a;
+	/* a pastel button with dark ink, rather than a dim one with white */
+	--lattice-accent: #f197c2;
+	--lattice-accent-ink: var(--lattice-window);
+	--lattice-cursor: var(--lattice-accent);
+	--lattice-selection: #4d4275cc;
 
-	--lattice-red: #e06c75;
-	--lattice-orange: #d19a66;
-	--lattice-yellow: #e5c07b;
-	--lattice-green: #98c379;
-	--lattice-cyan: #56b6c2;
-	--lattice-blue: #61afef;
-	--lattice-purple: #c678dd;
+	--lattice-red: #fb9795;
+	--lattice-orange: #f29f6b;
+	--lattice-yellow: #d3ae50;
+	--lattice-green: #64c591;
+	--lattice-cyan: #2dc4d3;
+	--lattice-blue: #82b5ff;
+	--lattice-purple: #c2a4f7;
+	--lattice-pink: #f197c2;
 }
 
 [theme="lattice-light"],
@@ -50,12 +59,12 @@
 	--studio-line: var(--lattice-ink);
 	--studio-chrome-fill: var(--lattice-chrome);
 	--studio-chrome-line: var(--lattice-ink);
-	/* keep the derived greys grey, with only a hint of the blue */
-	--studio-offset-tint: var(--lattice-blue);
-	--studio-offset-tint-amount: 3%;
+	/* the derived greys lean a little plum */
+	--studio-offset-tint: var(--lattice-purple);
+	--studio-offset-tint-amount: 6%;
 
 	--studio-primary: var(--lattice-accent);
-	--studio-primary-line: white;
+	--studio-primary-line: var(--lattice-accent-ink);
 	--studio-secondary: var(--lattice-purple);
 	--studio-link: var(--lattice-blue);
 	--studio-danger: var(--lattice-red);
@@ -117,12 +126,12 @@
 	--syntax-angle-bracket: var(--lattice-ink);
 	--syntax-list: var(--lattice-ink);
 
-	--syntax-keyword: var(--lattice-purple);
-	--syntax-control-keyword: var(--lattice-purple);
-	--syntax-module-keyword: var(--lattice-purple);
+	--syntax-keyword: var(--lattice-pink);
+	--syntax-control-keyword: var(--lattice-pink);
+	--syntax-module-keyword: var(--lattice-pink);
 
-	--syntax-tag-name: var(--lattice-red);
-	--syntax-attribute-name: var(--lattice-orange);
+	--syntax-tag-name: var(--lattice-pink);
+	--syntax-attribute-name: var(--lattice-purple);
 
 	--syntax-bool: var(--lattice-orange);
 	--syntax-atom: var(--lattice-orange);
@@ -130,10 +139,10 @@
 	--syntax-integer: var(--lattice-orange);
 	--syntax-float: var(--lattice-orange);
 
-	--syntax-type-name: var(--lattice-yellow);
-	--syntax-class-name: var(--lattice-yellow);
-	--syntax-namespace: var(--lattice-yellow);
-	--syntax-type-operator: var(--lattice-purple);
+	--syntax-type-name: var(--lattice-purple);
+	--syntax-class-name: var(--lattice-purple);
+	--syntax-namespace: var(--lattice-purple);
+	--syntax-type-operator: var(--lattice-pink);
 
 	--syntax-function--variable-name: var(--lattice-blue);
 	--syntax-function--property-name: var(--lattice-blue);
@@ -146,12 +155,12 @@
 	--syntax-escape: var(--lattice-cyan);
 	--syntax-regexp: var(--lattice-cyan);
 
-	--syntax-strong: var(--lattice-yellow);
+	--syntax-strong: var(--lattice-orange);
 	--syntax-weight-strong: bold;
 	--syntax-emphasis: var(--lattice-purple);
 	--syntax-style-emphasis: italic;
 
-	--syntax-heading: var(--lattice-red);
+	--syntax-heading: var(--lattice-pink);
 	--syntax-weight-heading: bold;
 
 	--syntax-link: var(--lattice-blue);

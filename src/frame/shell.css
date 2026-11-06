@@ -12,7 +12,7 @@
 	font: 13px/1.4 var(--studio-family-ui, system-ui, sans-serif);
 
 	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
-	--lattice-muted: var(--studio-chrome-line-offset-40, #888);
+	--lattice-muted: var(--studio-chrome-line-offset-30, #888);
 	--lattice-path-family: var(--studio-family-code, ui-monospace, monospace);
 	--lattice-current: color-mix(in oklch, var(--studio-primary, #007aff) 16%, transparent);
 
@@ -374,7 +374,7 @@
 		border: none;
 		border-radius: var(--studio-radius-sm, 4px);
 		background: none;
-		color: var(--studio-line-offset-40, currentColor);
+		color: var(--studio-line-offset-30, currentColor);
 		font-family: var(--studio-family-ui, system-ui, sans-serif);
 		cursor: pointer;
 
