@@ -53,8 +53,8 @@ function sidebarIcon(at) {
 }
 
 /**
- * lattice: the account's frame. a top bar; down the left, /home (the
- * account's root folder, whose folders are projects) and /system; in the
+ * lattice: the account's frame. a top bar; down the left, projects (the
+ * folders in the account's `lattice.projects` folder) and /system; in the
  * middle the open project, its files beside its workspace; down the right,
  * inspectors for what's in the workspace (so far, its drafts)
  */
@@ -70,7 +70,7 @@ export default function LatticeFrameTool(handle, element) {
   });
   element.append(...links);
 
-  // ── /home: the account's root folder, and the projects in it ────────────
+  // ── projects: a folder of lattice's own, and the projects in it ─────────
 
   const [home, setHome] = createSignal(null);
   const [homeDoc, setHomeDoc] = createSignal(null);
@@ -78,9 +78,7 @@ export default function LatticeFrameTool(handle, element) {
   const readHome = () => setHomeDoc(homeHandle.doc() ?? null);
 
   async function openHome() {
-    const rootFolderUrl = handle.doc()?.rootFolderUrl;
-    if (!rootFolderUrl) return;
-    homeHandle = await repo.find(rootFolderUrl);
+    homeHandle = await repo.find(await projectsFolder());
     readHome();
     homeHandle.on("change", readHome);
     setHome(homeHandle);
@@ -88,7 +86,62 @@ export default function LatticeFrameTool(handle, element) {
   }
   openHome();
 
-  // a project is a folder in /home
+  // what lattice keeps on the account is under its `lattice` key: so far,
+  // `projects`, the folder its projects are in. the first time, that folder's
+  // made, linking to the projects lattice kept in the account's root folder
+  // before it had one of its own (the root folder's left as it was)
+  async function projectsFolder() {
+    const kept = handle.doc()?.lattice?.projects;
+    if (kept && isValidAutomergeUrl(String(kept))) return String(kept);
+    const folder = await repo.create2({
+      "@patchwork": { type: "folder" },
+      title: "lattice projects",
+      docs: await projectsFromRootFolder(),
+    });
+    let url = folder.url;
+    handle.change((doc) => {
+      // (unless one was made meanwhile)
+      const made = doc.lattice?.projects;
+      if (made && isValidAutomergeUrl(String(made))) {
+        url = String(made);
+        return;
+      }
+      doc.lattice ??= {};
+      doc.lattice.projects = folder.url;
+    });
+    return url;
+  }
+
+  // the folders in the account's root folder that lattice made projects of:
+  // they have a workspace (or, from before workspaces, a layout)
+  async function projectsFromRootFolder() {
+    const rootUrl = String(handle.doc()?.rootFolderUrl ?? "");
+    if (!isValidAutomergeUrl(rootUrl)) return [];
+    const root = await findSoon(rootUrl);
+    const folders = (Array.isArray(root?.docs) ? root.docs : []).filter(
+      (entry) => String(entry?.type) === "folder" && isValidAutomergeUrl(String(entry.url)),
+    );
+    const projects = await Promise.all(
+      folders.map(async (entry) => {
+        const doc = await findSoon(String(entry.url));
+        if (!doc?.workspace && !doc?.layout) return null;
+        return { name: String(entry.name ?? folderTitle(doc)), type: "folder", url: String(entry.url) };
+      }),
+    );
+    return projects.filter(Boolean);
+  }
+
+  // a doc, or null if it can't be found in a while
+  async function findSoon(url, ms = 15000) {
+    try {
+      const later = new Promise((_, reject) => setTimeout(reject, ms));
+      return (await Promise.race([repo.find(url), later])).doc() ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // a project is a folder in lattice's projects folder
   const projects = createMemo(() => {
     const doc = homeDoc();
     return (Array.isArray(doc?.docs) ? doc.docs : [])
@@ -119,7 +172,7 @@ export default function LatticeFrameTool(handle, element) {
     return url;
   }
 
-  // a project in /home: a folder linking to some files (the same docs, not
+  // a project: a folder linking to some files (the same docs, not
   // copies), and a workspace with a copy of a layout of them
   async function addProject(name, urls = [], layout = null) {
     const links = await Promise.all(
@@ -160,7 +213,7 @@ export default function LatticeFrameTool(handle, element) {
 
   const projectKey = `lattice:${accountUrl}:project`;
   const [chosen, setChosen] = createSignal(remembered(projectKey, null));
-  // the chosen project, while it's still in /home; else the first one
+  // the chosen project, while it's still in projects; else the first one
   const current = createMemo(() => {
     const all = projects();
     return all.find((project) => project.url === chosen()) ?? all[0] ?? null;
@@ -179,7 +232,7 @@ export default function LatticeFrameTool(handle, element) {
   const [panes, setPanes] = createSignal(null);
 
   // a folder from anywhere (someone else's project, say), by its url: it goes
-  // in home under its own title. says what was wrong, or nothing
+  // in projects under its own title. says what was wrong, or nothing
   async function addFolder(text) {
     setPanes(null);
     const url = urlFromText(text);
@@ -219,7 +272,7 @@ export default function LatticeFrameTool(handle, element) {
     setRenaming(url);
   }
 
-  // the name shows in /home (the link) and on the folder itself (its title)
+  // the name shows in projects (the link) and on the folder itself (its title)
   async function renameProject(url, name) {
     setRenaming(null);
     name = name.trim().replace(/^\/+/, "");
