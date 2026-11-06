@@ -20,6 +20,8 @@ const repo = {
     return new Promise((resolve, reject) => waiting.set(id, { url, resolve, reject }));
   },
 };
+// also as `self.repo`, for patterns written for the page, where it's there
+self.repo = repo;
 
 function loopCounter(loopBudget, timeBudget) {
   const start = performance.now();
