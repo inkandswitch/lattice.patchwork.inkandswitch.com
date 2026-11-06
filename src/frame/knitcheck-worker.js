@@ -1,5 +1,5 @@
 import {checkKnitout} from "./knitcheck.js"
-import {knitoutToKcode} from "./vendor/knitout-to-kcode.js"
+import {knitoutToKcode} from "./knitoutjs/core/vendor/knitout-to-kcode.js"
 
 // checks a .k off the page's thread: through the kniterate's own converter
 // (what it warns of, and where it stops), then on a pretend kniterate

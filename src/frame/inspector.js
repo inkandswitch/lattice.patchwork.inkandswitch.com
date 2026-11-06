@@ -1,7 +1,7 @@
 import { createSignal, For } from "solid-js";
 import html from "solid-js/html";
 import { remember, remembered } from "./sidebars.js";
-import { icon } from "./icons.js";
+import { icon } from "./knitoutjs/core/icons.js";
 
 const DRAG_TYPE = "application/x-lattice-inspector";
 const ORDER_KEY = "lattice:inspector:order";

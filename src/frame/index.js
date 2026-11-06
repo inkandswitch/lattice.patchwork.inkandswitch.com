@@ -1,6 +1,6 @@
-import defaultJavaScriptContent from "./default-source.js";
+import defaultJavaScriptContent from "./knitoutjs/core/default-source.js";
 import { newFileDoc } from "./files.js";
-import { newPanel, newGroup, newSplit } from "./layout.js";
+import { newPanel, newGroup, newSplit } from "./knitoutjs/core/layout.js";
 
 export const plugins = [
   {

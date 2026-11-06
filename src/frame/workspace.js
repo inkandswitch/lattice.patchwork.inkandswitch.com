@@ -37,11 +37,11 @@ import {
   removePanel,
   setTool,
   activate,
-} from "./layout.js";
-import defaultSource from "./default-source.js";
+} from "./knitoutjs/core/layout.js";
+import defaultSource from "./knitoutjs/core/default-source.js";
 import { Resizer } from "./sidebars.js";
-import { icon } from "./icons.js";
-import { builds, setBuild } from "./builds.js";
+import { icon } from "./knitoutjs/core/icons.js";
+import { builds, setBuild } from "./knitoutjs/core/builds.js";
 
 const STYLESHEET = new URL("./frame.css", import.meta.url).href;
 
@@ -322,7 +322,7 @@ export function mountWorkspace(
     const builder = builds[jsUrl]?.builder;
     if (builder) return builder.now();
     const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("./run.js"),
+      import("./knitoutjs/core/run.js"),
       repo.find(jsUrl),
       repo.find(kUrl),
     ]);
@@ -384,7 +384,7 @@ export function mountWorkspace(
 
   const toolContext = {
     repo,
-    open: (url, toolElement, edge) => reveal(url, panelOf(toolElement), edge),
+    open: (url, toolElement, edge, toolId) => reveal(url, panelOf(toolElement), edge, toolId),
     openIfClosed: (url, toolElement, edge) =>
       findPanelShowing(layout.root, url) || reveal(url, panelOf(toolElement), edge),
     editableCopy: (url, toolElement) => editableCopy({ id: panelOf(toolElement), url }),
@@ -522,7 +522,7 @@ export function mountWorkspace(
     ]);
     updateLayout((tree) => addRow(tree, row));
     const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("./run.js"),
+      import("./knitoutjs/core/run.js"),
       repo.find(js),
       repo.find(k),
     ]);

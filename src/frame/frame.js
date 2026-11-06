@@ -8,7 +8,7 @@ import { mountWorkspace } from "./workspace.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
 import { Resizer, remember, remembered, sidebarState } from "./sidebars.js";
-import { icon } from "./icons.js";
+import { icon } from "./knitoutjs/core/icons.js";
 
 // frame.css too, for its menus, before any workspace has brought it
 const STYLESHEETS = ["./frame.css", "./shell.css"].map(

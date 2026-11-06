@@ -1,8 +1,8 @@
 import {checkPanel, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
-import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
-import {withIcon} from "./icons.js"
-import {stylesheet} from "./stylesheet.js"
+import {YARNS_CHANGED, yarnColours, yarnPicker} from "./knitoutjs/core/yarns.js"
+import {withIcon} from "./knitoutjs/core/icons.js"
+import {stylesheet} from "./knitoutjs/core/stylesheet.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
@@ -172,7 +172,7 @@ function converter() {
 		}
 	}
 	async function inPage({text, name, options}) {
-		const {knitoutToKcode} = await import("./vendor/knitout-to-kcode.js")
+		const {knitoutToKcode} = await import("./knitoutjs/core/vendor/knitout-to-kcode.js")
 		try {
 			return {kcode: knitoutToKcode(text, name, options), warnings: []}
 		} catch (error) {

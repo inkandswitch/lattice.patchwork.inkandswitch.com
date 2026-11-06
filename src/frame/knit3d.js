@@ -4,9 +4,9 @@ import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
-import {YARNS_CHANGED, yarnPicker, yarnStrands} from "./yarns.js"
-import {icon, withIcon} from "./icons.js"
-import {stylesheet} from "./stylesheet.js"
+import {YARNS_CHANGED, yarnPicker, yarnStrands} from "./knitoutjs/core/yarns.js"
+import {icon, withIcon} from "./knitoutjs/core/icons.js"
+import {stylesheet} from "./knitoutjs/core/stylesheet.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250

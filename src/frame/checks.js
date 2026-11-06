@@ -1,9 +1,9 @@
 import {moduleWorker} from "./files.js"
-import {icon} from "./icons.js"
+import {icon} from "./knitoutjs/core/icons.js"
 import {KNITERATE, holdRows} from "./knitcheck.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
 import {FIBRES, RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
-import {stylesheet} from "./stylesheet.js"
+import {stylesheet} from "./knitoutjs/core/stylesheet.js"
 
 const WORKER_URL = new URL("./knitcheck-worker.js", import.meta.url)
 const STYLESHEET = new URL("./checks.css", import.meta.url).href
@@ -34,7 +34,7 @@ export function checker() {
 	async function inPage(text, settings) {
 		const [{checkKnitout}, {knitoutToKcode}] = await Promise.all([
 			import("./knitcheck.js"),
-			import("./vendor/knitout-to-kcode.js"),
+			import("./knitoutjs/core/vendor/knitout-to-kcode.js"),
 		])
 		let error = null
 		const {log, warn} = console
