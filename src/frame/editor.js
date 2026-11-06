@@ -3,7 +3,7 @@ import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { Prec, Transaction } from "@codemirror/state";
 import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
-import { knitoutEditorIntegration, showError } from "./cm-knitout.js";
+import { goToLine as goToLineIn, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docColour, docText, fileExtension } from "./files.js";
 import { runInto } from "./run.js";
 import { builderOf, setBuild } from "./builds.js";
@@ -231,15 +231,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     }
 
     function goToLine(lineNumber) {
-      if (!view) return;
-      const line = view.state.doc.line(
-        Math.max(1, Math.min(lineNumber, view.state.doc.lines)),
-      );
-      view.dispatch({
-        selection: { anchor: line.from },
-        effects: EditorView.scrollIntoView(line.from, { y: "center" }),
-      });
-      view.focus();
+      if (view) goToLineIn(view, lineNumber);
     }
 
     function keep() {

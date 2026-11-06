@@ -33,6 +33,60 @@ const hoverLineField = StateField.define({
 	provide: field => EditorView.decorations.from(field),
 })
 
+// the line just jumped to: flashes, then fades. (two classes, taking turns,
+// so jumping to the same line again starts the flash over)
+const setFlashLine = StateEffect.define()
+const FLASH_MS = 1200
+const flashDecorations = [
+	Decoration.line({class: "cm-knitout-flash-line cm-knitout-flash-a"}),
+	Decoration.line({class: "cm-knitout-flash-line cm-knitout-flash-b"}),
+]
+let flashes = 0
+
+const flashLineField = StateField.define({
+	create() {
+		return Decoration.none
+	},
+	update(decorations, tr) {
+		decorations = decorations.map(tr.changes)
+		for (const effect of tr.effects) {
+			if (!effect.is(setFlashLine)) continue
+			if (effect.value == null) {
+				decorations = Decoration.none
+			} else {
+				const lineNumber = Math.max(1, Math.min(effect.value.line, tr.state.doc.lines))
+				decorations = Decoration.set([
+					flashDecorations[effect.value.turn].range(tr.state.doc.line(lineNumber).from),
+				])
+			}
+		}
+		return decorations
+	},
+	provide: field => EditorView.decorations.from(field),
+})
+
+/**
+ * jump to a line (1-based): put the cursor there, scroll it to the middle,
+ * and flash it
+ */
+export function goToLine(view, lineNumber) {
+	const line = view.state.doc.line(Math.max(1, Math.min(lineNumber, view.state.doc.lines)))
+	const turn = flashes++ % 2
+	view.dispatch({
+		selection: {anchor: line.from},
+		effects: [
+			EditorView.scrollIntoView(line.from, {y: "center"}),
+			setFlashLine.of({line: line.number, turn}),
+		],
+	})
+	view.focus()
+	clearTimeout(view.knitoutFlashTimer)
+	view.knitoutFlashTimer = setTimeout(() => {
+		// (unless the editor's gone, or another jump's flashing since)
+		if (view.dom.isConnected) view.dispatch({effects: setFlashLine.of(null)})
+	}, FLASH_MS)
+}
+
 // the line a build failed on, until the code changes: tinted, with what
 // went wrong written at its end
 const setErrorLine = StateEffect.define()
@@ -115,6 +169,25 @@ const knitoutTheme = EditorView.baseTheme({
 	"&dark .cm-knitout-hover-line": {
 		backgroundColor: "rgba(255, 220, 0, 0.15)",
 	},
+	".cm-knitout-flash-line": {
+		animationDuration: `${FLASH_MS}ms`,
+		animationTimingFunction: "ease-out",
+		animationFillMode: "forwards",
+	},
+	".cm-knitout-flash-a": {animationName: "cm-knitout-flash-a"},
+	".cm-knitout-flash-b": {animationName: "cm-knitout-flash-b"},
+	"@keyframes cm-knitout-flash-a": {
+		"0%, 25%": {backgroundColor: "rgba(255, 200, 0, 0.55)"},
+		"100%": {backgroundColor: "rgba(255, 200, 0, 0)"},
+	},
+	"@keyframes cm-knitout-flash-b": {
+		"0%, 25%": {backgroundColor: "rgba(255, 200, 0, 0.55)"},
+		"100%": {backgroundColor: "rgba(255, 200, 0, 0)"},
+	},
+	// (no fade: lit, steady, then not)
+	"@media (prefers-reduced-motion: reduce)": {
+		".cm-knitout-flash-line": {animationTimingFunction: "step-end"},
+	},
 })
 
 /**
@@ -167,12 +240,7 @@ export function knitoutEditorIntegration({events, url, onSelectLines}) {
 		function onGoto(event) {
 			const lineNumber = lineFor(event.detail)
 			if (lineNumber == null) return
-			const line = lineAt(lineNumber)
-			view.dispatch({
-				selection: {anchor: line.from},
-				effects: EditorView.scrollIntoView(line.from, {y: "center"}),
-			})
-			view.focus()
+			goToLine(view, lineNumber)
 		}
 
 		events.addEventListener("knitout:hover-source", onHover)
@@ -198,5 +266,5 @@ export function knitoutEditorIntegration({events, url, onSelectLines}) {
 		}
 	})
 
-	return [plugin, hoverLineField, errorLineField, knitoutTheme]
+	return [plugin, hoverLineField, errorLineField, flashLineField, knitoutTheme]
 }

@@ -141,7 +141,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const flipButton = button("", "", () => flip())
 	flipButton.append(icon("flip"), " flip")
 	flipButton.classList.add("knitout-animation-flip")
-	const yarns = yarnPicker({strands: true})
+	const yarns = yarnPicker({handle, strands: true})
 
 	bar.append(
 		iconButton("restart", "restart", "back to the start, before the first stitch", () => {
@@ -246,7 +246,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// as its first, if it's only the one)
 	let colours = {yarns: [], strands: [], ink: "#000"}
 	function readYarns() {
-		const strands = yarnStrands()
+		const strands = yarnStrands(handle.doc())
 		const yarns = [...strands.map(({colours}) => colours[0]), ...strands.map(({colours}) => colours[1] ?? colours[0])]
 		yarns.forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
 		const style = getComputedStyle(root)
@@ -1190,8 +1190,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// ── keeping up with the .k
 
 	let timer = null
+	// (the knitout as last read: a change to the .k that isn't to its text,
+	// its yarns, say, leaves the knitting where it is)
+	let readText = null
 	function reread() {
 		const text = docText(handle.doc())
+		readText = text
 		knitout = readKnitout(text)
 		track = carriageTrack(knitout.ops)
 		empty.hidden = knitout.ops.length > 0
@@ -1208,6 +1212,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	}
 
 	function scheduleReread() {
+		if (docText(handle.doc()) === readText) return
 		clearTimeout(timer)
 		timer = setTimeout(reread, REPARSE_DELAY)
 	}

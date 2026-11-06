@@ -417,7 +417,7 @@ export default function Knit3dTool(handle, element) {
 	const strainBox = document.createElement("input")
 	strainBox.type = "checkbox"
 	strainLabel.append(strainBox, "strain")
-	const yarns = yarnPicker({strands: true})
+	const yarns = yarnPicker({handle, strands: true})
 
 	bar.append(
 		playButton,
@@ -580,7 +580,7 @@ export default function Knit3dTool(handle, element) {
 	let palette = {}
 	function readColours() {
 		palette = {
-			yarns: yarnStrands().map(({colours, plated}) => ({colours: colours.map(rgb), plated})),
+			yarns: yarnStrands(handle.doc()).map(({colours, plated}) => ({colours: colours.map(rgb), plated})),
 			steel: [0.62, 0.64, 0.68],
 			bed: [0.3, 0.31, 0.34],
 			carriage: [0.78, 0.76, 0.72],
@@ -1028,9 +1028,13 @@ export default function Knit3dTool(handle, element) {
 
 	let timer = null
 	let fitted = false
+	// (the knitout as last read: a change to the .k that isn't to its text,
+	// its yarns, say, leaves the fabric as it is)
+	let readText = null
 	function reread() {
 		const wasEnd = upTo >= knitout.ops.length
-		knitout = readKnitout(docText(handle.doc()))
+		readText = docText(handle.doc())
+		knitout = readKnitout(readText)
 		track = carriageTrack(knitout.ops)
 		machine = newMachine()
 		fabric = newFabric()
@@ -1043,7 +1047,7 @@ export default function Knit3dTool(handle, element) {
 			roundSlider.value = String(round)
 		}
 		show()
-		panel.check(docText(handle.doc()))
+		panel.check(readText)
 		if (!fitted && knitout.ops.length) {
 			fitted = true
 			resetCamera()
@@ -1052,6 +1056,7 @@ export default function Knit3dTool(handle, element) {
 	}
 
 	function scheduleReread() {
+		if (docText(handle.doc()) === readText) return
 		clearTimeout(timer)
 		timer = setTimeout(reread, REPARSE_DELAY)
 	}

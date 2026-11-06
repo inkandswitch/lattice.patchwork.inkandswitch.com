@@ -183,7 +183,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	root.appendChild(canvas)
 	resizeObserver.observe(canvas)
 
-	const yarns = yarnPicker()
+	const yarns = yarnPicker({handle})
 	const resetButton = withIcon("fit", button("knitout-button", "reset zoom", () => renderer?.resetZoom()))
 	const exportButton = withIcon("download", button("knitout-button", "export kcode", exportKcode))
 	const actions = document.createElement("div")
@@ -285,7 +285,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 		empty.hidden = text.trim() !== ""
 		errorBar.hidden = true
 		try {
-			await renderer.parse(annotateKnitout(text), firstDraw, yarnColours())
+			await renderer.parse(annotateKnitout(text), firstDraw, yarnColours(handle.doc()))
 		} catch (error) {
 			if (gen !== generation) return
 			errorBar.textContent = String(error)

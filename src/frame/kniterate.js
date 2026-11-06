@@ -236,7 +236,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	)
 	sides.append(frontButton, rearButton)
 
-	const yarns = yarnPicker()
+	const yarns = yarnPicker({handle})
 
 	const spacer = document.createElement("div")
 	spacer.className = "kniterate-spacer"
@@ -322,7 +322,7 @@ export default function KniterateTool(handle, element, context = {}) {
 			highlight: resolve("var(--knitoutjs-highlighter)"),
 			accent: resolve("var(--knitoutjs-accent)"),
 			mono: getComputedStyle(root).getPropertyValue("--knitoutjs-mono").trim() || "monospace",
-			yarns: yarnColours(),
+			yarns: yarnColours(handle.doc()),
 		}
 	}
 
