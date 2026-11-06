@@ -1,7 +1,6 @@
-import defaultJavaScriptContent from "./knitoutjs/core/default-source.js";
-import { newFileDoc } from "./files.js";
-import { newPanel, newGroup, newSplit } from "./knitoutjs/core/layout.js";
-
+// nothing imported up here: patchwork may read this list in a worker, which
+// has no import map, so a bare import anywhere below this file stops the
+// whole package registering. what each plugin needs, its load() imports
 export const plugins = [
   {
     type: "patchwork:tool",
