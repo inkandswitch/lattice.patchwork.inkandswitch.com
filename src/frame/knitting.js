@@ -1,4 +1,5 @@
 import {STITCH} from "./size.js"
+import {twistStep} from "./strands.js"
 
 // a .k's knitting, op by op, on a pretend machine: what the animation and the
 // 3d view both play out
@@ -104,7 +105,8 @@ export function readKnitout(text) {
 // it's on now, or was let go from), dir (1 knitted going +, −1 going −), x
 // (where across the bed it was made),
 // parents (the loops it was pulled through), prev (the loop its yarn came
-// from), crossed (prev was on the other bed when it was made), cast (made on an empty needle: the fabric's bottom edge), off (the
+// from), crossed (prev was on the other bed when it was made), turn (how its
+// yarn's rolled where it leaves it, if it's two strands), cast (made on an empty needle: the fabric's bottom edge), off (the
 // op that dropped it, if one did)}: the
 // fabric, as a graph
 export function newMachine() {
@@ -164,6 +166,8 @@ export function apply(machine, op, index, yarnOf) {
 			// (whether its yarn came over from the other bed: the loop before
 			// was there as this one was made, not moved over first)
 			crossed: before != null && before.back !== op.needle.back,
+			// (how its yarn's rolled, two strands held together: see strands.js)
+			turn: (before?.turn ?? 0) + twistStep(machine.loops.length),
 			cast: !heldOn(machine, op.needle).loops.length,
 		}
 		machine.loops.push(loop)

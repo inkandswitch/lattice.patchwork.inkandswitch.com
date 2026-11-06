@@ -3,7 +3,8 @@ import {docText} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
-import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
+import {turnOf} from "./strands.js"
+import {YARNS_CHANGED, yarnPicker, yarnStrands} from "./yarns.js"
 import {icon, withIcon} from "./icons.js"
 import {stylesheet} from "./stylesheet.js"
 
@@ -81,8 +82,10 @@ const LOOP_CURVE = (() => {
 	return points
 })()
 
-// what each loop tells the gpu, three floats apiece
-const INSTANCE = ["head", "along", "up", "face", "reach", "colour"]
+// what each loop tells the gpu, three floats apiece (strands: how its yarn's
+// rolled where it comes in and where it goes out, and whether it's two
+// strands; and the second's colour)
+const INSTANCE = ["head", "along", "up", "face", "reach", "colour", "strands", "colour2"]
 const INSTANCE_FLOATS = INSTANCE.length * 3
 
 function button(text, title, onClick) {
@@ -261,7 +264,12 @@ function looksLikeTube(ops) {
 // is: so the gpu has one, and each loop just says where it goes, as
 // instanced attributes: its head; the way along its row, up its wale, and out
 // of its face; how far its legs reach to the loops below; its colour.
-// the vertices are (a point along LOOP_CURVE, a side round the yarn)
+// the vertices are (a point along LOOP_CURVE, a side round the yarn).
+// two strands fed in together are drawn a strand at a time (strand, 0
+// then 1), each as thick as one yarn, either side of where the yarn is,
+// rolled round it as far as it's turned there (see strands.js); one strand,
+// it's drawn once, as it is
+
 const LOOP_SHADER = `#version 300 es
 in vec2 corner;
 in vec3 head;
@@ -270,8 +278,11 @@ in vec3 up;
 in vec3 face;
 in vec3 reach;
 in vec3 colour;
+in vec3 strands;
+in vec3 colour2;
 uniform vec4 curve[${LOOP_CURVE.length}];
 uniform mat4 viewProjection;
+uniform float strand;
 out vec3 vNormal;
 out vec3 vColour;
 out vec3 vWorld;
@@ -286,10 +297,25 @@ void main() {
 	vec3 reference = abs(dot(t, face)) < 0.9 ? face : up;
 	vec3 n = normalize(cross(reference, t));
 	vec3 b = cross(t, n);
+	vColour = colour;
+	if (strands.z > 0.5) {
+		// (out of its face, square to the yarn: 0 is the first strand on the
+		// face, the second behind it)
+		vec3 f = face - t * dot(face, t);
+		f = length(f) > 1e-4 ? normalize(f) : n;
+		float phi = mix(strands.x, strands.y, float(k) / ${(LOOP_CURVE.length - 1).toFixed(1)}) + strand * ${Math.PI.toFixed(6)};
+		p += (f * cos(phi) + cross(t, f) * sin(phi)) * ${YARN.toFixed(4)};
+		if (strand > 0.5) vColour = colour2;
+	} else if (strand > 0.5) {
+		// (one strand: it's been drawn)
+		vNormal = n;
+		vWorld = p;
+		gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+		return;
+	}
 	float angle = corner.y * ${((Math.PI * 2) / SIDES).toFixed(6)};
 	vec3 o = n * cos(angle) + b * sin(angle);
 	vNormal = o;
-	vColour = colour;
 	vWorld = p + o * ${YARN.toFixed(4)};
 	gl_Position = viewProjection * vec4(vWorld, 1.0);
 }`
@@ -391,7 +417,7 @@ export default function Knit3dTool(handle, element) {
 	const strainBox = document.createElement("input")
 	strainBox.type = "checkbox"
 	strainLabel.append(strainBox, "strain")
-	const yarns = yarnPicker()
+	const yarns = yarnPicker({strands: true})
 
 	bar.append(
 		playButton,
@@ -475,6 +501,7 @@ export default function Knit3dTool(handle, element) {
 		viewProjection: gl.getUniformLocation(loopProgram, "viewProjection"),
 		eye: gl.getUniformLocation(loopProgram, "eye"),
 		curve: gl.getUniformLocation(loopProgram, "curve"),
+		strand: gl.getUniformLocation(loopProgram, "strand"),
 	}
 
 	// the one loop: its corners, and their triangles
@@ -553,7 +580,7 @@ export default function Knit3dTool(handle, element) {
 	let palette = {}
 	function readColours() {
 		palette = {
-			yarns: yarnColours().map(rgb),
+			yarns: yarnStrands().map(({colours, plated}) => ({colours: colours.map(rgb), plated})),
 			steel: [0.62, 0.64, 0.68],
 			bed: [0.3, 0.31, 0.34],
 			carriage: [0.78, 0.76, 0.72],
@@ -691,11 +718,22 @@ export default function Knit3dTool(handle, element) {
 				ty = -ty
 				tz = -tz
 			}
-			let colour = palette.yarns[loop.yarn] ?? palette.yarns[0]
+			const yarn = palette.yarns[loop.yarn] ?? palette.yarns[0]
+			let [colour, colour2 = colour] = yarn.colours
 			if (strainBox.checked) {
 				const pulled = strain(fabric, i)
 				colour = colour.map((value, k) => value + (palette.danger[k] - value) * pulled)
+				colour2 = colour2.map((value, k) => value + (palette.danger[k] - value) * pulled)
 			}
+			// how its yarn's rolled where it comes in, from the loop before,
+			// and where it goes out: along the curve, if the yarn's going
+			// along it, or back along it
+			const before = loop.prev != null ? loops[loop.prev] : null
+			const rollIn = before ? turnOf(before, yarn.plated) : turnOf(loop, yarn.plated)
+			const rollOut = turnOf(loop, yarn.plated)
+			const from = before && loop.prev >= start ? loop.prev : -1
+			const forwards =
+				from >= 0 ? tx * (x - xs[from]) + ty * (y - ys[from]) + tz * (z - zs[from]) >= 0 : tx * loop.dir >= 0
 			const v = instances
 			v[at] = x
 			v[at + 1] = y
@@ -716,6 +754,12 @@ export default function Knit3dTool(handle, element) {
 			v[at + 15] = colour[0]
 			v[at + 16] = colour[1]
 			v[at + 17] = colour[2]
+			v[at + 18] = forwards ? rollIn : rollOut
+			v[at + 19] = forwards ? rollOut : rollIn
+			v[at + 20] = yarn.colours.length > 1 ? 1 : 0
+			v[at + 21] = colour2[0]
+			v[at + 22] = colour2[1]
+			v[at + 23] = colour2[2]
 			at += INSTANCE_FLOATS
 		}
 		instanceCount = count - start
@@ -819,7 +863,11 @@ export default function Knit3dTool(handle, element) {
 		gl.uniformMatrix4fv(loopUniforms.viewProjection, false, viewProjection)
 		gl.uniform3fv(loopUniforms.eye, eye)
 		gl.bindVertexArray(loopVao)
-		gl.drawElementsInstanced(gl.TRIANGLES, loopIndexCount, gl.UNSIGNED_SHORT, 0, instanceCount)
+		// (each loop's first strand, then the second strand of those with two)
+		for (const strand of [0, 1]) {
+			gl.uniform1f(loopUniforms.strand, strand)
+			gl.drawElementsInstanced(gl.TRIANGLES, loopIndexCount, gl.UNSIGNED_SHORT, 0, instanceCount)
+		}
 		gl.useProgram(program)
 		gl.uniformMatrix4fv(uniforms.viewProjection, false, viewProjection)
 		gl.uniform3fv(uniforms.eye, eye)

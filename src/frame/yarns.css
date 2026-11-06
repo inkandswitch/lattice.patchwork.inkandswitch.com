@@ -20,3 +20,13 @@
 		box-shadow: 0 1px 0 var(--knitoutjs-line, currentColor);
 	}
 }
+
+/* two strands: held together, half each, across; plated, the first on the
+   face, over the second behind it */
+.yarn-chip.two {
+	background: linear-gradient(135deg, var(--yarn) 50%, var(--yarn-2) 50%);
+}
+
+.yarn-chip.two.plated {
+	background: radial-gradient(circle, var(--yarn) 45%, var(--yarn-2) 47%);
+}
