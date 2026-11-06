@@ -153,7 +153,8 @@ export function yarnPicker({handle, strands = false}) {
 
 	// (which carrier's showing in it)
 	let open = null
-	const current = () => yarnStrands(handle.doc())[open]
+	// (and what's in it: what's being picked, if it's not kept yet)
+	const current = () => (pending?.index === open ? pending.yarn : yarnStrands(handle.doc())[open])
 
 	let pending = null
 	let timer = null
@@ -189,8 +190,9 @@ export function yarnPicker({handle, strands = false}) {
 	second.input.addEventListener("change", flush)
 	addSecond.addEventListener("click", () => {
 		const yarn = current()
-		// (white, unless the first is near enough white: then black)
-		const light = parseInt(yarn.colours[0].slice(1), 16) > 0xdddddd
+		// (white, unless the first is near enough white: then near black)
+		const [r, g, b] = [1, 3, 5].map(at => parseInt(yarn.colours[0].slice(at, at + 2), 16))
+		const light = 0.2126 * r + 0.7152 * g + 0.0722 * b > 200
 		keep({colours: [yarn.colours[0], light ? "#222222" : "#ffffff"], plated: false})
 		second.input.focus()
 	})
@@ -199,9 +201,16 @@ export function yarnPicker({handle, strands = false}) {
 		first.input.focus()
 	})
 
+	// (pressing a chip closes an open popover before its click comes: so a
+	// click on the chip whose popover that was only closes it)
+	let closed = null
 	function toggle(index) {
 		if (open === index && popover.matches(":popover-open")) {
 			popover.hidePopover()
+			return
+		}
+		if (closed?.index === index && performance.now() - closed.at < 400) {
+			closed = null
 			return
 		}
 		flush()
@@ -216,6 +225,7 @@ export function yarnPicker({handle, strands = false}) {
 	}
 	popover.addEventListener("toggle", event => {
 		if (event.newState === "closed") {
+			closed = {index: open, at: performance.now()}
 			flush()
 			open = null
 			paint()
