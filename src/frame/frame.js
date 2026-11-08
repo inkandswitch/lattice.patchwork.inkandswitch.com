@@ -23,6 +23,7 @@ import {
   updatedTo,
 } from "./knitoutjs/core/migrate.js";
 import { createDoc, findSoon, urlFromText } from "./knitoutjs/core/patchwork-docs.js";
+import { seedActive } from "./knitoutjs/core/active.js";
 import { folderTitle } from "./knitoutjs/core/folder.js";
 import { directoryTitle } from "./knitoutjs/core/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
@@ -179,16 +180,17 @@ export default function LatticeFrameTool(handle, element) {
     const account = handle.doc();
     if (!account?.layout && !account?.files?.length) return;
     const title = "knitting";
-    const parts = await partsFrom(
+    const { files, nodes, active } = await partsFrom(
       { title, urls: Array.isArray(account.files) ? account.files : [], tree: account.layout },
       baseRepo,
       hive,
     );
     const project = await createDoc(
       baseRepo,
-      { "@patchwork": { type: "lattice:project" }, title, ...parts },
+      { "@patchwork": { type: "lattice:project" }, title, files, nodes },
       hive,
     );
+    seedActive(project.url, active);
     addEntry({ name: title, type: "lattice:project", url: project.url });
     handle.change((doc) => {
       delete doc.layout;
