@@ -45,6 +45,30 @@ export const plugins = [
       return LatticeProjectTool;
     },
   },
+  // your own version of one of the site's themes (themes.js): {base, name,
+  // variables}, listed in your theme preferences. edited in the settings
+  {
+    type: "patchwork:datatype",
+    id: "lattice:theme",
+    name: "Lattice Theme",
+    icon: "Palette",
+    unlisted: true,
+    async load() {
+      return {
+        init(doc) {
+          doc.base = "";
+          doc.name = "theme";
+          doc.variables = {};
+        },
+        getTitle(doc) {
+          return doc.name || "theme";
+        },
+        setTitle(doc, title) {
+          doc.name = title;
+        },
+      };
+    },
+  },
   // a project's layout from before, behind its folder (as `workspace`).
   // updating the project makes it the project itself
   {

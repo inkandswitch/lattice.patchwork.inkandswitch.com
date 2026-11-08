@@ -143,8 +143,36 @@
 		font-weight: 600;
 	}
 
-	& .lattice-tree-heading.lattice-system {
+	& .lattice-tree-heading.lattice-packages {
 		margin-top: 12px;
+	}
+
+	/* a heading that folds what's under it */
+	& .lattice-fold {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		padding: 0;
+		border: none;
+		background: none;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	& .lattice-fold-chevron {
+		display: inline-grid;
+		place-items: center;
+		width: 10px;
+		color: var(--lattice-muted);
+		transition: rotate var(--studio-transition-fast, 0.1s ease);
+	}
+	& .lattice-fold[aria-expanded="true"] .lattice-fold-chevron {
+		rotate: 90deg;
+	}
+
+	& .lattice-tree-children[hidden],
+	& .lattice-main[hidden],
+	& .lattice-no-project[hidden] {
+		display: none;
 	}
 
 	/* "projects" and the project's name (latticework's) sit level, over one
@@ -202,13 +230,175 @@
 		box-shadow: inset 2px 0 var(--studio-primary, #007aff);
 	}
 
-	& .lattice-system {
-		color: var(--lattice-muted);
-		font-style: italic;
-		cursor: default;
+	/* you, down the bottom of the projects: your picture, for your settings */
+	& .lattice-sidebar-foot {
+		display: flex;
+		flex: none;
+		align-items: center;
+		padding: 8px 10px;
+		border-top: 1px solid var(--lattice-rule);
+	}
+	& .lattice-me {
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: none;
+		cursor: pointer;
 
-		&.lattice-tree-item:hover {
+		&[aria-pressed="true"] {
+			box-shadow: 0 0 0 2px var(--studio-primary, #007aff);
+		}
+		& patchwork-view {
+			display: block;
+			width: 24px;
+			height: 24px;
+		}
+		& .contact-avatar {
+			width: 24px;
+			min-width: 24px;
+			max-width: 24px;
+			height: 24px;
+			min-height: 24px;
+			max-height: 24px;
+		}
+	}
+	& .lattice-me-none {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		border: 1px solid var(--lattice-rule);
+		border-radius: 50%;
+		color: var(--lattice-muted);
+	}
+
+	/* ── settings ─────────────────────────────────────────────────────── */
+
+	& .lattice-settings-main {
+		justify-content: center;
+		overflow: auto;
+	}
+
+	& .lattice-settings {
+		box-sizing: border-box;
+		width: min(560px, 100%);
+		padding: 28px 24px 64px;
+
+		& h1 {
+			margin: 0 0 20px;
+			font: 600 15px var(--lattice-path-family);
+		}
+		& h2 {
+			margin: 0 0 2px;
+			color: var(--lattice-muted);
+			font: 600 12px var(--lattice-path-family);
+		}
+	}
+
+	& .lattice-settings-section {
+		display: grid;
+		gap: 10px;
+		padding: 16px 0 20px;
+		border-top: 1px solid var(--lattice-rule);
+	}
+
+	& .lattice-setting {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px 10px;
+		min-height: 28px;
+
+		& input:not([type]),
+		& select {
+			box-sizing: border-box;
+			flex: 1;
+			min-width: 0;
+			padding: 4px 6px;
+			border: 1px solid var(--lattice-rule);
+			border-radius: var(--studio-radius-sm, 4px);
+			background: var(--studio-fill, #fff);
+			color: inherit;
+			font: inherit;
+		}
+		& input::placeholder {
+			color: var(--lattice-muted);
+		}
+	}
+
+	& .lattice-settings-label {
+		flex: none;
+		width: 96px;
+		color: var(--lattice-muted);
+	}
+
+	& .lattice-settings-hint {
+		margin: 0;
+		color: var(--lattice-muted);
+		font-size: 12px;
+		font-style: italic;
+	}
+	& .lattice-settings-section > .lattice-settings-hint {
+		padding-left: 106px;
+	}
+
+	& .lattice-settings-avatar {
+		display: block;
+		flex: none;
+		width: 48px;
+		height: 48px;
+
+		& .contact-avatar {
+			width: 48px;
+			min-width: 48px;
+			max-width: 48px;
+			height: 48px;
+			min-height: 48px;
+			max-height: 48px;
+		}
+	}
+
+	& .lattice-swatches {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	& .lattice-swatch {
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: var(--swatch);
+		cursor: pointer;
+
+		&[aria-checked="true"] {
+			outline: 2px solid var(--swatch);
+			outline-offset: 2px;
+		}
+	}
+
+	& .lattice-colours {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 14px;
+	}
+	& .lattice-colour {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		cursor: pointer;
+
+		& input {
+			width: 28px;
+			height: 22px;
+			padding: 0;
+			border: 1px solid var(--lattice-rule);
+			border-radius: var(--studio-radius-sm, 4px);
 			background: none;
+			cursor: pointer;
 		}
 	}
 

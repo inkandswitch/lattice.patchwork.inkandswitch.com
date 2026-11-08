@@ -30,6 +30,8 @@ import { directoryTitle } from "./knitoutjs/core/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
 import { icon } from "./knitoutjs/core/icons.js";
 import { tooltips } from "./knitoutjs/core/tooltip.js";
+import { startThemes } from "./themes.js";
+import { SettingsPage } from "./settings-page.js";
 
 // latticework's, too, for its menus, before any project has brought it
 const STYLESHEETS = ["./knitoutjs/core/latticework.css", "./shell.css"].map(
@@ -236,7 +238,31 @@ export default function LatticeFrameTool(handle, element) {
   function choose(url) {
     setChosen(url);
     remember(projectKey, url);
+    setPage(null);
   }
+
+  // what's in the middle instead of the project, when it isn't: "settings"
+  const [page, setPage] = createSignal(null);
+
+  // the account, for its contact (your picture, down the bottom of the
+  // projects)
+  const [accountDoc, setAccountDoc] = createSignal(handle.doc());
+  const readAccount = () => setAccountDoc(handle.doc());
+  handle.on("change", readAccount);
+  const contactUrl = () => {
+    const url = String(accountDoc()?.contactUrl ?? "");
+    return isValidAutomergeUrl(url) ? url : null;
+  };
+
+  // the headings down the side, folded or not
+  const [projectsOpen, setProjectsOpen] = createSignal(remembered("lattice:projects-list:open", true));
+  const [packagesOpen, setPackagesOpen] = createSignal(remembered("lattice:packages-list:open", true));
+  // (it takes the event: a prop that's a function of nothing is a getter, to
+  // solid's html)
+  const fold = (open, setOpen, key) => (_event) => {
+    setOpen(!open());
+    remember(key, open());
+  };
 
   const [renaming, setRenaming] = createSignal(null);
 
@@ -457,7 +483,7 @@ export default function LatticeFrameTool(handle, element) {
       <${Toggle} sidebar=${folders} name="projects" at=${2.5} />
       <${Toggle} sidebar=${files} name="files" at=${5.5} />
       <span class="lattice-breadcrumb">
-        projects${() => (current() ? ` › ${current().name}` : "")}
+        ${() => (page() === "settings" ? "settings" : `projects${current() ? ` › ${current().name}` : ""}`)}
       </span>
       <span class="lattice-spacer"></span>
       ${DEV_FRAME &&
@@ -493,7 +519,7 @@ export default function LatticeFrameTool(handle, element) {
           />`
         : html`<button
             class="lattice-tree-item"
-            aria-current=${() => (currentUrl() === project.url ? "page" : undefined)}
+            aria-current=${() => (!page() && currentUrl() === project.url ? "page" : undefined)}
             data-old=${isOld(project) ? "" : undefined}
             title=${isOld(project)
               ? "made with an older version: open it to update it"
@@ -507,11 +533,30 @@ export default function LatticeFrameTool(handle, element) {
           </button>`;
   }
 
-  // system's folders are here, but they don't do anything yet
-  function SystemItem(props) {
-    return html`<span class="lattice-tree-item lattice-system" aria-disabled="true" title="nothing here yet">
+  // a heading down the side that folds what's under it. `open` is whether
+  // it's open (a getter: pass the signal)
+  function Fold(props) {
+    return html`<button class="lattice-fold" aria-expanded=${() => String(props.open)} onClick=${(event) => props.toggle(event)}>
+      <span class="lattice-fold-chevron" aria-hidden="true">${icon("chevron-right", 10)}</span>
       ${props.name}
-    </span>`;
+    </button>`;
+  }
+
+  // you, down the bottom: your picture, and your settings
+  function Me() {
+    return html`<footer class="lattice-sidebar-foot">
+      <button
+        class="lattice-me"
+        aria-pressed=${() => String(page() === "settings")}
+        aria-label="settings"
+        title="settings · you, and the theme"
+        onClick=${() => setPage(page() === "settings" ? null : "settings")}
+      >
+        <${Show} when=${contactUrl} fallback=${html`<span class="lattice-me-none">${icon("pencil", 12)}</span>`}>
+          <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
+        <//>
+      </button>
+    </footer>`;
   }
 
   // the projects' +: a new project, or one from anywhere by its url, or from
@@ -745,7 +790,11 @@ export default function LatticeFrameTool(handle, element) {
       <${ProjectMenu} />
       <div class="lattice-sidebar-content">
       <div class="lattice-tree-heading">
-        <span>projects</span>
+        <${Fold}
+          name="projects"
+          open=${projectsOpen}
+          toggle=${fold(projectsOpen, setProjectsOpen, "lattice:projects-list:open")}
+        />
         <button
           class="lattice-icon-button"
           title="a new project, or one by its url"
@@ -755,7 +804,7 @@ export default function LatticeFrameTool(handle, element) {
           ${icon("plus", 14)}
         </button>
       </div>
-      <div class="lattice-tree-children">
+      <div class="lattice-tree-children" hidden=${() => !projectsOpen()}>
         <${For}
           each=${projects}
           fallback=${html`<p class="lattice-tree-empty">no projects yet</p>`}
@@ -768,17 +817,32 @@ export default function LatticeFrameTool(handle, element) {
           </p>
         <//>
       </div>
-      <div class="lattice-tree-heading lattice-system">system</div>
-      <div class="lattice-tree-children">
-        <${SystemItem} name="packages" />
-        <${SystemItem} name="settings" />
+      <div class="lattice-tree-heading lattice-packages">
+        <${Fold}
+          name="packages"
+          open=${packagesOpen}
+          toggle=${fold(packagesOpen, setPackagesOpen, "lattice:packages-list:open")}
+        />
+      </div>
+      <div class="lattice-tree-children" hidden=${() => !packagesOpen()}>
+        <p class="lattice-tree-empty">nothing here yet</p>
       </div>
       </div>
+      <${Me} />
     </nav>`;
   }
 
+  // the settings, in the middle, while they're open (themes.js puts the
+  // theme on the page, once the frame's providers are in)
+  let themes = null;
+  function Settings() {
+    return html`<div class="lattice-main lattice-settings-main">
+      <${SettingsPage} account=${handle} repo=${baseRepo} hive=${hive} themes=${themes} />
+    </div>`;
+  }
+
   function NoProject() {
-    return html`<div class="lattice-no-project">
+    return html`<div class="lattice-no-project" hidden=${() => page() === "settings"}>
       <p>${() => (home() && !chosenLooking() ? "no projects yet" : "finding projects…")}</p>
       <${Show} when=${() => home() && !chosenLooking()}>
         <button class="lattice-button" onClick=${() => newProject()}>
@@ -799,7 +863,9 @@ export default function LatticeFrameTool(handle, element) {
   const providers = nestProviders(element, frameProviders(accountUrl));
   let dispose = null;
   providers.ready.then((inner) => {
-    if (inner) dispose = render(Shell, inner);
+    if (!inner) return;
+    themes = startThemes(inner, baseRepo, hive);
+    dispose = render(Shell, inner);
   });
 
   function Shell() {
@@ -810,9 +876,11 @@ export default function LatticeFrameTool(handle, element) {
         <${TopBar} />
         <div class="lattice-body">
           <${Show} when=${folders.open}><${Sidebar} /><//>
+          <${Show} when=${() => page() === "settings"}><${Settings} /><//>
           <${Show} when=${currentKey} fallback=${html`<${NoProject} />`}>
             <div
               class="lattice-main"
+              hidden=${() => page() === "settings"}
               ref=${(el) => {
                 main = el;
                 createEffect(() => {
@@ -829,6 +897,8 @@ export default function LatticeFrameTool(handle, element) {
 
   return () => {
     homeHandle?.off("change", readHome);
+    handle.off("change", readAccount);
+    themes?.stop();
     removeEventListener("hashchange", openShared);
     clearTimeout(noteTimer);
     dispose?.();
