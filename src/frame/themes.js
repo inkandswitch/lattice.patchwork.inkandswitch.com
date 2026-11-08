@@ -1,25 +1,30 @@
-// the theme on the page. which one, for light and for dark, is the account's
-// own choice, kept in its theme preferences (the doc patchwork's theme picker
-// keeps it in too, at account.toolStorage["theme-preferences"]); lattice puts
-// it on the page itself, since nothing else here does.
+// the theme on the page. which one is the account's own choice, kept in its
+// theme preferences (the doc patchwork's theme picker keeps it in too, at
+// account.toolStorage["theme-preferences"]), as `light` and `dark`. lattice
+// picks one theme for both, and puts it on the page itself, since nothing
+// else here does.
 //
 // and your own versions of them: one of the site's themes (its `base`) with
 // some of its variables changed. each is a lattice:theme doc, {base, name,
 // variables}, that the preferences list as `themes`. editing a theme makes
 // one, the first time. after that yours stands in for the site's wherever
 // it'd be: in the list, and wherever it's been chosen
-import { createSignal } from "solid-js";
+import { createEffect, createMemo, createResource, createSignal, mapArray, onCleanup } from "solid-js";
 import { isValidAutomergeUrl, parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { getRegistry } from "@inkandswitch/patchwork-plugins";
 import { subscribe } from "@inkandswitch/patchwork-providers";
+import { useDocument } from "./vendor/solid-automerge.js";
 import { createDoc } from "./knitoutjs/core/patchwork-docs.js";
 
 export const THEME_TYPE = "lattice:theme";
 const PREFERENCES = "theme-preferences";
-const MODES = ["light", "dark"];
+// a change (a colour being dragged, say) shows at once, and is kept once it's
+// stopped changing for this long
+const KEEP_AFTER = 300;
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
+const sameList = (a, b) => a.length === b.length && a.every((item, i) => item === b[i]);
 
 // the id a theme of yours goes by on the page: <html theme=…>
 export const themeIdOf = (url) => `lattice-theme-${parseAutomergeUrl(url).documentId}`;
@@ -34,7 +39,7 @@ function defaultFor(mode) {
 
 // a theme's stylesheet, fetched once
 const sheets = new Map();
-async function cssOf(themeId) {
+function cssOf(themeId) {
   const style = getRegistry("patchwork:theme").get(themeId)?.style;
   if (!style) return "";
   if (!sheets.has(style)) {
@@ -48,190 +53,215 @@ async function cssOf(themeId) {
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * the theme, on the page, from the account's preferences. `element` is in
- * the frame's providers (the preferences doc is its tool storage's). returns
- * what the settings page uses:
- *
- *   mode()            "light" or "dark": which the computer's in
- *   chosen()          {light, dark}: each mode's theme id (yours, if you've
- *                     made yours of the one chosen)
- *   themes()          [{id, name, colorScheme, own?: {url, base, changed}}]
- *   choose(mode, id)
- *   edit(mode)        your own of that mode's theme, made the first time.
- *                     resolves with its url
- *   ready()           whether the preferences are here (choosing and
- *                     editing need them)
- *   stop()
+ * what a theme sets `key` to, before anything of yours: read off a little
+ * element of its own, out of sight
  */
-export function startThemes(element, repo, hive) {
+export function themeValue(id, key) {
+  const probe = document.createElement("div");
+  probe.setAttribute("theme", id);
+  probe.style.display = "none";
+  document.body.append(probe);
+  const value = getComputedStyle(probe).getPropertyValue(key).replace(/\s+/g, " ").trim();
+  probe.remove();
+  return value;
+}
+
+/**
+ * the theme, on the page, from the account's preferences. call it under a
+ * solid owner: it stops when that does. `element` is in the frame's
+ * providers (the preferences doc is its tool storage's). returns:
+ *
+ *   mode()        "light" or "dark": which the computer's in
+ *   themes()      [{id, name, colorScheme, own?}]: the site's, with yours in
+ *                 place of the ones they're of. `own` is yours (below)
+ *   chosenId()    the theme on the page
+ *   chosen()      its entry in themes()
+ *   choose(id)    for light and dark both
+ *   edit()        yours of the chosen theme, made the first time. resolves
+ *                 with it
+ *   ready()       whether the preferences are here (choosing and editing
+ *                 need them)
+ *
+ * one of yours, as `own`: {url, id, base(), variables(), changed(),
+ * set(key, value, {now}), reset()}. `set` shows at once and is kept a
+ * moment later (or now)
+ */
+export function useThemes(element, { repo, hive }) {
   const registry = getRegistry("patchwork:theme");
+
+  // the site's themes, as they're registered (each the same object, so a
+  // list of them keeps its places)
+  const siteEntries = new Map();
+  const readSite = () =>
+    registry.all().map((theme) => {
+      const name = string(theme.name) || theme.id;
+      const known = siteEntries.get(theme.id);
+      if (known && known.name === name && known.colorScheme === theme.colorScheme) return known;
+      const entry = { id: theme.id, name, colorScheme: theme.colorScheme };
+      siteEntries.set(theme.id, entry);
+      return entry;
+    });
+  const [site, setSite] = createSignal(readSite(), { equals: sameList });
+  const onRegistered = () => setSite(readSite());
+  registry.on("registered", onRegistered);
+  onCleanup(() => registry.off?.("registered", onRegistered));
+
   const [mode, setMode] = createSignal(modeNow());
-  const [chosen, setChosen] = createSignal({ light: defaultFor("light"), dark: defaultFor("dark") });
-  const [themes, setThemes] = createSignal([]);
-  const [ready, setReady] = createSignal(false);
-  let prefs = null;
-  const own = new Map(); // url → {handle, style, off}
-  let dead = false;
+  const onMode = () => setMode(modeNow());
+  darkQuery.addEventListener("change", onMode);
+  onCleanup(() => darkQuery.removeEventListener("change", onMode));
 
-  // yours, made of a theme of the site's
-  const yoursOf = (id) => themes().find((theme) => theme.own?.base === id);
-  const resolve = (id) => yoursOf(id)?.id ?? id;
-
-  function apply() {
-    const doc = prefs?.doc();
-    const now = {};
-    for (const which of MODES) now[which] = resolve(string(doc?.[which]) || defaultFor(which));
-    setChosen(now);
-    setMode(modeNow());
-    document.documentElement.setAttribute("theme", now[modeNow()]);
-  }
-
-  function list() {
-    const site = registry
-      .all()
-      .map((theme) => ({ id: theme.id, name: string(theme.name) || theme.id, colorScheme: theme.colorScheme }));
-    const yours = [];
-    for (const [url, { handle }] of own) {
-      const doc = handle?.doc();
-      if (!doc) continue;
-      const base = site.find((theme) => theme.id === doc.base);
-      yours.push({
-        id: themeIdOf(url),
-        name: base?.name ?? (string(doc.name) || "yours"),
-        colorScheme: base?.colorScheme,
-        own: {
-          url,
-          base: string(doc.base),
-          changed: Object.values(doc.variables ?? {}).filter((value) => string(value).trim()).length,
-        },
+  // the preferences: found through the frame's tool storage
+  const [prefsUrl, setPrefsUrl] = createSignal();
+  const unsubscribe = subscribe(element, { type: "patchwork:tool-storage", toolId: PREFERENCES }, (url) => {
+    if (isUrl(url)) setPrefsUrl(string(url));
+  });
+  onCleanup(() => unsubscribe?.());
+  const [prefs, prefsHandle] = useDocument(prefsUrl, { repo });
+  createEffect(() => {
+    const handle = prefsHandle();
+    if (handle && !handle.doc()?.["@patchwork"]) {
+      handle.change((doc) => {
+        doc["@patchwork"] = { type: PREFERENCES };
       });
     }
-    // yours where the site's would be
-    const listed = site.map((theme) => yours.find((mine) => mine.own.base === theme.id) ?? theme);
-    setThemes([...listed, ...yours.filter((mine) => !listed.includes(mine))]);
-  }
+  });
+  const ready = () => !!prefsHandle();
 
-  // a theme of yours, on the page: its base's rules under its own id, then
-  // what's been changed
-  async function install(url) {
-    const entry = own.get(url);
-    const doc = entry?.handle?.doc();
-    if (!doc) return;
+  // yours: each found, put on the page, and kept up to date
+  const ownUrls = createMemo(
+    () => (Array.isArray(prefs()?.themes) ? prefs().themes : []).map(string).filter(isUrl),
+    [],
+    { equals: sameList },
+  );
+  const own = createMemo(mapArray(ownUrls, (url) => ownTheme(url)));
+
+  function ownTheme(url) {
     const id = themeIdOf(url);
-    const base = string(doc.base);
-    const css = (await cssOf(base)).replace(new RegExp(`\\[theme=(["']?)${escape(base)}\\1\\]`, "g"), `[theme="${id}"]`);
-    const changed = Object.entries(doc.variables ?? {})
-      .filter(([key, value]) => /^--[\w-]+$/.test(key) && string(value).trim())
-      .map(([key, value]) => `\t${key}: ${string(value).replace(/[;{}<]/g, "")};`)
-      .join("\n");
-    if (dead || own.get(url) !== entry) return;
-    entry.style.textContent = `${css}\n\n/* changed */\n[theme="${id}"] {\n${changed}\n}\n`;
-    list();
-    apply();
-  }
+    const [doc, handle] = useDocument(() => url, { repo });
+    const base = () => string(doc()?.base);
 
-  // the ones the preferences list: each found, put on the page, and kept up
-  // to date
-  function syncOwn() {
-    const urls = (Array.isArray(prefs?.doc()?.themes) ? prefs.doc().themes : []).map(string).filter(isUrl);
-    for (const [url, entry] of own) {
-      if (urls.includes(url)) continue;
-      entry.off();
-      own.delete(url);
-    }
-    for (const url of urls) {
-      if (own.has(url)) continue;
-      const style = document.createElement("style");
-      style.dataset.latticeTheme = url;
-      document.head.append(style);
-      const entry = { handle: null, style, off: () => style.remove() };
-      own.set(url, entry);
-      repo.find(url).then(
-        (handle) => {
-          if (dead || own.get(url) !== entry) return;
-          entry.handle = handle;
-          const onChange = () => install(url);
-          handle.on("change", onChange);
-          entry.off = () => {
-            handle.off("change", onChange);
-            style.remove();
-          };
-          install(url);
-        },
-        () => {},
-      );
-    }
-    list();
-  }
+    // what's been changed but not kept yet
+    const [waiting, setWaiting] = createSignal({});
+    const variables = createMemo(() => ({ ...(doc()?.variables ?? {}), ...waiting() }));
+    const changed = () => Object.values(variables()).filter((value) => string(value).trim()).length;
 
-  const onPrefs = () => {
-    syncOwn();
-    apply();
-  };
-  const unsubscribe = subscribe(element, { type: "patchwork:tool-storage", toolId: PREFERENCES }, (url) => {
-    if (dead || !isUrl(url) || prefs?.url === url) return;
-    repo.find(url).then((handle) => {
-      if (dead) return;
-      prefs?.off("change", onPrefs);
-      prefs = handle;
-      if (!handle.doc()?.["@patchwork"]) {
-        handle.change((doc) => {
-          doc["@patchwork"] = { type: PREFERENCES };
-        });
-      }
-      handle.on("change", onPrefs);
-      setReady(true);
-      onPrefs();
+    // its base's rules under its own id, and then what's changed. the
+    // changes are twice as particular, so they're over anything of the base's
+    const [css] = createResource(base, cssOf);
+    const rules = document.createElement("style");
+    const changes = document.createElement("style");
+    rules.dataset.latticeTheme = changes.dataset.latticeTheme = url;
+    document.head.append(rules, changes);
+    onCleanup(() => {
+      rules.remove();
+      changes.remove();
     });
+    createEffect(() => {
+      const from = base();
+      rules.textContent = from
+        ? string(css()).replace(new RegExp(`\\[theme=(["']?)${escape(from)}\\1\\]`, "g"), `[theme="${id}"]`)
+        : "";
+    });
+    createEffect(() => {
+      const lines = Object.entries(variables())
+        .filter(([key, value]) => /^--[\w-]+$/.test(key) && string(value).trim())
+        .map(([key, value]) => `\t${key}: ${string(value).replace(/[;{}<]/g, "")};`);
+      changes.textContent = `[theme="${id}"][theme="${id}"] {\n${lines.join("\n")}\n}\n`;
+    });
+
+    let timer = null;
+    function keep() {
+      clearTimeout(timer);
+      timer = null;
+      const kept = Object.entries(waiting());
+      if (!kept.length || !handle()) return;
+      handle().change((theme) => {
+        theme.variables ??= {};
+        for (const [key, value] of kept) {
+          if (string(value).trim()) theme.variables[key] = value;
+          else delete theme.variables[key];
+        }
+      });
+      setWaiting({});
+    }
+    onCleanup(keep);
+
+    const name = () => site().find((theme) => theme.id === base())?.name ?? (string(doc()?.name) || "yours");
+    return {
+      url,
+      id,
+      own: true,
+      get name() {
+        return name();
+      },
+      get colorScheme() {
+        return site().find((theme) => theme.id === base())?.colorScheme;
+      },
+      base,
+      variables,
+      changed,
+      set(key, value, { now = false } = {}) {
+        setWaiting((all) => ({ ...all, [key]: value }));
+        clearTimeout(timer);
+        if (now) keep();
+        else timer = setTimeout(keep, KEEP_AFTER);
+      },
+      reset() {
+        clearTimeout(timer);
+        setWaiting({});
+        handle()?.change((theme) => {
+          theme.variables = {};
+        });
+      },
+    };
+  }
+
+  // yours where the site's would be, and any of yours of a theme that's gone
+  const themes = createMemo(() => {
+    const mine = own();
+    const listed = site().map((theme) => mine.find((yours) => yours.base() === theme.id) ?? theme);
+    return [...listed, ...mine.filter((yours) => !listed.includes(yours))];
   });
 
-  const onRegistered = () => {
-    list();
-    apply();
-  };
-  darkQuery.addEventListener("change", apply);
-  registry.on("registered", onRegistered);
-  list();
-  apply();
+  const resolve = (id) => own().find((yours) => yours.base() === id)?.id ?? id;
+  const chosenId = createMemo(() => resolve(string(prefs()?.[mode()]) || defaultFor(mode())));
+  const chosen = createMemo(() => themes().find((theme) => theme.id === chosenId()) ?? null);
+  createEffect(() => document.documentElement.setAttribute("theme", chosenId()));
 
-  function choose(which, id) {
-    prefs?.change((doc) => {
-      doc[which] = id;
+  function choose(id) {
+    prefsHandle()?.change((doc) => {
+      doc.light = id;
+      doc.dark = id;
     });
   }
 
-  async function edit(which) {
-    const id = chosen()[which];
-    const current = themes().find((theme) => theme.id === id);
-    if (current?.own) return current.own.url;
-    const handle = await createDoc(
+  let making = null;
+  async function edit() {
+    const current = chosen();
+    if (current?.own) return current;
+    const from = chosenId();
+    making ??= createDoc(
       repo,
-      { "@patchwork": { type: THEME_TYPE }, base: id, name: current?.name ?? id, variables: {} },
+      { "@patchwork": { type: THEME_TYPE }, base: from, name: current?.name ?? from, variables: {} },
       hive,
-    );
-    prefs?.change((doc) => {
-      doc.themes ??= [];
-      if (!doc.themes.includes(handle.url)) doc.themes.push(handle.url);
-      doc[which] = themeIdOf(handle.url);
+    ).then((handle) => {
+      const id = themeIdOf(handle.url);
+      prefsHandle()?.change((doc) => {
+        doc.themes ??= [];
+        if (!doc.themes.includes(handle.url)) doc.themes.push(handle.url);
+        doc.light = id;
+        doc.dark = id;
+      });
+      return handle;
     });
-    return handle.url;
+    try {
+      await making;
+    } finally {
+      making = null;
+    }
+    return chosen();
   }
 
-  return {
-    mode,
-    chosen,
-    themes,
-    ready,
-    choose,
-    edit,
-    stop() {
-      dead = true;
-      unsubscribe?.();
-      prefs?.off("change", onPrefs);
-      darkQuery.removeEventListener("change", apply);
-      registry.off?.("registered", onRegistered);
-      for (const entry of own.values()) entry.off();
-      own.clear();
-    },
-  };
+  return { mode, themes, chosenId, chosen, choose, edit, ready };
 }
