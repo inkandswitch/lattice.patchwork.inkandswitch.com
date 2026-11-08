@@ -377,8 +377,17 @@
 		align-items: center;
 		gap: 4px 10px;
 	}
+	& .lattice-you-face {
+		position: relative;
+		width: 56px;
+		height: 56px;
+
+		&[aria-busy="true"] {
+			opacity: 0.5;
+		}
+	}
 	& .lattice-you-picture {
-		grid-row: span 2;
+		display: block;
 		width: 56px;
 		height: 56px;
 		padding: 0;
@@ -394,6 +403,40 @@
 		&:focus-visible {
 			outline: 2px solid var(--studio-primary, #007aff);
 			outline-offset: 2px;
+		}
+		&:disabled {
+			cursor: progress;
+		}
+	}
+	/* the × on its corner, over the edge of it */
+	& .lattice-you-unpicture {
+		position: absolute;
+		top: -2px;
+		right: -2px;
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		padding: 0;
+		border: 1px solid var(--lattice-rule);
+		border-radius: 50%;
+		background: var(--studio-fill, #fff);
+		color: var(--lattice-muted);
+		cursor: pointer;
+		transition: transform 120ms ease-out;
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover {
+				border-color: var(--studio-danger, #e45649);
+				color: var(--studio-danger, #e45649);
+			}
+		}
+		&:active {
+			transform: scale(0.9);
+		}
+		&:focus-visible {
+			outline: 2px solid var(--studio-primary, #007aff);
+			outline-offset: 1px;
 		}
 	}
 	& .lattice-you-nobody {
@@ -429,10 +472,10 @@
 			outline: none;
 		}
 	}
-	& .lattice-you-actions {
-		display: flex;
-		align-items: center;
-		gap: 6px;
+	& .lattice-you-says {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
 	}
 
 	/* your colour: a pointer in it, as people see you. with alt held, mice */

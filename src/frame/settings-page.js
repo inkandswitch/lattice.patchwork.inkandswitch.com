@@ -187,46 +187,35 @@ export function SettingsPage(props) {
   const myColour = () => string(me()?.color) || (contactUrl() ? colourFor(contactUrl()) : null);
   watchAlt();
 
+  // the picture's how you change it; the × on its corner takes it away
   function You() {
     return html`<section class="lattice-settings-section">
       <h2>you</h2>
       <div class="lattice-you">
-        <button
-          class="lattice-you-picture"
-          title=${() => (me()?.avatarUrl ? "upload another picture" : "upload a picture")}
-          onClick=${() => pictureInput.click()}
-        >
-          <${Show} when=${contactUrl} fallback=${html`<span class="lattice-you-nobody">${icon("plus", 16)}</span>`}>
-            <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
-          <//>
-        </button>
-        <input
-          class="lattice-you-name"
-          value=${() => string(me()?.name)}
-          placeholder="your name"
-          aria-label="your name"
-          autocomplete="name"
-          spellcheck="false"
-          onInput=${(event) => rename(event.currentTarget.value, false)}
-          onChange=${(event) => rename(event.currentTarget.value, true)}
-          onKeyDown=${(event) => event.key === "Enter" && event.currentTarget.blur()}
-        />
-        <div class="lattice-you-actions">
-          <button class="lattice-button" disabled=${() => picturing() === "uploading…"} onClick=${() => pictureInput.click()}>
-            upload
+        <div class="lattice-you-face" aria-busy=${() => String(picturing() === "uploading…")}>
+          <button
+            class="lattice-you-picture"
+            title=${() => (me()?.avatarUrl ? "upload another picture" : "upload a picture")}
+            disabled=${() => picturing() === "uploading…"}
+            onClick=${() => pictureInput.click()}
+          >
+            <${Show} when=${contactUrl} fallback=${html`<span class="lattice-you-nobody">${icon("plus", 16)}</span>`}>
+              <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
+            <//>
           </button>
           <${Show} when=${() => me()?.avatarUrl}>
             <button
-              class="lattice-button"
+              class="lattice-you-unpicture"
+              title="remove your picture"
+              aria-label="remove your picture"
               onClick=${() =>
                 changeMe((doc) => {
                   delete doc.avatarUrl;
                 })}
             >
-              remove
+              ${icon("close", 9)}
             </button>
           <//>
-          <${Show} when=${picturing}><span class="lattice-settings-hint">${picturing}</span><//>
           <input
             type="file"
             accept="image/*"
@@ -238,6 +227,20 @@ export function SettingsPage(props) {
               takePicture(file);
             }}
           />
+        </div>
+        <div class="lattice-you-says">
+          <input
+            class="lattice-you-name"
+            value=${() => string(me()?.name)}
+            placeholder="your name"
+            aria-label="your name"
+            autocomplete="name"
+            spellcheck="false"
+            onInput=${(event) => rename(event.currentTarget.value, false)}
+            onChange=${(event) => rename(event.currentTarget.value, true)}
+            onKeyDown=${(event) => event.key === "Enter" && event.currentTarget.blur()}
+          />
+          <${Show} when=${picturing}><p class="lattice-settings-hint">${picturing}</p><//>
         </div>
       </div>
       <div class="lattice-setting">
