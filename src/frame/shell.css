@@ -247,7 +247,7 @@
 		gap: 7px;
 		min-width: 0;
 		max-width: 100%;
-		padding: 3px 9px 3px 3px;
+		padding: 3px;
 		border: none;
 		border-radius: 999px;
 		background: none;
@@ -260,6 +260,9 @@
 		&[aria-pressed="true"] {
 			background: var(--lattice-current);
 		}
+		&:has(.lattice-me-name) {
+			padding-right: 9px;
+		}
 		& patchwork-view {
 			width: 22px;
 			height: 22px;
@@ -271,10 +274,6 @@
 		font: 600 12px var(--lattice-path-family);
 		white-space: nowrap;
 		text-overflow: ellipsis;
-
-		&:empty {
-			display: none;
-		}
 	}
 	& .lattice-me-nobody {
 		box-sizing: border-box;
@@ -300,15 +299,6 @@
 			min-height: 0;
 			max-height: none;
 		}
-	}
-
-	& .lattice-visually-hidden {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		overflow: hidden;
-		clip-path: inset(50%);
-		white-space: nowrap;
 	}
 
 	/* ── settings ─────────────────────────────────────────────────────── */
@@ -367,6 +357,11 @@
 		color: var(--lattice-muted);
 	}
 
+	& .lattice-settings :is(input, select, .lattice-button):focus-visible {
+		outline: 2px solid var(--studio-primary, #007aff);
+		outline-offset: 1px;
+	}
+
 	& .lattice-settings-hint {
 		margin: 0;
 		color: var(--lattice-muted);
@@ -374,12 +369,13 @@
 		font-style: italic;
 	}
 
-	/* you: your picture, and your name beside it, as it's shown */
+	/* you: your picture, where the labels are, and your name beside it, as
+	   it's shown, lined up with everything else */
 	& .lattice-you {
 		display: grid;
-		grid-template-columns: 56px 1fr;
+		grid-template-columns: 96px 1fr;
 		align-items: center;
-		gap: 4px 14px;
+		gap: 4px 10px;
 	}
 	& .lattice-you-picture {
 		grid-row: span 2;
@@ -500,7 +496,7 @@
 	/* the themes, each a little lattice in it */
 	& .lattice-theme-cards {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
 		gap: 14px 12px;
 	}
 	& .lattice-theme-card {

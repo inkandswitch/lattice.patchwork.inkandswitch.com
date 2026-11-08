@@ -383,7 +383,7 @@ export function SettingsPage(props) {
       <${Cards} />
       <${Show}
         when=${own}
-        keyed
+        keyed=${true}
         fallback=${html`<button
           class="lattice-button lattice-theme-edit-button"
           disabled=${() => !themes.ready() || editing()}

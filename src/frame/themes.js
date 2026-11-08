@@ -227,7 +227,17 @@ export function useThemes(element, { repo, hive }) {
   const resolve = (id) => own().find((yours) => yours.base() === id)?.id ?? id;
   const chosenId = createMemo(() => resolve(string(prefs()?.[mode()]) || defaultFor(mode())));
   const chosen = createMemo(() => themes().find((theme) => theme.id === chosenId()) ?? null);
-  createEffect(() => document.documentElement.setAttribute("theme", chosenId()));
+  // on the page. patchwork's own theming puts the site's default back when
+  // the computer goes light or dark (it hasn't the preferences, here), so
+  // whatever else changes it, it's put back
+  const root = document.documentElement;
+  const put = () => {
+    if (root.getAttribute("theme") !== chosenId()) root.setAttribute("theme", chosenId());
+  };
+  createEffect(put);
+  const watcher = new MutationObserver(put);
+  watcher.observe(root, { attributes: true, attributeFilter: ["theme"] });
+  onCleanup(() => watcher.disconnect());
 
   function choose(id) {
     prefsHandle()?.change((doc) => {

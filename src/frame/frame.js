@@ -581,13 +581,14 @@ function Frame(props) {
       <button
         class="lattice-me"
         aria-pressed=${() => String(page() === "settings")}
+        aria-label=${() => (myName() ? undefined : "settings")}
         title="settings · you, and the theme"
         onClick=${() => setPage(page() === "settings" ? null : "settings")}
       >
         <${Show} when=${contactUrl} fallback=${html`<span class="lattice-me-nobody"></span>`}>
           <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
         <//>
-        <span class="lattice-me-name">${() => myName() || html`<span class="lattice-visually-hidden">settings</span>`}</span>
+        <${Show} when=${myName}><span class="lattice-me-name">${myName}</span><//>
       </button>
     </footer>`;
   }
