@@ -1,4 +1,4 @@
-import { createSignal, createMemo, createEffect, onCleanup, untrack, For, Show } from "solid-js";
+import { createSignal, createMemo, createEffect, on, onCleanup, untrack, For, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
@@ -30,8 +30,9 @@ import { directoryTitle } from "./knitoutjs/core/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
 import { icon } from "./knitoutjs/core/icons.js";
 import { tooltips } from "./knitoutjs/core/tooltip.js";
-import { startThemes } from "./themes.js";
+import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
+import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
 
 // latticework's, too, for its menus, before any project has brought it
 const STYLESHEETS = ["./knitoutjs/core/latticework.css", "./shell.css"].map(
@@ -94,7 +95,6 @@ export default function LatticeFrameTool(handle, element) {
   // all the same
   const baseRepo = repo.baseRepo ?? repo;
   const hive = element.hive;
-  const accountUrl = handle.url;
 
   const links = STYLESHEETS.map((href) => {
     const link = document.createElement("link");
@@ -105,31 +105,60 @@ export default function LatticeFrameTool(handle, element) {
   element.append(...links);
   tooltips();
 
+  // the frame is the account doc's tool, so its providers are the account's
+  const providers = nestProviders(element, frameProviders(handle.url));
+  let dispose = null;
+  providers.ready.then((inner) => {
+    if (!inner) return;
+    dispose = render(
+      () => html`<${RepoContext.Provider} value=${repo}>
+        <${Frame} handle=${handle} element=${inner} repo=${repo} baseRepo=${baseRepo} hive=${hive} />
+      <//>`,
+      inner,
+    );
+  });
+
+  return () => {
+    dispose?.();
+    providers.remove();
+    for (const link of links) link.remove();
+  };
+}
+
+/**
+ * the frame itself, in the account's providers (`element`): everything it
+ * keeps is solid's, and goes when it does
+ */
+function Frame(props) {
+  const { handle, element, repo, baseRepo, hive } = props;
+  const accountUrl = handle.url;
+
+  // the account, live
+  const account = makeDocumentProjection(handle);
+
   // ── projects: the ones in the account's root folder ───────────────────
 
-  const [home, setHome] = createSignal(null);
-  const [homeDoc, setHomeDoc] = createSignal(null);
-  let homeHandle = null;
-  const readHome = () => setHomeDoc(homeHandle.doc() ?? null);
+  const rootFolderUrl = () => (isValidAutomergeUrl(String(account.rootFolderUrl ?? "")) ? String(account.rootFolderUrl) : undefined);
+  const [homeDoc, home] = useDocument(rootFolderUrl);
+  const homeHandle = () => home() ?? null;
 
-  async function openHome() {
-    const rootFolderUrl = String(handle.doc()?.rootFolderUrl ?? "");
-    if (!isValidAutomergeUrl(rootFolderUrl)) return;
-    homeHandle = await repo.find(rootFolderUrl);
-    readHome();
-    homeHandle.on("change", readHome);
-    setHome(homeHandle);
-    await moveOldWorkspace();
-    openShared();
-  }
-  openHome();
+  // once it's here: the workspace from before projects, and a share link
+  createEffect(
+    on(home, (found) => {
+      if (!found) return;
+      untrack(async () => {
+        await moveOldWorkspace();
+        openShared();
+      });
+    }),
+  );
 
   // a share link (files.js's shareUrl): #folder=<a project's files>. you get
   // your own project on them, and the link's taken out of the address
   async function openShared() {
     const params = new URLSearchParams(location.hash.slice(1));
     const shared = params.get("folder");
-    if (!shared || !homeHandle) return;
+    if (!shared || !homeHandle()) return;
     params.delete("folder");
     const rest = params.toString();
     history.replaceState(history.state, "", `${location.pathname}${location.search}${rest ? `#${rest}` : ""}`);
@@ -137,15 +166,21 @@ export default function LatticeFrameTool(handle, element) {
     say(await addFromUrl(shared), true);
   }
   addEventListener("hashchange", openShared);
+  onCleanup(() => removeEventListener("hashchange", openShared));
 
-  // what the root folder links to: {url, name, type}
+  // what the root folder links to: {url, name, type}. each the same object
+  // while it's the same, so the list keeps its places
+  const known = new Map();
   const entries = createMemo(() =>
     (Array.isArray(homeDoc()?.docs) ? homeDoc().docs : [])
-      .map((entry) => ({
-        url: String(entry?.url ?? ""),
-        name: String(entry?.name ?? "untitled"),
-        type: String(entry?.type ?? ""),
-      }))
+      .map((raw) => {
+        const url = String(raw?.url ?? "");
+        const name = String(raw?.name ?? "untitled");
+        const type = String(raw?.type ?? "");
+        const key = `${url} ${type} ${name}`;
+        if (!known.has(key)) known.set(key, { url, name, type });
+        return known.get(key);
+      })
       .filter((entry) => isValidAutomergeUrl(entry.url)),
   );
 
@@ -170,7 +205,7 @@ export default function LatticeFrameTool(handle, element) {
 
   // an entry in the root folder, changed: where it points, and what it is
   function changeEntry(url, change) {
-    homeHandle.change((doc) => {
+    homeHandle()?.change((doc) => {
       for (const entry of doc.docs ?? []) {
         if (String(entry?.url) !== url) continue;
         if (change.url && String(entry.url) !== change.url) entry.url = change.url;
@@ -181,7 +216,7 @@ export default function LatticeFrameTool(handle, element) {
   }
 
   function addEntry(entry) {
-    homeHandle.change((doc) => {
+    homeHandle()?.change((doc) => {
       doc.docs ??= [];
       doc.docs.push(entry);
     });
@@ -244,15 +279,13 @@ export default function LatticeFrameTool(handle, element) {
   // what's in the middle instead of the project, when it isn't: "settings"
   const [page, setPage] = createSignal(null);
 
-  // the account, for its contact (your picture, down the bottom of the
-  // projects)
-  const [accountDoc, setAccountDoc] = createSignal(handle.doc());
-  const readAccount = () => setAccountDoc(handle.doc());
-  handle.on("change", readAccount);
+  // your contact (your picture and name, down the bottom of the projects)
   const contactUrl = () => {
-    const url = String(accountDoc()?.contactUrl ?? "");
-    return isValidAutomergeUrl(url) ? url : null;
+    const url = String(account.contactUrl ?? "");
+    return isValidAutomergeUrl(url) ? url : undefined;
   };
+  const [me] = useDocument(contactUrl);
+  const myName = () => String(me()?.name ?? "").trim();
 
   // the headings down the side, folded or not
   const [projectsOpen, setProjectsOpen] = createSignal(remembered("lattice:projects-list:open", true));
@@ -542,19 +575,19 @@ export default function LatticeFrameTool(handle, element) {
     </button>`;
   }
 
-  // you, down the bottom: your picture, and your settings
+  // you, down the bottom: your picture and your name, and your settings
   function Me() {
     return html`<footer class="lattice-sidebar-foot">
       <button
         class="lattice-me"
         aria-pressed=${() => String(page() === "settings")}
-        aria-label="settings"
         title="settings · you, and the theme"
         onClick=${() => setPage(page() === "settings" ? null : "settings")}
       >
-        <${Show} when=${contactUrl} fallback=${html`<span class="lattice-me-none">${icon("pencil", 12)}</span>`}>
+        <${Show} when=${contactUrl} fallback=${html`<span class="lattice-me-nobody"></span>`}>
           <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
         <//>
+        <span class="lattice-me-name">${() => myName() || html`<span class="lattice-visually-hidden">settings</span>`}</span>
       </button>
     </footer>`;
   }
@@ -824,27 +857,25 @@ export default function LatticeFrameTool(handle, element) {
           toggle=${fold(packagesOpen, setPackagesOpen, "lattice:packages-list:open")}
         />
       </div>
-      <div class="lattice-tree-children" hidden=${() => !packagesOpen()}>
-        <p class="lattice-tree-empty">nothing here yet</p>
-      </div>
+      <div class="lattice-tree-children" hidden=${() => !packagesOpen()}></div>
       </div>
       <${Me} />
     </nav>`;
   }
 
-  // the settings, in the middle, while they're open (themes.js puts the
-  // theme on the page, once the frame's providers are in)
-  let themes = null;
+  // the theme, on the page (themes.js), and the settings, in the middle,
+  // while they're open
+  const themes = useThemes(element, { repo: baseRepo, hive });
   function Settings() {
     return html`<div class="lattice-main lattice-settings-main">
-      <${SettingsPage} account=${handle} repo=${baseRepo} hive=${hive} themes=${themes} />
+      <${SettingsPage} account=${handle} accountDoc=${account} repo=${baseRepo} hive=${hive} themes=${themes} />
     </div>`;
   }
 
   function NoProject() {
     return html`<div class="lattice-no-project" hidden=${() => page() === "settings"}>
-      <p>${() => (home() && !chosenLooking() ? "no projects yet" : "finding projects…")}</p>
-      <${Show} when=${() => home() && !chosenLooking()}>
+      <p>${() => (homeHandle() && !chosenLooking() ? "no projects yet" : "finding projects…")}</p>
+      <${Show} when=${() => homeHandle() && !chosenLooking()}>
         <button class="lattice-button" onClick=${() => newProject()}>
           ${icon("plus")} new project
         </button>
@@ -859,14 +890,7 @@ export default function LatticeFrameTool(handle, element) {
     ),
   );
 
-  // the frame is the account doc's tool, so its providers are the account's
-  const providers = nestProviders(element, frameProviders(accountUrl));
-  let dispose = null;
-  providers.ready.then((inner) => {
-    if (!inner) return;
-    themes = startThemes(inner, baseRepo, hive);
-    dispose = render(Shell, inner);
-  });
+  onCleanup(() => clearTimeout(noteTimer));
 
   function Shell() {
     return html`<div
@@ -895,14 +919,5 @@ export default function LatticeFrameTool(handle, element) {
       </div>`;
   }
 
-  return () => {
-    homeHandle?.off("change", readHome);
-    handle.off("change", readAccount);
-    themes?.stop();
-    removeEventListener("hashchange", openShared);
-    clearTimeout(noteTimer);
-    dispose?.();
-    providers.remove();
-    for (const link of links) link.remove();
-  };
+  return Shell();
 }

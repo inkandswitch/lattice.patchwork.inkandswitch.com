@@ -14,7 +14,9 @@
 
 	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
 	--lattice-muted: var(--studio-chrome-line-offset-30, #888);
-	--lattice-path-family: var(--studio-family-code, ui-monospace, monospace);
+	/* headings, and the names of things: the theme's code font, unless
+	   there's a heading font of its own */
+	--lattice-path-family: var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace));
 	--lattice-current: color-mix(in oklch, var(--studio-primary, #007aff) 16%, transparent);
 
 	& button {
@@ -230,48 +232,83 @@
 		box-shadow: inset 2px 0 var(--studio-primary, #007aff);
 	}
 
-	/* you, down the bottom of the projects: your picture, for your settings */
+	/* you, down the bottom of the projects: your picture and your name, for
+	   your settings */
 	& .lattice-sidebar-foot {
 		display: flex;
 		flex: none;
 		align-items: center;
-		padding: 8px 10px;
+		padding: 6px;
 		border-top: 1px solid var(--lattice-rule);
 	}
 	& .lattice-me {
-		display: grid;
-		place-items: center;
-		padding: 0;
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		min-width: 0;
+		max-width: 100%;
+		padding: 3px 9px 3px 3px;
 		border: none;
-		border-radius: 50%;
+		border-radius: 999px;
 		background: none;
+		text-align: left;
 		cursor: pointer;
 
+		&:hover {
+			background: var(--studio-chrome-fill-offset-20, #0001);
+		}
 		&[aria-pressed="true"] {
-			box-shadow: 0 0 0 2px var(--studio-primary, #007aff);
+			background: var(--lattice-current);
 		}
 		& patchwork-view {
-			display: block;
-			width: 24px;
-			height: 24px;
-		}
-		& .contact-avatar {
-			width: 24px;
-			min-width: 24px;
-			max-width: 24px;
-			height: 24px;
-			min-height: 24px;
-			max-height: 24px;
+			width: 22px;
+			height: 22px;
 		}
 	}
-	& .lattice-me-none {
-		display: grid;
-		place-items: center;
-		width: 24px;
-		height: 24px;
-		border: 1px solid var(--lattice-rule);
+	& .lattice-me-name {
+		min-width: 0;
+		overflow: hidden;
+		font: 600 12px var(--lattice-path-family);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+
+		&:empty {
+			display: none;
+		}
+	}
+	& .lattice-me-nobody {
+		box-sizing: border-box;
+		width: 22px;
+		height: 22px;
+		border: 1px dashed var(--lattice-muted);
 		border-radius: 50%;
-		color: var(--lattice-muted);
+	}
+
+	/* base's contact-avatar, at whatever size its view is: it's 2rem, with its
+	   border outside that, and sits on the line, unless it's told otherwise */
+	& patchwork-view[tool-id="contact-avatar"] {
+		display: block;
+		flex: none;
+
+		& .contact-avatar {
+			box-sizing: border-box;
+			display: flex;
+			width: 100%;
+			min-width: 0;
+			max-width: none;
+			height: 100%;
+			min-height: 0;
+			max-height: none;
+		}
+	}
+
+	& .lattice-visually-hidden {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip-path: inset(50%);
+		white-space: nowrap;
 	}
 
 	/* ── settings ─────────────────────────────────────────────────────── */
@@ -283,15 +320,15 @@
 
 	& .lattice-settings {
 		box-sizing: border-box;
-		width: min(560px, 100%);
+		width: min(600px, 100%);
 		padding: 28px 24px 64px;
 
 		& h1 {
-			margin: 0 0 20px;
+			margin: 0 0 16px;
 			font: 600 15px var(--lattice-path-family);
 		}
 		& h2 {
-			margin: 0 0 2px;
+			margin: 0;
 			color: var(--lattice-muted);
 			font: 600 12px var(--lattice-path-family);
 		}
@@ -299,8 +336,8 @@
 
 	& .lattice-settings-section {
 		display: grid;
-		gap: 10px;
-		padding: 16px 0 20px;
+		gap: 12px;
+		padding: 16px 0 24px;
 		border-top: 1px solid var(--lattice-rule);
 	}
 
@@ -311,7 +348,6 @@
 		gap: 8px 10px;
 		min-height: 28px;
 
-		& input:not([type]),
 		& select {
 			box-sizing: border-box;
 			flex: 1;
@@ -321,10 +357,7 @@
 			border-radius: var(--studio-radius-sm, 4px);
 			background: var(--studio-fill, #fff);
 			color: inherit;
-			font: inherit;
-		}
-		& input::placeholder {
-			color: var(--lattice-muted);
+			font-size: inherit;
 		}
 	}
 
@@ -340,50 +373,239 @@
 		font-size: 12px;
 		font-style: italic;
 	}
-	& .lattice-settings-section > .lattice-settings-hint {
-		padding-left: 106px;
-	}
 
-	& .lattice-settings-avatar {
-		display: block;
-		flex: none;
-		width: 48px;
-		height: 48px;
-
-		& .contact-avatar {
-			width: 48px;
-			min-width: 48px;
-			max-width: 48px;
-			height: 48px;
-			min-height: 48px;
-			max-height: 48px;
-		}
+	/* you: your picture, and your name beside it, as it's shown */
+	& .lattice-you {
+		display: grid;
+		grid-template-columns: 56px 1fr;
+		align-items: center;
+		gap: 4px 14px;
 	}
-
-	& .lattice-swatches {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-	}
-	& .lattice-swatch {
-		width: 20px;
-		height: 20px;
+	& .lattice-you-picture {
+		grid-row: span 2;
+		width: 56px;
+		height: 56px;
 		padding: 0;
 		border: none;
 		border-radius: 50%;
-		background: var(--swatch);
+		background: none;
 		cursor: pointer;
 
-		&[aria-checked="true"] {
-			outline: 2px solid var(--swatch);
+		& patchwork-view {
+			width: 56px;
+			height: 56px;
+		}
+		&:focus-visible {
+			outline: 2px solid var(--studio-primary, #007aff);
 			outline-offset: 2px;
+		}
+	}
+	& .lattice-you-nobody {
+		box-sizing: border-box;
+		display: grid;
+		place-items: center;
+		width: 56px;
+		height: 56px;
+		border: 1px dashed var(--lattice-muted);
+		border-radius: 50%;
+		color: var(--lattice-muted);
+	}
+	& .lattice-you-name {
+		box-sizing: border-box;
+		width: 100%;
+		margin-left: -7px;
+		padding: 3px 6px;
+		border: 1px solid transparent;
+		border-radius: var(--studio-radius-sm, 4px);
+		background: none;
+		color: inherit;
+		font: 600 17px var(--lattice-path-family);
+
+		&::placeholder {
+			color: var(--lattice-muted);
+		}
+		&:hover {
+			border-color: var(--lattice-rule);
+		}
+		&:focus {
+			border-color: var(--studio-primary, #007aff);
+			background: var(--studio-fill, #fff);
+			outline: none;
+		}
+	}
+	& .lattice-you-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	/* your colour: a pointer in it, as people see you. with alt held, mice */
+	& .lattice-mice {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 2px;
+	}
+	& .lattice-mouse-button {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border: 1px solid transparent;
+		border-radius: var(--studio-radius, 6px);
+		background: none;
+		color: var(--mouse);
+		cursor: pointer;
+		transition: transform 120ms ease-out;
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover {
+				background: var(--studio-chrome-fill-offset-20, #0001);
+			}
+		}
+		&:active {
+			transform: scale(0.94);
+		}
+		&[aria-checked="true"] {
+			border-color: var(--mouse);
+			background: color-mix(in oklch, var(--mouse) 14%, transparent);
+		}
+		& svg {
+			fill: currentColor;
+			overflow: visible;
+		}
+	}
+	& .lattice-pointer path {
+		stroke: var(--studio-fill, #fff);
+		stroke-width: 1.2px;
+		stroke-linejoin: round;
+		paint-order: stroke;
+	}
+	& .lattice-mouse-tail {
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 1.2px;
+		stroke-linecap: round;
+	}
+	& .lattice-mouse-ear {
+		fill: color-mix(in oklch, currentColor, white 55%);
+	}
+	& .lattice-mouse-eye {
+		fill: #1c1a17;
+	}
+	& .lattice-mouse-nose {
+		fill: color-mix(in oklch, hotpink, currentColor 25%);
+	}
+
+	/* the themes, each a little lattice in it */
+	& .lattice-theme-cards {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+		gap: 14px 12px;
+	}
+	& .lattice-theme-card {
+		display: grid;
+		gap: 6px;
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		text-align: left;
+		cursor: pointer;
+
+		& .lattice-mini {
+			transition: transform 140ms ease-out;
+		}
+		&:active .lattice-mini {
+			transform: scale(0.98);
+		}
+		&[aria-checked="true"] .lattice-mini,
+		&:focus-visible .lattice-mini {
+			outline: 2px solid var(--studio-primary, #007aff);
+			outline-offset: 2px;
+		}
+		&:focus-visible {
+			outline: none;
+		}
+		&:disabled {
+			cursor: default;
+		}
+	}
+	& .lattice-theme-name {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		min-width: 0;
+		font-size: 12px;
+
+		& small {
+			color: var(--lattice-muted);
+			font-size: 11px;
+			font-style: italic;
+		}
+	}
+	& .lattice-theme-edit-button {
+		justify-self: start;
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+	}
+	& .lattice-theme-edit {
+		display: grid;
+		gap: 10px;
+		padding-top: 4px;
+	}
+	& .lattice-font-select {
+		appearance: base-select;
+
+		&::picker(select) {
+			appearance: base-select;
+			max-height: 320px;
+			border: 1px solid var(--lattice-rule);
+			border-radius: var(--studio-radius-sm, 4px);
+			background: var(--studio-fill, #fff);
+			color: var(--studio-line, inherit);
+			box-shadow: 2px 2px 0 var(--lattice-rule);
+		}
+		& optgroup {
+			color: var(--lattice-muted);
+			font: 600 11px var(--lattice-path-family);
+		}
+		& option {
+			padding: 3px 8px;
+			color: var(--studio-line, inherit);
+			font-size: 13px;
+			font-weight: 400;
+		}
+		& option:checked {
+			background: var(--lattice-current);
+		}
+		& option::checkmark {
+			display: none;
+		}
+	}
+	& .lattice-size {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		color: var(--lattice-muted);
+
+		& input {
+			box-sizing: border-box;
+			width: 64px;
+			padding: 4px 6px;
+			border: 1px solid var(--lattice-rule);
+			border-radius: var(--studio-radius-sm, 4px);
+			background: var(--studio-fill, #fff);
+			color: var(--studio-line, inherit);
+			font: inherit;
 		}
 	}
 
 	& .lattice-colours {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 8px 14px;
+		gap: 8px 16px;
 	}
 	& .lattice-colour {
 		display: flex;
@@ -392,13 +614,151 @@
 		cursor: pointer;
 
 		& input {
-			width: 28px;
-			height: 22px;
+			box-sizing: border-box;
+			width: 26px;
+			height: 26px;
 			padding: 0;
 			border: 1px solid var(--lattice-rule);
-			border-radius: var(--studio-radius-sm, 4px);
+			border-radius: 50%;
 			background: none;
 			cursor: pointer;
+			overflow: hidden;
+		}
+		& input::-webkit-color-swatch-wrapper {
+			padding: 0;
+		}
+		& input::-webkit-color-swatch {
+			border: none;
+			border-radius: 50%;
+		}
+	}
+
+	/* a little lattice: everything in it is the theme's own, not the
+	   frame's (it's in a theme of its own) */
+	& .lattice-mini {
+		--mini-rule: var(--studio-chrome-fill-offset-30, #0002);
+
+		display: flex;
+		flex-direction: column;
+		aspect-ratio: 16 / 10;
+		overflow: hidden;
+		border: 1px solid var(--mini-rule);
+		border-radius: var(--studio-radius, 6px);
+		background: var(--studio-chrome-fill);
+		color: var(--studio-chrome-line);
+		font: 400 7.5px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+		text-align: left;
+		pointer-events: none;
+		user-select: none;
+	}
+	& .lattice-mini-top {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 3px;
+		height: 10px;
+		padding: 0 5px;
+		border-bottom: 1px solid var(--mini-rule);
+
+		& i {
+			width: 6px;
+			height: 4px;
+			border: 1px solid currentColor;
+			border-radius: 1px;
+			opacity: 0.45;
+		}
+	}
+	& .lattice-mini-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+	& .lattice-mini-side {
+		display: flex;
+		flex: none;
+		flex-direction: column;
+		width: 34%;
+		padding: 4px 0;
+		border-right: 1px solid var(--mini-rule);
+		font-family: var(--lattice-heading-family, var(--studio-family-code, monospace));
+
+		& b {
+			padding: 0 5px 2px;
+			font-weight: 600;
+		}
+		& span {
+			padding: 1px 5px 1px 8px;
+			overflow: hidden;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+		}
+		& [data-current] {
+			background: color-mix(in oklch, var(--studio-primary) 16%, transparent);
+			box-shadow: inset 1.5px 0 var(--studio-primary);
+		}
+	}
+	& .lattice-mini-main {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-width: 0;
+		background: var(--studio-fill);
+		color: var(--studio-line);
+	}
+	& .lattice-mini-tabs {
+		display: flex;
+		flex: none;
+		border-bottom: 1px solid var(--mini-rule);
+		background: var(--studio-chrome-fill);
+
+		& span {
+			margin-bottom: -1px;
+			padding: 2px 6px;
+			border-right: 1px solid var(--mini-rule);
+			background: var(--studio-fill);
+			box-shadow: inset 0 1.5px var(--studio-primary);
+			font-family: var(--lattice-heading-family, var(--studio-family-code, monospace));
+		}
+	}
+	& .lattice-mini-tools {
+		flex: none;
+		padding: 3px 5px 2px;
+	}
+	& .lattice-mini-build {
+		display: inline-block;
+		padding: 0 5px;
+		border-radius: 2px;
+		background: var(--studio-primary);
+		color: var(--studio-primary-line, white);
+		font-weight: 600;
+	}
+	& .lattice-mini-code {
+		padding: 1px 0;
+		color: var(--text-editor-line, var(--studio-line));
+		font-family: var(--text-editor-family, var(--studio-family-code, monospace));
+		white-space: pre;
+
+		& s {
+			display: inline-block;
+			width: 9px;
+			padding-right: 5px;
+			color: var(--text-editor-gutter-line, var(--studio-line));
+			text-align: right;
+			text-decoration: none;
+			opacity: 0.8;
+		}
+		& .k {
+			color: var(--syntax-keyword);
+		}
+		& .n {
+			color: var(--syntax-number);
+		}
+		& .t {
+			color: var(--syntax-string);
+		}
+		& .c {
+			color: var(--syntax-comment);
+			font-style: italic;
 		}
 	}
 

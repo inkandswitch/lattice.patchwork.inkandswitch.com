@@ -1,11 +1,17 @@
-// lattice's settings: you (your account: your name, your picture, your
-// colour), and the theme (which, for light and for dark, and changing it).
-// changing one of the site's themes makes it yours (themes.js), but it's
-// still the same theme, by the same name: you're only changing it
-import { createSignal, createEffect, createMemo, on, onCleanup, For, Show } from "solid-js";
+// lattice's settings: you (your name, your picture, your colour), and the
+// theme (which, and changing it). there's one page whether you've an account
+// or not: changing any of you makes it, the first time. changing one of the
+// site's themes makes it yours (themes.js), but it's still the same theme, by
+// the same name: you're only changing it
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
+import { useDocument } from "./vendor/solid-automerge.js";
 import { createDoc } from "./knitoutjs/core/patchwork-docs.js";
+import { icon } from "./knitoutjs/core/icons.js";
+import { themeValue } from "./themes.js";
+import { ThemePreview } from "./theme-preview.js";
+import { fonts, firstFamily, KINDS } from "./fonts.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
@@ -43,13 +49,16 @@ async function squared(file) {
   return new Uint8Array(await blob.arrayBuffer());
 }
 
-// what can be changed of a theme. its colours are its palette's: a lattice
-// theme's own (everything else in it comes from those), or the studio's
-const TYPE = [
+// what can be changed of a theme. a font's one of the ones here; the ones
+// without a variable of their own fall back to another of the theme's
+const FONTS = [
   { key: "--studio-family-ui", label: "ui font" },
-  { key: "--text-editor-family", label: "editor font" },
-  { key: "--studio-font-size", label: "text size" },
+  { key: "--lattice-heading-family", label: "heading font", from: "--studio-family-code" },
+  { key: "--editor-family-code", label: "editor font" },
 ];
+const EDITOR_SIZE = "--text-editor-font-size";
+// its colours are its palette's: a lattice theme's own (everything else in
+// it comes from those), or the studio's
 const LATTICE_COLOURS = [
   { key: "--lattice-window", label: "window" },
   { key: "--lattice-chrome", label: "chrome" },
@@ -64,8 +73,9 @@ const STUDIO_COLOURS = [
 ];
 
 // a css colour as #rrggbb, for a colour input
-const probe = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+let probe = null;
 function hexOf(colour) {
+  probe ??= document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   if (!colour) return "#000000";
   probe.clearRect(0, 0, 1, 1);
   probe.fillStyle = "#000";
@@ -75,73 +85,81 @@ function hexOf(colour) {
   return `#${[r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("")}`;
 }
 
-const computed = (key) =>
-  getComputedStyle(document.documentElement).getPropertyValue(key).replace(/\s+/g, " ").trim();
+// whether alt's held: the colours are mice then
+const [alt, setAlt] = createSignal(false);
+let altWatchers = 0;
+const readAlt = (event) => setAlt(!!event.altKey);
+const dropAlt = () => setAlt(false);
+function watchAlt() {
+  if (!altWatchers++) {
+    addEventListener("keydown", readAlt, true);
+    addEventListener("keyup", readAlt, true);
+    addEventListener("pointermove", readAlt, { capture: true, passive: true });
+    addEventListener("blur", dropAlt);
+  }
+  onCleanup(() => {
+    if (--altWatchers) return;
+    removeEventListener("keydown", readAlt, true);
+    removeEventListener("keyup", readAlt, true);
+    removeEventListener("pointermove", readAlt, true);
+    removeEventListener("blur", dropAlt);
+    setAlt(false);
+  });
+}
+
+// a pointer, in a colour. or, with alt held, a mouse
+function Pointer() {
+  return html`<svg class="lattice-pointer" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+    <path d="M4 1.6v11.6l2.9-2.7 1.9 4.4 2.1-.9-1.9-4.3h4.1z" />
+  </svg>`;
+}
+function Mouse() {
+  return html`<svg class="lattice-mouse" viewBox="0 0 20 16" width="22" height="18" aria-hidden="true">
+    <path class="lattice-mouse-tail" d="M4.4 12.2c-2.6.2-3.8-1.6-3-3.6.5-1.2 1.8-1.4 2.4-.7" />
+    <path d="M3.9 12.6c-.3-3.7 2.6-6.2 6.4-6.1 2.7.1 4.6 1.6 7 3.5.6.5.4 1.3-.3 1.5-1.6.5-3.3 1.1-5.4 1.2H5.1c-.6 0-1.1-.1-1.2-.1z" />
+    <circle cx="11.6" cy="6.3" r="2.5" />
+    <circle class="lattice-mouse-ear" cx="11.6" cy="6.3" r="1.25" />
+    <circle class="lattice-mouse-eye" cx="14.5" cy="9.1" r=".75" />
+    <circle class="lattice-mouse-nose" cx="17.5" cy="10.6" r=".65" />
+  </svg>`;
+}
 
 /**
- * the settings, in `props`: account (the account doc's handle), repo, hive,
- * themes (themes.js's)
+ * the settings, in `props`: account (the account doc's handle), accountDoc
+ * (its live view), repo, hive, themes (themes.js's useThemes)
  */
 export function SettingsPage(props) {
-  const { account, repo, hive, themes } = props;
+  const { account, accountDoc, repo, hive, themes } = props;
 
   // ── you ────────────────────────────────────────────────────────────────
 
-  const [accountDoc, setAccountDoc] = createSignal(account.doc());
-  const readAccount = () => setAccountDoc(account.doc());
-  account.on("change", readAccount);
-  onCleanup(() => account.off("change", readAccount));
-  const contactUrl = () => (isUrl(accountDoc()?.contactUrl) ? string(accountDoc().contactUrl) : null);
+  const contactUrl = () => (isUrl(accountDoc.contactUrl) ? string(accountDoc.contactUrl) : undefined);
+  const [me, contact] = useDocument(contactUrl, { repo });
 
-  const [contact, setContact] = createSignal(null);
-  const [me, setMe] = createSignal(null);
-  createEffect(
-    on(contactUrl, (url) => {
-      setContact(null);
-      setMe(null);
-      if (!url) return;
-      let live = true;
-      let handle = null;
-      const read = () => live && setMe(handle.doc() ?? null);
-      repo.find(url).then((found) => {
-        if (!live) return;
-        handle = found;
-        setContact(found);
-        read();
-        found.on("change", read);
+  // your contact, made if you've none yet
+  let making = null;
+  async function myContact() {
+    const url = contactUrl();
+    if (url) return contact() ?? repo.find(url);
+    making ??= createDoc(repo, { "@patchwork": { type: "contact" }, type: "anonymous" }, hive).then((handle) => {
+      handle.change((doc) => {
+        doc.color = colourFor(handle.url);
       });
-      onCleanup(() => {
-        live = false;
-        handle?.off("change", read);
-      });
-    }),
-  );
-  const registered = () => me()?.type === "registered";
-
-  const [newName, setNewName] = createSignal("");
-  async function makeAccount(event) {
-    event.preventDefault();
-    const name = newName().trim();
-    if (!name) return;
-    let handle = contact();
-    if (!handle) {
-      handle = await createDoc(repo, { "@patchwork": { type: "contact" }, type: "anonymous" }, hive);
       account.change((doc) => {
         doc.contactUrl = handle.url;
       });
-    }
-    handle.change((doc) => {
-      doc.type = "registered";
-      doc.name = name;
-      if (!doc.color) doc.color = colourFor(handle.url);
+      return handle;
     });
+    return making;
   }
+  const changeMe = async (change) => (await myContact()).change(change);
 
-  function rename(name) {
-    name = name.trim();
-    if (!name || name === me()?.name) return;
-    contact()?.change((doc) => {
-      doc.name = name;
+  // a name makes you someone (and not anonymous)
+  function rename(name, done) {
+    if (done) name = name.trim();
+    changeMe((doc) => {
+      if (string(doc.name) !== name) doc.name = name;
+      if (name.trim() && doc.type !== "registered") doc.type = "registered";
     });
   }
 
@@ -149,14 +167,14 @@ export function SettingsPage(props) {
   const [picturing, setPicturing] = createSignal(null);
   async function takePicture(file) {
     if (!file) return;
-    setPicturing("making it…");
+    setPicturing("uploading…");
     try {
       const image = await createDoc(
         repo,
         { content: await squared(file), mimeType: "image/webp", name: file.name, extension: "webp" },
         hive,
       );
-      contact()?.change((doc) => {
+      await changeMe((doc) => {
         doc.avatarUrl = image.url;
       });
       setPicturing(null);
@@ -166,43 +184,49 @@ export function SettingsPage(props) {
     }
   }
 
+  const myColour = () => string(me()?.color) || (contactUrl() ? colourFor(contactUrl()) : null);
+  watchAlt();
+
   function You() {
     return html`<section class="lattice-settings-section">
       <h2>you</h2>
-      <${Show}
-        when=${registered}
-        fallback=${html`<form class="lattice-setting" onSubmit=${makeAccount}>
-            <label class="lattice-settings-label" for="lattice-new-name">name</label>
-            <input
-              id="lattice-new-name"
-              value=${newName}
-              placeholder="what people see you as"
-              autocomplete="name"
-              onInput=${(event) => setNewName(event.currentTarget.value)}
-            />
-            <button class="lattice-button" disabled=${() => !newName().trim()}>make my account</button>
-          </form>
-          <p class="lattice-settings-hint">so people see who's here, and who changed what</p>`}
-      >
-        <div class="lattice-setting lattice-setting-picture">
-          <span class="lattice-settings-label">picture</span>
-          <${Show} when=${contactUrl}>
-            <patchwork-view class="lattice-settings-avatar" doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
+      <div class="lattice-you">
+        <button
+          class="lattice-you-picture"
+          title=${() => (me()?.avatarUrl ? "upload another picture" : "upload a picture")}
+          onClick=${() => pictureInput.click()}
+        >
+          <${Show} when=${contactUrl} fallback=${html`<span class="lattice-you-nobody">${icon("plus", 16)}</span>`}>
+            <patchwork-view doc-url=${contactUrl} tool-id="contact-avatar"></patchwork-view>
           <//>
-          <button class="lattice-button" disabled=${() => picturing() === "making it…"} onClick=${() => pictureInput.click()}>
-            ${() => (me()?.avatarUrl ? "another" : "pick one")}
+        </button>
+        <input
+          class="lattice-you-name"
+          value=${() => string(me()?.name)}
+          placeholder="your name"
+          aria-label="your name"
+          autocomplete="name"
+          spellcheck="false"
+          onInput=${(event) => rename(event.currentTarget.value, false)}
+          onChange=${(event) => rename(event.currentTarget.value, true)}
+          onKeyDown=${(event) => event.key === "Enter" && event.currentTarget.blur()}
+        />
+        <div class="lattice-you-actions">
+          <button class="lattice-button" disabled=${() => picturing() === "uploading…"} onClick=${() => pictureInput.click()}>
+            upload
           </button>
           <${Show} when=${() => me()?.avatarUrl}>
             <button
               class="lattice-button"
               onClick=${() =>
-                contact()?.change((doc) => {
+                changeMe((doc) => {
                   delete doc.avatarUrl;
                 })}
             >
-              none
+              remove
             </button>
           <//>
+          <${Show} when=${picturing}><span class="lattice-settings-hint">${picturing}</span><//>
           <input
             type="file"
             accept="image/*"
@@ -214,154 +238,130 @@ export function SettingsPage(props) {
               takePicture(file);
             }}
           />
-          <${Show} when=${picturing}><span class="lattice-settings-hint">${picturing}</span><//>
         </div>
-        <label class="lattice-setting">
-          <span class="lattice-settings-label">name</span>
-          <input
-            value=${() => me()?.name ?? ""}
-            autocomplete="name"
-            onChange=${(event) => rename(event.currentTarget.value)}
-            onKeyDown=${(event) => event.key === "Enter" && event.currentTarget.blur()}
-          />
-        </label>
-        <div class="lattice-setting">
-          <span class="lattice-settings-label">colour</span>
-          <span class="lattice-swatches" role="radiogroup" aria-label="your colour">
-            <${For} each=${COLOURS}>
-              ${([name, value]) => html`<button
-                class="lattice-swatch"
-                role="radio"
-                style=${{ "--swatch": value }}
-                aria-checked=${() => String(me()?.color === value)}
-                aria-label=${name}
-                title=${name}
-                onClick=${() =>
-                  contact()?.change((doc) => {
-                    doc.color = value;
-                  })}
-              ></button>`}
-            <//>
-          </span>
-        </div>
-      <//>
+      </div>
+      <div class="lattice-setting">
+        <span class="lattice-settings-label">colour</span>
+        <span class="lattice-mice" role="radiogroup" aria-label="your colour" data-mice=${() => (alt() ? "" : undefined)}>
+          <${For} each=${COLOURS}>
+            ${([name, value]) => html`<button
+              class="lattice-mouse-button"
+              role="radio"
+              style=${{ "--mouse": value }}
+              aria-checked=${() => String(myColour() === value)}
+              aria-label=${name}
+              title=${name}
+              onClick=${() =>
+                changeMe((doc) => {
+                  doc.color = value;
+                })}
+            >
+              ${() => (alt() ? Mouse() : Pointer())}
+            </button>`}
+          <//>
+        </span>
+      </div>
     </section>`;
   }
 
   // ── the theme ──────────────────────────────────────────────────────────
 
-  function Choice(choiceProps) {
-    const which = choiceProps.which;
-    // its own kind first, then the rest
-    const options = createMemo(() => {
-      const all = themes.themes();
-      const fits = (theme) => !theme.colorScheme || theme.colorScheme === which;
-      return [...all.filter(fits), ...all.filter((theme) => !fits(theme))];
+  function Cards() {
+    return html`<div class="lattice-theme-cards" role="radiogroup" aria-label="theme">
+      <${For} each=${themes.themes}>
+        ${(theme) => html`<button
+          class="lattice-theme-card"
+          role="radio"
+          aria-checked=${() => String(themes.chosenId() === theme.id)}
+          disabled=${() => !themes.ready()}
+          onClick=${() => themes.choose(theme.id)}
+        >
+          <${ThemePreview} id=${theme.id} />
+          <span class="lattice-theme-name">
+            ${() => theme.name}
+            <${Show} when=${() => theme.own && theme.changed()}><small>edited</small><//>
+          </span>
+        </button>`}
+      <//>
+    </div>`;
+  }
+
+  // a font of yours, from the ones here, or the theme's own
+  function FontField(field) {
+    const { own, key, label, from } = field;
+    const value = () => string(own.variables()[key]);
+    const theirs = createMemo(() => {
+      const base = own.base();
+      return firstFamily(themeValue(base, key) || (from ? themeValue(base, from) : "")) || "default";
     });
-    const label = (theme) => `${theme.name}${theme.own?.changed ? " (edited)" : ""}`;
+    // one that's set but isn't here goes on the end, so it's still what's shown
+    const listed = () => fonts().some((font) => font.stack === value());
     return html`<label class="lattice-setting">
-      <span class="lattice-settings-label">${which}</span>
+      <span class="lattice-settings-label">${label}</span>
       <select
-        disabled=${() => !themes.ready()}
-        onChange=${(event) => themes.choose(which, event.currentTarget.value)}
+        class="lattice-font-select"
+        style=${() => ({ "font-family": value() || "inherit" })}
+        onChange=${(event) => own.set(key, event.currentTarget.value, { now: true })}
       >
-        <${For} each=${options}>
-          ${(theme) => html`<option value=${theme.id} selected=${() => themes.chosen()[which] === theme.id}>
-            ${() => label(theme)}
-          </option>`}
+        <option value="" selected=${() => !value()}>${() => `the theme's · ${theirs()}`}</option>
+        <${For} each=${KINDS}>
+          ${(kind) => html`<optgroup label=${kind}>
+            <${For} each=${() => fonts().filter((font) => font.kind === kind)}>
+              ${(font) => html`<option
+                value=${font.stack}
+                style=${{ "font-family": font.stack }}
+                selected=${() => value() === font.stack}
+              >
+                ${font.name}
+              </option>`}
+            <//>
+          </optgroup>`}
+        <//>
+        <${Show} when=${() => value() && !listed()}>
+          <option value=${value} selected>${() => firstFamily(value())}</option>
         <//>
       </select>
-      <${Show} when=${() => themes.mode() === which}>
-        <span class="lattice-settings-hint">now</span>
-      <//>
     </label>`;
   }
 
-  // the theme showing now, and what you've changed of it
-  const showing = () => themes.themes().find((theme) => theme.id === themes.chosen()[themes.mode()]);
+  function Edit(own) {
+    const colours = createMemo(() => (themeValue(own.base(), "--lattice-window") ? LATTICE_COLOURS : STUDIO_COLOURS));
+    // what the theme had, under anything of yours
+    const theirs = (key) => themeValue(own.base(), key);
+    const size = () => parseFloat(string(own.variables()[EDITOR_SIZE])) || "";
 
-  function Changes() {
-    const url = () => showing()?.own?.url ?? null;
-    const [doc, setDoc] = createSignal(null);
-    // what the page has now, once the theme's been put on it again
-    const [tick, setTick] = createSignal(0);
-    createEffect(
-      on(url, (url) => {
-        setDoc(null);
-        if (!url) return;
-        let live = true;
-        let handle = null;
-        let timer = null;
-        const read = () => {
-          if (!live) return;
-          setDoc({ handle, value: handle.doc() });
-          clearTimeout(timer);
-          timer = setTimeout(() => setTick((n) => n + 1), 80);
-        };
-        repo.find(url).then((found) => {
-          if (!live) return;
-          handle = found;
-          read();
-          found.on("change", read);
-        });
-        onCleanup(() => {
-          live = false;
-          clearTimeout(timer);
-          handle?.off("change", read);
-        });
-      }),
-    );
-    const now = (key) => (tick(), themes.chosen(), computed(key));
-    const changed = (key) => string(doc()?.value?.variables?.[key]);
-    const colours = () => (now("--lattice-window") ? LATTICE_COLOURS : STUDIO_COLOURS);
-
-    function set(key, value) {
-      doc()?.handle.change((theme) => {
-        theme.variables ??= {};
-        if (string(value).trim()) theme.variables[key] = value;
-        else delete theme.variables[key];
-      });
-    }
-    // a colour as it's dragged: written now and then, and when it's let go
-    let colourTimer = null;
-    function colour(key, value, done) {
-      clearTimeout(colourTimer);
-      if (done) return set(key, value);
-      colourTimer = setTimeout(() => set(key, value), 120);
-    }
-    onCleanup(() => clearTimeout(colourTimer));
-
-    return html`<${Show}
-      when=${() => doc()?.handle}
-      fallback=${html`<div class="lattice-setting">
-        <span class="lattice-settings-label"></span>
-        <button class="lattice-button" disabled=${() => !themes.ready()} onClick=${() => themes.edit(themes.mode())}>
-          edit
-        </button>
-      </div>`}
-    >
-      <${For} each=${TYPE}>
-        ${(field) => html`<label class="lattice-setting">
-          <span class="lattice-settings-label">${field.label}</span>
+    return html`<div class="lattice-theme-edit">
+      <${For} each=${FONTS}>${(field) => FontField({ own, ...field })}<//>
+      <label class="lattice-setting">
+        <span class="lattice-settings-label">editor size</span>
+        <span class="lattice-size">
           <input
-            value=${() => changed(field.key)}
-            placeholder=${() => now(field.key)}
-            spellcheck="false"
-            onChange=${(event) => set(field.key, event.currentTarget.value)}
-            onKeyDown=${(event) => event.key === "Enter" && event.currentTarget.blur()}
+            type="number"
+            min="8"
+            max="32"
+            step="1"
+            value=${size}
+            placeholder=${() => parseFloat(theirs("--editor-font-size")) || 14}
+            onChange=${(event) => {
+              const n = parseFloat(event.currentTarget.value);
+              own.set(EDITOR_SIZE, n > 0 ? `${n}px` : "", { now: true });
+            }}
           />
-        </label>`}
-      <//>
+          px
+        </span>
+      </label>
       <div class="lattice-setting">
         <span class="lattice-settings-label">colours</span>
         <span class="lattice-colours">
           <${For} each=${colours}>
-            ${(field) => html`<label class="lattice-colour" title=${() => `${field.label}${changed(field.key) ? " (edited)" : ""}`}>
+            ${(field) => html`<label
+              class="lattice-colour"
+              title=${() => `${field.label}${own.variables()[field.key] ? " (changed)" : ""}`}
+            >
               <input
                 type="color"
-                value=${() => hexOf(now(field.key))}
-                onInput=${(event) => colour(field.key, event.currentTarget.value, false)}
-                onChange=${(event) => colour(field.key, event.currentTarget.value, true)}
+                value=${() => hexOf(string(own.variables()[field.key]) || theirs(field.key))}
+                onInput=${(event) => own.set(field.key, event.currentTarget.value)}
               />
               <span>${field.label}</span>
             </label>`}
@@ -370,26 +370,37 @@ export function SettingsPage(props) {
       </div>
       <div class="lattice-setting">
         <span class="lattice-settings-label"></span>
-        <button
-          class="lattice-button"
-          disabled=${() => !showing()?.own?.changed}
-          onClick=${() =>
-            doc()?.handle.change((theme) => {
-              theme.variables = {};
-            })}
-        >
-          as it was
-        </button>
+        <button class="lattice-button" disabled=${() => !own.changed()} onClick=${() => own.reset()}>as it was</button>
       </div>
-    <//>`;
+    </div>`;
   }
 
+  const [editing, setEditing] = createSignal(false);
   function Theme() {
+    const own = () => themes.chosen()?.own && themes.chosen();
     return html`<section class="lattice-settings-section">
       <h2>theme</h2>
-      <${Choice} which="light" />
-      <${Choice} which="dark" />
-      <${Changes} />
+      <${Cards} />
+      <${Show}
+        when=${own}
+        keyed
+        fallback=${html`<button
+          class="lattice-button lattice-theme-edit-button"
+          disabled=${() => !themes.ready() || editing()}
+          onClick=${async () => {
+            setEditing(true);
+            try {
+              await themes.edit();
+            } finally {
+              setEditing(false);
+            }
+          }}
+        >
+          ${icon("pencil", 12)} edit
+        </button>`}
+      >
+        ${(theme) => Edit(theme)}
+      <//>
     </section>`;
   }
 
