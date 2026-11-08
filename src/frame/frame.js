@@ -24,10 +24,12 @@ import {
 } from "./knitoutjs/core/migrate.js";
 import { createDoc, findSoon, urlFromText } from "./knitoutjs/core/patchwork-docs.js";
 import { seedActive } from "./knitoutjs/core/active.js";
+import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
 import { folderTitle } from "./knitoutjs/core/folder.js";
 import { directoryTitle } from "./knitoutjs/core/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
 import { icon } from "./knitoutjs/core/icons.js";
+import { tooltips } from "./knitoutjs/core/tooltip.js";
 
 // latticework's, too, for its menus, before any project has brought it
 const STYLESHEETS = ["./knitoutjs/core/latticework.css", "./shell.css"].map(
@@ -99,6 +101,7 @@ export default function LatticeFrameTool(handle, element) {
     return link;
   });
   element.append(...links);
+  tooltips();
 
   // ── projects: the ones in the account's root folder ───────────────────
 
@@ -115,8 +118,23 @@ export default function LatticeFrameTool(handle, element) {
     homeHandle.on("change", readHome);
     setHome(homeHandle);
     await moveOldWorkspace();
+    openShared();
   }
   openHome();
+
+  // a share link (files.js's shareUrl): #folder=<a project's files>. you get
+  // your own project on them, and the link's taken out of the address
+  async function openShared() {
+    const params = new URLSearchParams(location.hash.slice(1));
+    const shared = params.get("folder");
+    if (!shared || !homeHandle) return;
+    params.delete("folder");
+    const rest = params.toString();
+    history.replaceState(history.state, "", `${location.pathname}${location.search}${rest ? `#${rest}` : ""}`);
+    say("finding it…");
+    say(await addFromUrl(shared), true);
+  }
+  addEventListener("hashchange", openShared);
 
   // what the root folder links to: {url, name, type}
   const entries = createMemo(() =>
@@ -222,9 +240,20 @@ export default function LatticeFrameTool(handle, element) {
 
   const [renaming, setRenaming] = createSignal(null);
 
+  // your project on a folder (or directory), if you've one already
+  async function projectOn(filesUrl) {
+    const found = await Promise.all(
+      projects()
+        .filter((entry) => PROJECT_TYPES.includes(entry.type))
+        .map(async (entry) => ({ entry, doc: await findSoon(repo, entry.url, 3000) })),
+    );
+    return found.find(({ doc }) => String(doc?.files ?? "") === filesUrl)?.entry.url ?? null;
+  }
+
   // a project from anywhere, by its url (or a patchwork link to one): it goes
-  // in the root folder under its own title. a folder or a directory becomes a
-  // new project, with it as its files. says what was wrong, or nothing
+  // in the root folder under its own title. a folder or a directory is a
+  // project's files: you get your own project on it (the one you have, if
+  // you've one). says what was wrong, or nothing
   async function addFromUrl(text) {
     const url = urlFromText(text);
     if (!url) return "that isn't an automerge url";
@@ -240,7 +269,9 @@ export default function LatticeFrameTool(handle, element) {
       choose(url);
       return null;
     }
-    if (type === "folder" && isOldLatticeFolder(doc)) {
+    // an old lattice project still to be updated (one that's been updated is
+    // a folder like any other, linking back to its project)
+    if (type === "folder" && isOldLatticeFolder(doc) && !isValidAutomergeUrl(String(doc.project ?? ""))) {
       const updated = await updatedTo(doc, repo);
       if (updated) return addFromUrl(updated);
       addEntry({ name: folderTitle(doc), type: "folder", url });
@@ -248,6 +279,11 @@ export default function LatticeFrameTool(handle, element) {
       return null;
     }
     if (type === "folder" || type === "directory") {
+      const mine = await projectOn(url);
+      if (mine) {
+        choose(mine);
+        return null;
+      }
       const title = type === "folder" ? folderTitle(doc) : directoryTitle(doc);
       const project = await createProject(repo, { type: "lattice:project", title, files: url, hive });
       addEntry({ name: title, type: "lattice:project", url: project.url });
@@ -270,8 +306,8 @@ export default function LatticeFrameTool(handle, element) {
 
   // ── sidebars ───────────────────────────────────────────────────────────
 
-  // the projects and the project's files are resizable; the inspector isn't
-  // (yet). each opens and closes on its own
+  // the projects, the project's files and the inspector are each resizable,
+  // and each opens and closes on its own
   const folders = sidebarState("folders", 200);
   const files = sidebarState("files", 200);
   const inspector = sidebarState("inspector", 300);
@@ -363,8 +399,9 @@ export default function LatticeFrameTool(handle, element) {
         onOpen: (open) => (openInProject = open),
         ...latticeOptions(baseRepo),
       });
-      const unmountInspector = render(
-        () => html`<${Inspector}
+      const unmountInspector = render(() => {
+        createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));
+        return html`<${Resizer} sidebar=${inspector} side="left" /><${Inspector}
           sections=${[
             { id: "drafts", name: "drafts", render: () => html`<${Drafts} />` },
             {
@@ -377,9 +414,8 @@ export default function LatticeFrameTool(handle, element) {
               />`,
             },
           ]}
-        />`,
-        inspectorElement,
-      );
+        />`;
+      }, inspectorElement);
       unmount = () => {
         unmountInspector();
         unmountProject();
@@ -478,9 +514,11 @@ export default function LatticeFrameTool(handle, element) {
     </span>`;
   }
 
-  // the projects' +: a new project, or one from anywhere by its url
+  // the projects' +: a new project, or one from anywhere by its url, or from
+  // a .patchworkfolder. `adding` says what it's doing, while it is
   let homeMenu;
-  const [adding, setAdding] = createSignal(false);
+  let archiveInput;
+  const [adding, setAdding] = createSignal(null);
   const [addProblem, setAddProblem] = createSignal(null);
 
   function openHomeMenu(event) {
@@ -494,30 +532,101 @@ export default function LatticeFrameTool(handle, element) {
   async function onAddFromUrl(event) {
     event.preventDefault();
     const input = event.currentTarget.elements.url;
-    setAdding(true);
+    setAdding("finding it…");
     const problem = await addFromUrl(input.value);
-    setAdding(false);
+    setAdding(null);
     setAddProblem(problem);
     if (problem) return input.focus();
     input.value = "";
     homeMenu.hidePopover();
   }
 
-  // right click on a project
+  // under the projects: how a .patchworkfolder dropped or pasted there is
+  // going, or what went wrong with it
+  const [note, setNote] = createSignal(null);
+  let noteTimer = null;
+  function say(text, problem = false) {
+    clearTimeout(noteTimer);
+    setNote(text ? { text, problem } : null);
+    if (text && problem) noteTimer = setTimeout(() => setNote(null), 8000);
+  }
+
+  // .patchworkfolders: each unpacked into new docs, and what it's of added as
+  // if by its url. says what went wrong, or nothing
+  async function addArchives(files) {
+    const archives = [...(files ?? [])].filter(isArchive);
+    if (!archives.length) return "that's not a .patchworkfolder";
+    for (const file of archives) {
+      let root;
+      try {
+        root = await unpackArchive(baseRepo, file, hive);
+      } catch (error) {
+        console.error("[lattice] couldn't unpack", file.name, error);
+        return `couldn't unpack ${file.name}: ${String(error?.message ?? error)}`;
+      }
+      const problem = await addFromUrl(root);
+      if (problem) return problem;
+    }
+    return null;
+  }
+
+  // chosen, dropped or pasted: how it's going shows in the + menu, if that's
+  // open, else under the projects
+  async function takeArchives(files) {
+    const inMenu = homeMenu?.matches(":popover-open");
+    if (inMenu) {
+      setAddProblem(null);
+      setAdding("unpacking it…");
+    } else say("unpacking…");
+    const problem = await addArchives(files);
+    if (!inMenu) return say(problem, true);
+    setAdding(null);
+    setAddProblem(problem);
+    if (!problem) homeMenu.hidePopover();
+  }
+
+  const hasFiles = (event) => [...(event.dataTransfer?.types ?? [])].includes("Files");
+  const [dropping, setDropping] = createSignal(false);
+
+  // right click on a project. what's shared is its files (its folder): whoever
+  // opens it gets a project of their own on them. one from before is shared
+  // as it is
   let projectMenu;
   const [menuProject, setMenuProject] = createSignal(null);
+  const [menuFiles, setMenuFiles] = createSignal(null);
+  const [packing, setPacking] = createSignal(null);
 
   function openProjectMenu(event, project) {
     event.preventDefault();
     setMenuProject(project);
-    projectMenu.style.top = `${Math.min(event.clientY, innerHeight - 100)}px`;
-    projectMenu.style.left = `${Math.min(event.clientX, innerWidth - 220)}px`;
+    setPacking(null);
+    setMenuFiles(isOld(project) ? project.url : null);
+    if (!isOld(project)) {
+      findSoon(repo, project.url).then((doc) => {
+        const files = String(doc?.files ?? "");
+        if (menuProject() === project && isValidAutomergeUrl(files)) setMenuFiles(files);
+      });
+    }
+    projectMenu.style.top = `${Math.min(event.clientY, innerHeight - 140)}px`;
+    projectMenu.style.left = `${Math.min(event.clientX, innerWidth - 320)}px`;
     projectMenu.showPopover();
   }
 
   function copyFromMenu(text) {
     navigator.clipboard?.writeText(text);
     projectMenu.hidePopover();
+  }
+
+  async function downloadFromMenu() {
+    setPacking("packing it…");
+    try {
+      await downloadArchive(baseRepo, menuProject().url, hive);
+      setPacking(null);
+      projectMenu.hidePopover();
+    } catch (error) {
+      console.error("[lattice] couldn't pack it", error);
+      setPacking(`couldn't: ${String(error?.message ?? error)}`);
+    }
   }
 
   function ProjectMenu() {
@@ -528,16 +637,30 @@ export default function LatticeFrameTool(handle, element) {
     >
       <button
         class="knitoutjs-menu-item"
-        onClick=${() => copyFromMenu(shareUrl(menuProject().url))}
+        disabled=${() => !menuFiles()}
+        onClick=${() => copyFromMenu(shareUrl(menuFiles()))}
       >
         ${icon("link")}
         copy share url
-        <small>a link to it on this site</small>
+        <small>a link here · they get their own</small>
       </button>
-      <button class="knitoutjs-menu-item" onClick=${() => copyFromMenu(menuProject().url)}>
+      <button
+        class="knitoutjs-menu-item"
+        disabled=${() => !menuFiles()}
+        onClick=${() => copyFromMenu(menuFiles())}
+      >
         ${icon("copy")}
         copy automerge url
-        <small>${() => menuProject()?.url.slice(0, 20)}…</small>
+        <small>${() => (menuFiles() ? `${menuFiles().slice(0, 20)}…` : "…")}</small>
+      </button>
+      <button
+        class="knitoutjs-menu-item"
+        disabled=${() => packing() === "packing it…"}
+        onClick=${downloadFromMenu}
+      >
+        ${icon("download")}
+        download
+        <small>${() => packing() ?? ".patchworkfolder, files and all"}</small>
       </button>
     </div>`;
   }
@@ -556,18 +679,35 @@ export default function LatticeFrameTool(handle, element) {
         <small>an empty one</small>
       </button>
       <div class="knitoutjs-menu-heading">from anywhere</div>
+      <button class="knitoutjs-menu-item" disabled=${() => !!adding()} onClick=${() => archiveInput.click()}>
+        ${icon("file")}
+        .patchworkfolder
+        <small>from a file</small>
+      </button>
+      <input
+        type="file"
+        accept=".patchworkfolder,.zip"
+        multiple
+        hidden
+        ref=${(el) => (archiveInput = el)}
+        onChange=${(event) => {
+          const files = [...event.currentTarget.files];
+          event.currentTarget.value = "";
+          if (files.length) takeArchives(files);
+        }}
+      />
       <form class="knitoutjs-menu-url" onSubmit=${onAddFromUrl}>
         <input
           name="url"
           placeholder="automerge:… url"
-          aria-label="a project's, folder's or directory's automerge url"
+          aria-label="a project's, folder's or directory's automerge url, or a .patchworkfolder pasted"
           autocomplete="off"
-          disabled=${adding}
+          disabled=${() => !!adding()}
           onInput=${() => setAddProblem(null)}
         />
       </form>
       <p class="knitoutjs-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
-        ${() => addProblem() ?? (adding() ? "finding it…" : "a project, folder or directory")}
+        ${() => addProblem() ?? adding() ?? "a project, folder or directory · or drop or paste a .patchworkfolder"}
       </p>
     </div>`;
   }
@@ -577,6 +717,28 @@ export default function LatticeFrameTool(handle, element) {
       class="lattice-sidebar"
       aria-label="projects"
       style=${() => ({ width: `${folders.width()}px` })}
+      data-dropping=${() => (dropping() ? "" : undefined)}
+      onDragOver=${(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setDropping(true);
+      }}
+      onDragLeave=${(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setDropping(false);
+      }}
+      onDrop=${(event) => {
+        if (!hasFiles(event)) return;
+        event.preventDefault();
+        setDropping(false);
+        takeArchives(event.dataTransfer.files);
+      }}
+      onPaste=${(event) => {
+        const files = [...(event.clipboardData?.files ?? [])];
+        if (!files.some(isArchive)) return;
+        event.preventDefault();
+        takeArchives(files);
+      }}
     >
       <${Resizer} sidebar=${folders} />
       <${HomeMenu} />
@@ -599,6 +761,11 @@ export default function LatticeFrameTool(handle, element) {
           fallback=${html`<p class="lattice-tree-empty">no projects yet</p>`}
         >
           ${(project) => html`<${ProjectItem} project=${project} />`}
+        <//>
+        <${Show} when=${note}>
+          <p class="lattice-tree-note" data-problem=${() => (note()?.problem ? "" : undefined)}>
+            ${() => note()?.text}
+          </p>
         <//>
       </div>
       <div class="lattice-tree-heading lattice-system">system</div>
@@ -662,6 +829,8 @@ export default function LatticeFrameTool(handle, element) {
 
   return () => {
     homeHandle?.off("change", readHome);
+    removeEventListener("hashchange", openShared);
+    clearTimeout(noteTimer);
     dispose?.();
     providers.remove();
     for (const link of links) link.remove();

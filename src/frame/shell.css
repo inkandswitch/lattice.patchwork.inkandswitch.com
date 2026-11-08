@@ -127,6 +127,13 @@
 		border-right: 1px solid var(--lattice-rule);
 	}
 
+	/* a .patchworkfolder over it, to be dropped */
+	& .lattice-sidebar[data-dropping] {
+		background: var(--lattice-current);
+		outline: 2px dashed var(--studio-primary, #007aff);
+		outline-offset: -4px;
+	}
+
 	& .lattice-tree-heading {
 		display: flex;
 		align-items: center;
@@ -220,6 +227,18 @@
 		color: var(--lattice-muted);
 	}
 
+	/* how a .patchworkfolder dropped or pasted is going */
+	& .lattice-tree-note {
+		margin: 4px 12px 4px 24px;
+		color: var(--lattice-muted);
+		font-style: italic;
+		overflow-wrap: anywhere;
+
+		&[data-problem] {
+			color: var(--studio-danger-text, #e45649);
+		}
+	}
+
 	& .lattice-icon-button {
 		display: grid;
 		place-items: center;
@@ -280,11 +299,19 @@
 		&[data-dragging] {
 			background: color-mix(in oklch, var(--studio-primary, #007aff) 45%, transparent);
 		}
+
+		/* the inspector's, down the right: along its left edge */
+		&[data-side="left"] {
+			right: auto;
+			left: -3px;
+		}
 	}
 
 	/* ── the inspector ────────────────────────────────────────────────── */
 
+	/* its width is the user's (sidebars.js), as the others' are */
 	& .lattice-inspector {
+		position: relative;
 		display: flex;
 		flex: none;
 		flex-direction: column;

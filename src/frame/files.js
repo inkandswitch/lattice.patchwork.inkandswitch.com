@@ -5,9 +5,10 @@ import { fileExtension as fileExtensionOf } from "./knitoutjs/core/files.js";
 // all of core's, but fileExtension: lattice's own (below) is the one
 export * from "./knitoutjs/core/files.js";
 
-// a link to a doc on this site, as patchwork's router reads them
-export function shareUrl(url) {
-  return `${location.origin}/#doc=${url}`;
+// a link to a project's files (its folder or directory) on this site: whoever
+// opens it gets a project of their own on them (frame.js's openShared)
+export function shareUrl(filesUrl) {
+  return `${location.origin}/#folder=${filesUrl}`;
 }
 
 // "js", "k", or whatever else the file says it is. a latticex terminal isn't
