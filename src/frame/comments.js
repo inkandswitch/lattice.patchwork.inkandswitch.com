@@ -27,10 +27,10 @@ function Thread(props) {
 }
 
 /**
- * the comments on every doc showing in the workspace, grouped by doc. it asks
+ * the comments on every doc showing in the project, grouped by doc. it asks
  * the project's comments provider for all of them (it watches every doc
  * mounted beneath it) and keeps the ones on docs in `showing`, a list of
- * { url, name } from the workspace (a signal: solid's html hands it over as
+ * { url, name } from the project (a signal: solid's html hands it over as
  * a getter, so it's read off props). `open(url)` brings a doc's pane forward
  */
 export function CommentsInspector(props) {
@@ -63,7 +63,7 @@ export function CommentsInspector(props) {
       ${(group) => html`<section class="lattice-comments-doc">
         <button
           class="lattice-comments-doc-name"
-          title="bring it forward in the workspace"
+          title="bring it forward in the project"
           onClick=${() => open?.(group.url)}
         >
           ${group.name}

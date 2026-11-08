@@ -1,17 +1,35 @@
-import { createSignal, createMemo, createEffect, onCleanup, For, Show } from "solid-js";
+import { createSignal, createMemo, createEffect, onCleanup, untrack, For, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { nestProviders, frameProviders, projectProviders } from "./providers.js";
-import { folderLink, folderTitle, shareUrl, urlFromText } from "./files.js";
-import { mountWorkspace } from "./workspace.js";
+import { shareUrl } from "./files.js";
+import { latticeOptions } from "./project.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
-import { Resizer, remember, remembered, sidebarState } from "./sidebars.js";
+import {
+  PROJECT_TYPES,
+  OLD_KNITOUTJS_TYPES,
+  projectTitle,
+  typeOf,
+} from "./knitoutjs/core/project.js";
+import { createProject, mountProject, mountUpdate } from "./knitoutjs/core/project-view.js";
+import {
+  isOldKnitoutjs,
+  isOldLatticeFolder,
+  partsFrom,
+  updateKnitoutjs,
+  updateLatticeFolder,
+  updatedTo,
+} from "./knitoutjs/core/migrate.js";
+import { createDoc, findSoon, urlFromText } from "./knitoutjs/core/patchwork-docs.js";
+import { folderTitle } from "./knitoutjs/core/folder.js";
+import { directoryTitle } from "./knitoutjs/core/directory.js";
+import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
 import { icon } from "./knitoutjs/core/icons.js";
 
-// frame.css too, for its menus, before any workspace has brought it
-const STYLESHEETS = ["./frame.css", "./shell.css"].map(
+// latticework's, too, for its menus, before any project has brought it
+const STYLESHEETS = ["./knitoutjs/core/latticework.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 
@@ -52,14 +70,25 @@ function sidebarIcon(at) {
   </svg>`;
 }
 
+// the types of the root folder's entries that are projects: knitoutjs's and
+// lattice's, and knitoutjs's from before (which show a button to update them).
+// lattice's from before are folders, and have to be looked in
+const ENTRY_TYPES = [...PROJECT_TYPES, ...OLD_KNITOUTJS_TYPES];
+
+const isOld = (entry) => entry.type === "folder" || OLD_KNITOUTJS_TYPES.includes(entry.type);
+
 /**
  * lattice: the account's frame. a top bar; down the left, projects (the
- * folders in the account's `lattice.projects` folder) and /system; in the
- * middle the open project, its files beside its workspace; down the right,
- * inspectors for what's in the workspace (so far, its drafts)
+ * projects in the account's root folder) and /system; in the middle the open
+ * project, its files beside its panes; down the right, inspectors for what's
+ * in the project (its drafts, and comments)
  */
 export default function LatticeFrameTool(handle, element) {
   const repo = element.repo;
+  // there's no draft overlay above a frame, but updates go to the doc itself
+  // all the same
+  const baseRepo = repo.baseRepo ?? repo;
+  const hive = element.hive;
   const accountUrl = handle.url;
 
   const links = STYLESHEETS.map((href) => {
@@ -70,7 +99,7 @@ export default function LatticeFrameTool(handle, element) {
   });
   element.append(...links);
 
-  // ── projects: a folder of lattice's own, and the projects in it ─────────
+  // ── projects: the ones in the account's root folder ───────────────────
 
   const [home, setHome] = createSignal(null);
   const [homeDoc, setHomeDoc] = createSignal(null);
@@ -78,7 +107,9 @@ export default function LatticeFrameTool(handle, element) {
   const readHome = () => setHomeDoc(homeHandle.doc() ?? null);
 
   async function openHome() {
-    homeHandle = await repo.find(await projectsFolder());
+    const rootFolderUrl = String(handle.doc()?.rootFolderUrl ?? "");
+    if (!isValidAutomergeUrl(rootFolderUrl)) return;
+    homeHandle = await repo.find(rootFolderUrl);
     readHome();
     homeHandle.on("change", readHome);
     setHome(homeHandle);
@@ -86,117 +117,60 @@ export default function LatticeFrameTool(handle, element) {
   }
   openHome();
 
-  // what lattice keeps on the account is under its `lattice` key: so far,
-  // `projects`, the folder its projects are in. the first time, that folder's
-  // made, linking to the projects lattice kept in the account's root folder
-  // before it had one of its own (the root folder's left as it was)
-  async function projectsFolder() {
-    const kept = handle.doc()?.lattice?.projects;
-    if (kept && isValidAutomergeUrl(String(kept))) return String(kept);
-    const folder = await repo.create2({
-      "@patchwork": { type: "folder" },
-      title: "lattice projects",
-      docs: await projectsFromRootFolder(),
-    });
-    let url = folder.url;
-    handle.change((doc) => {
-      // (unless one was made meanwhile)
-      const made = doc.lattice?.projects;
-      if (made && isValidAutomergeUrl(String(made))) {
-        url = String(made);
-        return;
-      }
-      doc.lattice ??= {};
-      doc.lattice.projects = folder.url;
-    });
-    return url;
-  }
+  // what the root folder links to: {url, name, type}
+  const entries = createMemo(() =>
+    (Array.isArray(homeDoc()?.docs) ? homeDoc().docs : [])
+      .map((entry) => ({
+        url: String(entry?.url ?? ""),
+        name: String(entry?.name ?? "untitled"),
+        type: String(entry?.type ?? ""),
+      }))
+      .filter((entry) => isValidAutomergeUrl(entry.url)),
+  );
 
-  // the folders in the account's root folder that lattice made projects of:
-  // they have a workspace (or, from before workspaces, a layout)
-  async function projectsFromRootFolder() {
-    const rootUrl = String(handle.doc()?.rootFolderUrl ?? "");
-    if (!isValidAutomergeUrl(rootUrl)) return [];
-    const root = await findSoon(rootUrl);
-    const folders = (Array.isArray(root?.docs) ? root.docs : []).filter(
-      (entry) => String(entry?.type) === "folder" && isValidAutomergeUrl(String(entry.url)),
-    );
-    const projects = await Promise.all(
-      folders.map(async (entry) => {
-        const doc = await findSoon(String(entry.url));
-        if (!doc?.workspace && !doc?.layout) return null;
-        return { name: String(entry.name ?? folderTitle(doc)), type: "folder", url: String(entry.url) };
-      }),
-    );
-    return projects.filter(Boolean);
-  }
-
-  // a doc, or null if it can't be found in a while
-  async function findSoon(url, ms = 15000) {
-    try {
-      const later = new Promise((_, reject) => setTimeout(reject, ms));
-      return (await Promise.race([repo.find(url), later])).doc() ?? null;
-    } catch {
-      return null;
+  // which of the root folder's folders are lattice projects from before: a
+  // folder's url → true or false, once it's been looked in
+  const [looked, setLooked] = createSignal({});
+  createEffect(() => {
+    for (const entry of entries()) {
+      if (entry.type !== "folder" || entry.url in untrack(looked)) continue;
+      setLooked((all) => ({ ...all, [entry.url]: null }));
+      findSoon(repo, entry.url).then((doc) =>
+        setLooked((all) => ({ ...all, [entry.url]: isOldLatticeFolder(doc) })),
+      );
     }
-  }
-
-  // a project is a folder in lattice's projects folder
-  const projects = createMemo(() => {
-    const doc = homeDoc();
-    return (Array.isArray(doc?.docs) ? doc.docs : [])
-      .filter((entry) => String(entry?.type) === "folder")
-      .map((entry) => ({ url: String(entry.url), name: String(entry.name ?? "untitled") }))
-      .filter((project) => isValidAutomergeUrl(project.url));
   });
 
-  // a project's workspace (its layout) is a doc of its own, linked from its
-  // folder as `workspace`. it's what drafts are of: drafts don't do folders,
-  // and the overlay forks the folder and the files into a draft anyway, as
-  // they're resolved beneath it
-  async function newWorkspace(layout = null) {
-    return (await repo.create2({ "@patchwork": { type: "lattice:workspace" }, layout })).url;
+  const projects = createMemo(() =>
+    entries().filter(
+      (entry) => ENTRY_TYPES.includes(entry.type) || (entry.type === "folder" && looked()[entry.url]),
+    ),
+  );
+
+  // an entry in the root folder, changed: where it points, and what it is
+  function changeEntry(url, change) {
+    homeHandle.change((doc) => {
+      for (const entry of doc.docs ?? []) {
+        if (String(entry?.url) !== url) continue;
+        if (change.url && String(entry.url) !== change.url) entry.url = change.url;
+        if (change.type && String(entry.type) !== change.type) entry.type = change.type;
+        if (change.name && String(entry.name) !== change.name) entry.name = change.name;
+      }
+    });
   }
 
-  async function workspaceFor(projectUrl) {
-    const folder = await repo.find(projectUrl);
-    const linked = folder.doc()?.workspace;
-    if (linked && isValidAutomergeUrl(String(linked))) return String(linked);
-    // a project from before workspaces kept its layout on the folder
-    const old = folder.doc()?.layout;
-    const url = await newWorkspace(old ? JSON.parse(JSON.stringify(old)) : null);
-    folder.change((doc) => {
-      doc.workspace = url;
-      delete doc.layout;
-    });
-    return url;
-  }
-
-  // a project: a folder linking to some files (the same docs, not
-  // copies), and a workspace with a copy of a layout of them
-  async function addProject(name, urls = [], layout = null) {
-    const links = await Promise.all(
-      urls.map(async (url) => folderLink(url, (await repo.find(url)).doc())),
-    );
-    const project = await repo.create2({
-      "@patchwork": { type: "folder" },
-      title: name,
-      docs: links,
-      workspace: await newWorkspace(layout ? JSON.parse(JSON.stringify(layout)) : null),
-    });
+  function addEntry(entry) {
     homeHandle.change((doc) => {
       doc.docs ??= [];
-      doc.docs.push({ name, type: "folder", url: project.url });
+      doc.docs.push(entry);
     });
-    return project.url;
   }
 
-  // the files and layout of something from before projects: the account doc
-  // (as the frame kept them there), or a knitoutjs-panes doc
-  function oldFiles(doc) {
-    return (Array.isArray(doc?.files) ? doc.files : [])
-      .map(String)
-      .filter((url) => isValidAutomergeUrl(url));
+  async function newProject() {
+    const project = await createProject(repo, { type: "lattice:project", hive });
+    addEntry({ name: "untitled", type: "lattice:project", url: project.url });
+    choose(project.url);
+    setRenaming(project.url);
   }
 
   // before projects, the frame kept its files and layout on the account
@@ -204,7 +178,18 @@ export default function LatticeFrameTool(handle, element) {
   async function moveOldWorkspace() {
     const account = handle.doc();
     if (!account?.layout && !account?.files?.length) return;
-    await addProject("knitting", oldFiles(account), account.layout);
+    const title = "knitting";
+    const parts = await partsFrom(
+      { title, urls: Array.isArray(account.files) ? account.files : [], tree: account.layout },
+      baseRepo,
+      hive,
+    );
+    const project = await createDoc(
+      baseRepo,
+      { "@patchwork": { type: "lattice:project" }, title, ...parts },
+      hive,
+    );
+    addEntry({ name: title, type: "lattice:project", url: project.url });
     handle.change((doc) => {
       delete doc.layout;
       delete doc.files;
@@ -213,12 +198,20 @@ export default function LatticeFrameTool(handle, element) {
 
   const projectKey = `lattice:${accountUrl}:project`;
   const [chosen, setChosen] = createSignal(remembered(projectKey, null));
-  // the chosen project, while it's still in projects; else the first one
+  // the chosen project, while it's still in the root folder; else the first
   const current = createMemo(() => {
     const all = projects();
-    return all.find((project) => project.url === chosen()) ?? all[0] ?? null;
+    const found = all.find((project) => project.url === chosen());
+    if (found) return found;
+    // (a folder that's still being looked in might be it)
+    const looking = entries().some(
+      (entry) => entry.url === chosen() && entry.type === "folder" && looked()[entry.url] == null,
+    );
+    return looking ? null : (all[0] ?? null);
   });
   const currentUrl = createMemo(() => current()?.url ?? null);
+  // the project shown changes when it does, or when it's updated
+  const currentKey = createMemo(() => (current() ? `${current().url} ${current().type}` : null));
 
   function choose(url) {
     setChosen(url);
@@ -227,60 +220,47 @@ export default function LatticeFrameTool(handle, element) {
 
   const [renaming, setRenaming] = createSignal(null);
 
-  // a knitoutjs-panes doc found by its url, which could be a project (see
-  // importPanes)
-  const [panes, setPanes] = createSignal(null);
-
-  // a folder from anywhere (someone else's project, say), by its url: it goes
-  // in projects under its own title. says what was wrong, or nothing
-  async function addFolder(text) {
-    setPanes(null);
+  // a project from anywhere, by its url (or a patchwork link to one): it goes
+  // in the root folder under its own title. a folder or a directory becomes a
+  // new project, with it as its files. says what was wrong, or nothing
+  async function addFromUrl(text) {
     const url = urlFromText(text);
     if (!url) return "that isn't an automerge url";
     if (projects().some((project) => project.url === url)) {
       choose(url);
       return null;
     }
-    let doc;
-    try {
-      const found = repo.find(url);
-      const later = new Promise((_, reject) => setTimeout(reject, 15000));
-      doc = (await Promise.race([found, later])).doc();
-    } catch {
-      return "couldn't find that doc";
+    const doc = await findSoon(repo, url);
+    if (!doc) return "couldn't find that doc";
+    const type = typeOf(doc);
+    if (ENTRY_TYPES.includes(type)) {
+      addEntry({ name: projectTitle(doc), type, url });
+      choose(url);
+      return null;
     }
-    const type = String(doc?.["@patchwork"]?.type ?? "");
-    if (type === "knitoutjs-panes") setPanes(doc);
-    if (type !== "folder") return `that's ${type ? `a ${type}` : "not a folder"}`;
-    homeHandle.change((home) => {
-      home.docs ??= [];
-      home.docs.push({ name: folderTitle(doc), type: "folder", url });
-    });
-    choose(url);
-    return null;
+    if (type === "folder" && isOldLatticeFolder(doc)) {
+      const updated = await updatedTo(doc, repo);
+      if (updated) return addFromUrl(updated);
+      addEntry({ name: folderTitle(doc), type: "folder", url });
+      choose(url);
+      return null;
+    }
+    if (type === "folder" || type === "directory") {
+      const title = type === "folder" ? folderTitle(doc) : directoryTitle(doc);
+      const project = await createProject(repo, { type: "lattice:project", title, files: url, hive });
+      addEntry({ name: title, type: "lattice:project", url: project.url });
+      choose(project.url);
+      return null;
+    }
+    return "that's not a project, folder or directory";
   }
 
-  // a knitoutjs-panes doc is a project from before lattice: its files and
-  // layout become a project of their own (the panes doc stays as it was)
-  async function importPanes(doc) {
-    choose(await addProject(folderTitle(doc), oldFiles(doc), doc.layout));
-  }
-
-  async function newProject() {
-    const url = await addProject("untitled");
-    choose(url);
-    setRenaming(url);
-  }
-
-  // the name shows in projects (the link) and on the folder itself (its title)
+  // the name shows in the root folder (the link) and on the project itself
   async function renameProject(url, name) {
     setRenaming(null);
     name = name.trim().replace(/^\/+/, "");
     if (!name) return;
-    homeHandle.change((doc) => {
-      const entry = doc.docs?.find((entry) => String(entry.url) === url);
-      if (entry) entry.name = name;
-    });
+    changeEntry(url, { name });
     (await repo.find(url)).change((doc) => {
       doc.title = name;
     });
@@ -288,54 +268,98 @@ export default function LatticeFrameTool(handle, element) {
 
   // ── sidebars ───────────────────────────────────────────────────────────
 
-  // the folders and the project's files are resizable; the inspector isn't
+  // the projects and the project's files are resizable; the inspector isn't
   // (yet). each opens and closes on its own
   const folders = sidebarState("folders", 200);
   const files = sidebarState("files", 200);
   const inspector = sidebarState("inspector", 300);
 
-  // ── the open project: its own providers, with its workspace doc as the
-  //    draft host, around its files, workspace and inspector, so its drafts
-  //    are drafts of all of it ─────────────────────────────────────────────
+  // ── the open project ───────────────────────────────────────────────────
 
   let main;
 
-  function mountProject(url) {
-    main.replaceChildren();
+  // a project from before: a button to update it, and nothing else. one
+  // that's been updated already (somewhere else) is pointed at instead
+  function mountOld(entry) {
+    let dead = false;
+    let unmount = null;
+    const box = document.createElement("div");
+    box.className = "lattice-panes";
+    main.append(box);
+
+    (async () => {
+      const doc = await findSoon(repo, entry.url);
+      if (dead) return;
+      if (entry.type === "folder") {
+        const updated = doc && (await updatedTo(doc, repo));
+        if (dead) return;
+        if (updated) return moved(entry, updated, "lattice:project");
+      } else if (doc && !isOldKnitoutjs(doc) && PROJECT_TYPES.includes(typeOf(doc))) {
+        return changeEntry(entry.url, { type: typeOf(doc) });
+      }
+      unmount = mountUpdate(box, async () => {
+        if (entry.type === "folder") {
+          const folder = await baseRepo.find(entry.url);
+          const url = await updateLatticeFolder(folder, baseRepo, { title: entry.name, hive });
+          moved(entry, url, "lattice:project");
+        } else {
+          const project = await baseRepo.find(entry.url);
+          await updateKnitoutjs(project, baseRepo, hive);
+          changeEntry(entry.url, { type: typeOf(project.doc()) });
+        }
+      });
+    })();
+
+    return () => {
+      dead = true;
+      unmount?.();
+      box.remove();
+    };
+  }
+
+  // the root folder's entry for an old project points at what it became
+  function moved(entry, url, type) {
+    changeEntry(entry.url, { url, type });
+    if (chosen() === entry.url) choose(url);
+  }
+
+  // a project: its own providers, with the project doc as the draft host,
+  // around its files, panes and inspector, so its drafts are drafts of all
+  // of it
+  function mountCurrent(entry) {
+    if (isOld(entry)) return mountOld(entry);
     let dead = false;
     let providers = null;
     let unmount = null;
 
-    workspaceFor(url).then(async (workspaceUrl) => {
-      if (dead) return;
-      providers = nestProviders(main, projectProviders(workspaceUrl));
+    (async () => {
+      providers = nestProviders(main, projectProviders(entry.url));
       const inner = await providers.ready;
-      if (!inner) return;
+      if (!inner || dead) return;
       // the innermost provider's repo resolves through the draft overlay, so
-      // the workspace reads and writes whichever draft is checked out
+      // the project reads and writes whichever draft is checked out
       const projectRepo = inner.repo ?? repo;
-      const [workspace, folder] = await Promise.all([
-        projectRepo.find(workspaceUrl),
-        projectRepo.find(url),
-      ]);
+      const project = await projectRepo.find(entry.url);
       if (dead) return;
 
       const area = document.createElement("div");
-      area.className = "lattice-workspace";
-      const inspector = document.createElement("aside");
-      inspector.className = "lattice-inspector";
-      inner.append(area, inspector);
+      area.className = "lattice-panes";
+      const inspectorElement = document.createElement("aside");
+      inspectorElement.className = "lattice-inspector";
+      inner.append(area, inspectorElement);
 
-      // what the workspace is showing, for the inspectors
+      // what the panes are showing, for the inspectors
       const [showing, setShowing] = createSignal([]);
-      let openInWorkspace = null;
-      const unmountWorkspace = mountWorkspace({ workspace, folder }, area, {
+      let openInProject = null;
+      const unmountProject = mountProject(area, {
+        project,
         repo: projectRepo,
-        baseRepo: repo,
-        hive: element.hive,
-        files,
+        baseRepo,
+        hive,
+        sidebar: files,
         onShowing: setShowing,
-        onOpen: (open) => (openInWorkspace = open),
+        onOpen: (open) => (openInProject = open),
+        ...latticeOptions(baseRepo),
       });
       const unmountInspector = render(
         () => html`<${Inspector}
@@ -345,20 +369,20 @@ export default function LatticeFrameTool(handle, element) {
               id: "comments",
               name: "comments",
               render: () => html`<${CommentsInspector}
-                element=${inspector}
+                element=${inspectorElement}
                 showing=${showing}
-                open=${(url) => openInWorkspace?.(url)}
+                open=${(url) => openInProject?.(url)}
               />`,
             },
           ]}
         />`,
-        inspector,
+        inspectorElement,
       );
       unmount = () => {
         unmountInspector();
-        unmountWorkspace();
+        unmountProject();
       };
-    });
+    })();
 
     return () => {
       dead = true;
@@ -392,7 +416,7 @@ export default function LatticeFrameTool(handle, element) {
 
   function TopBar() {
     return html`<header class="lattice-topbar">
-      <${Toggle} sidebar=${folders} name="folders" at=${2.5} />
+      <${Toggle} sidebar=${folders} name="projects" at=${2.5} />
       <${Toggle} sidebar=${files} name="files" at=${5.5} />
       <span class="lattice-breadcrumb">
         projects${() => (current() ? ` › ${current().name}` : "")}
@@ -432,12 +456,16 @@ export default function LatticeFrameTool(handle, element) {
         : html`<button
             class="lattice-tree-item"
             aria-current=${() => (currentUrl() === project.url ? "page" : undefined)}
-            title="double click to rename · right click for its links"
+            data-old=${isOld(project) ? "" : undefined}
+            title=${isOld(project)
+              ? "made with an older version: open it to update it"
+              : "double click to rename · right click for its links"}
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
             onContextMenu=${(event) => openProjectMenu(event, project)}
           >
-            ${project.name}
+            <span class="lattice-tree-name">${project.name}</span>
+            ${isOld(project) && html`<small class="lattice-tree-old">old</small>`}
           </button>`;
   }
 
@@ -448,39 +476,28 @@ export default function LatticeFrameTool(handle, element) {
     </span>`;
   }
 
-  // home's +: a new project, or a folder from anywhere by its url
+  // the projects' +: a new project, or one from anywhere by its url
   let homeMenu;
   const [adding, setAdding] = createSignal(false);
   const [addProblem, setAddProblem] = createSignal(null);
 
   function openHomeMenu(event) {
     setAddProblem(null);
-    setPanes(null);
     const rect = event.currentTarget.getBoundingClientRect();
     homeMenu.style.top = `${rect.bottom + 4}px`;
     homeMenu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 280))}px`;
     homeMenu.showPopover();
   }
 
-  async function onAddFolder(event) {
+  async function onAddFromUrl(event) {
     event.preventDefault();
     const input = event.currentTarget.elements.url;
     setAdding(true);
-    const problem = await addFolder(input.value);
+    const problem = await addFromUrl(input.value);
     setAdding(false);
     setAddProblem(problem);
     if (problem) return input.focus();
     input.value = "";
-    homeMenu.hidePopover();
-  }
-
-  async function onImportPanes() {
-    setAdding(true);
-    await importPanes(panes());
-    setAdding(false);
-    setPanes(null);
-    setAddProblem(null);
-    homeMenu.querySelector("input[name=url]").value = "";
     homeMenu.hidePopover();
   }
 
@@ -534,35 +551,21 @@ export default function LatticeFrameTool(handle, element) {
       >
         ${icon("folder")}
         new project
-        <small>an empty folder in projects</small>
+        <small>an empty one</small>
       </button>
-      <div class="knitoutjs-menu-heading">a folder from anywhere</div>
-      <form class="knitoutjs-menu-url" onSubmit=${onAddFolder}>
+      <div class="knitoutjs-menu-heading">from anywhere</div>
+      <form class="knitoutjs-menu-url" onSubmit=${onAddFromUrl}>
         <input
           name="url"
           placeholder="automerge:… url"
-          aria-label="a folder's automerge url"
+          aria-label="a project's, folder's or directory's automerge url"
           autocomplete="off"
           disabled=${adding}
-          onInput=${() => (setAddProblem(null), setPanes(null))}
+          onInput=${() => setAddProblem(null)}
         />
       </form>
-      <p
-        class="knitoutjs-menu-hint"
-        data-problem=${() => (addProblem() && !panes() ? "" : undefined)}
-      >
-        ${() => addProblem() ?? (adding() ? "finding it…" : "or a patchwork link to one")}
-        <${Show} when=${panes}>
-          ${" "}
-          <button
-            class="lattice-menu-action"
-            disabled=${adding}
-            title="a new project with its files and layout"
-            onClick=${onImportPanes}
-          >
-            import
-          </button>
-        <//>
+      <p class="knitoutjs-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
+        ${() => addProblem() ?? (adding() ? "finding it…" : "a project, folder or directory")}
       </p>
     </div>`;
   }
@@ -570,7 +573,7 @@ export default function LatticeFrameTool(handle, element) {
   function Sidebar() {
     return html`<nav
       class="lattice-sidebar"
-      aria-label="folders"
+      aria-label="projects"
       style=${() => ({ width: `${folders.width()}px` })}
     >
       <${Resizer} sidebar=${folders} />
@@ -581,8 +584,8 @@ export default function LatticeFrameTool(handle, element) {
         <span>projects</span>
         <button
           class="lattice-icon-button"
-          title="a new project, or a folder by its url"
-          aria-label="a new project, or a folder by its url"
+          title="a new project, or one by its url"
+          aria-label="a new project, or one by its url"
           onClick=${openHomeMenu}
         >
           ${icon("plus", 14)}
@@ -607,14 +610,21 @@ export default function LatticeFrameTool(handle, element) {
 
   function NoProject() {
     return html`<div class="lattice-no-project">
-      <p>${() => (home() ? "no projects yet" : "finding projects…")}</p>
-      <${Show} when=${home}>
+      <p>${() => (home() && !chosenLooking() ? "no projects yet" : "finding projects…")}</p>
+      <${Show} when=${() => home() && !chosenLooking()}>
         <button class="lattice-button" onClick=${() => newProject()}>
           ${icon("plus")} new project
         </button>
       <//>
     </div>`;
   }
+
+  // the chosen project is a folder that's still being looked in
+  const chosenLooking = createMemo(() =>
+    entries().some(
+      (entry) => entry.url === chosen() && entry.type === "folder" && looked()[entry.url] == null,
+    ),
+  );
 
   // the frame is the account doc's tool, so its providers are the account's
   const providers = nestProviders(element, frameProviders(accountUrl));
@@ -631,14 +641,15 @@ export default function LatticeFrameTool(handle, element) {
         <${TopBar} />
         <div class="lattice-body">
           <${Show} when=${folders.open}><${Sidebar} /><//>
-          <${Show} when=${currentUrl} fallback=${html`<${NoProject} />`}>
+          <${Show} when=${currentKey} fallback=${html`<${NoProject} />`}>
             <div
               class="lattice-main"
               ref=${(el) => {
                 main = el;
                 createEffect(() => {
-                  const url = currentUrl();
-                  if (url) onCleanup(mountProject(url));
+                  if (!currentKey()) return;
+                  const entry = untrack(current);
+                  onCleanup(mountCurrent(entry));
                 });
               }}
             ></div>

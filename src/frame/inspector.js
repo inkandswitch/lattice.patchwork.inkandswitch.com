@@ -1,6 +1,6 @@
 import { createSignal, For } from "solid-js";
 import html from "solid-js/html";
-import { remember, remembered } from "./sidebars.js";
+import { remember, remembered } from "./knitoutjs/core/sidebars.js";
 import { icon } from "./knitoutjs/core/icons.js";
 
 const DRAG_TYPE = "application/x-lattice-inspector";

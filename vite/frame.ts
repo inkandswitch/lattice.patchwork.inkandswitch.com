@@ -15,8 +15,8 @@ const CHANGES_WAIT = 25_000
 /**
  * Mounts the lattice frame checkout in `from` at `to`: served in dev, copied
  * into the site at build. Only what the module loader asks for goes out — the
- * checkout's own .git, .pushwork store and node_modules stay behind — and an
- * edit to the frame reloads the dev page.
+ * checkout's own .git, .pushwork store, node_modules and tests stay behind —
+ * and an edit to the frame reloads the dev page.
  *
  * Another site using this frame (?lattice-frame=) has no vite client to be
  * told to reload, so it asks: `<to>/__changes?since=<version>` answers with
@@ -35,7 +35,11 @@ export function frame({from, to}: {from: string; to: string}): Plugin {
 		const within = relative(directory, path)
 		if (within.startsWith("..")) return false
 		const parts = within.split(sep).filter(Boolean)
-		if (parts.some(part => part.startsWith(".") || part === "node_modules")) {
+		if (
+			parts.some(
+				part => part.startsWith(".") || part === "node_modules" || part === "test",
+			)
+		) {
 			return false
 		}
 		return !file || extname(path) in CONTENT_TYPES

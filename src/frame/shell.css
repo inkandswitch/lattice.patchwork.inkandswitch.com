@@ -1,5 +1,6 @@
-/* the frame around the workspace: top bar, /home and /system down the left,
-   a project's files, and the inspector down the right */
+/* the frame around a project: top bar, projects and /system down the left,
+   and the inspector down the right. the project itself, its files beside its
+   panes, is latticework's (knitoutjs/core/latticework.css) */
 .knitoutjs-editor-tool.lattice-shell {
 	display: flex;
 	flex-direction: column;
@@ -79,7 +80,7 @@
 		cursor: pointer;
 	}
 
-	/* ── the body: sidebar | project (files | workspace) | inspector ───── */
+	/* ── the body: sidebar | project (files | panes) | inspector ──────── */
 
 	& .lattice-body {
 		display: flex;
@@ -94,15 +95,14 @@
 		background: var(--studio-fill, #fafafa);
 	}
 
-	& .lattice-workspace {
+	& .lattice-panes {
 		display: flex;
 		flex: 1;
 		min-width: 0;
 	}
 
-	/* their widths are the user's (sidebars.js) */
-	& .lattice-sidebar,
-	& .lattice-files {
+	/* its width is the user's (sidebars.js) */
+	& .lattice-sidebar {
 		position: relative;
 		display: flex;
 		flex: none;
@@ -127,8 +127,7 @@
 		border-right: 1px solid var(--lattice-rule);
 	}
 
-	& .lattice-tree-heading,
-	& .lattice-files-heading {
+	& .lattice-tree-heading {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -141,10 +140,9 @@
 		margin-top: 12px;
 	}
 
-	/* "projects" and the project's name sit level, over one line running
-	   across both columns */
-	& .lattice-sidebar-content > .lattice-tree-heading:first-child,
-	& .lattice-files-heading {
+	/* "projects" and the project's name (latticework's) sit level, over one
+	   line running across both columns */
+	& .lattice-sidebar-content > .lattice-tree-heading:first-child {
 		/* the sidebar's top padding, taken in, so the words sit in the
 		   middle of the space above the line */
 		min-height: 32px;
@@ -156,8 +154,7 @@
 		flex-direction: column;
 	}
 
-	& .lattice-tree-item,
-	& .lattice-file-open {
+	& .lattice-tree-item {
 		display: flex;
 		align-items: center;
 		gap: 6px;
@@ -174,6 +171,23 @@
 		&:hover {
 			background: var(--studio-chrome-fill-offset-20, #0001);
 		}
+	}
+
+	& .lattice-tree-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* made with an older version: open it, and there's a button to update it */
+	& .lattice-tree-item[data-old] {
+		color: var(--lattice-muted);
+	}
+
+	& .lattice-tree-old {
+		flex: none;
+		margin-left: auto;
+		font-family: var(--studio-family-ui, system-ui, sans-serif);
+		font-size: 10.5px;
 	}
 
 	& .lattice-tree-item[aria-current="page"] {
@@ -201,8 +215,7 @@
 		font: inherit;
 	}
 
-	& .lattice-tree-empty,
-	& .lattice-files-empty {
+	& .lattice-tree-empty {
 		margin: 4px 12px 4px 24px;
 		color: var(--lattice-muted);
 	}
@@ -245,152 +258,12 @@
 		color: var(--studio-danger-text, #e45649);
 	}
 
-	/* something the menu can do about what it found: import a panes doc */
-	& .lattice-menu-action {
-		margin-left: 4px;
-		padding: 1px 8px;
-		border: 1px solid var(--lattice-rule);
-		border-radius: var(--studio-radius, 6px);
-		background: var(--studio-fill, #fff);
-		color: var(--studio-chrome-line, var(--studio-line, #383a42));
-		font: 11px var(--studio-family-ui, system-ui, sans-serif);
-		cursor: pointer;
-
-		&:disabled {
-			cursor: progress;
-			opacity: 0.6;
-		}
-	}
-
 	& .lattice-button {
 		padding: 4px 12px;
 		border: 1px solid var(--lattice-rule);
 		border-radius: var(--studio-radius, 6px);
 		background: var(--studio-fill, #fff);
 		cursor: pointer;
-	}
-
-	/* ── a project: its files beside its workspace ───────────────────────── */
-
-	& .lattice-project {
-		display: flex;
-		flex: 1;
-		min-width: 0;
-	}
-
-	& .lattice-files {
-		border-right: 1px solid var(--studio-fill-offset-30, #0002);
-		background: var(--studio-fill, #fafafa);
-		color: var(--studio-line, #383a42);
-	}
-
-	& .lattice-path {
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	& .lattice-file {
-		position: relative;
-		display: flex;
-		align-items: center;
-		color: var(--studio-line-offset-30, currentColor);
-
-		&[data-showing] {
-			color: var(--studio-line, #383a42);
-			font-weight: 600;
-		}
-
-		/* where a file used to be: under the .js that wrote it, or the .k it's
-		   a copy of. the file itself is elsewhere in the list */
-		&[data-ghost] {
-			opacity: 0.5;
-			font-style: italic;
-
-			& .knitoutjs-swatch {
-				border-style: dashed;
-				background: none;
-			}
-		}
-	}
-
-	/* how long since it was last built or changed */
-	& .lattice-file-when {
-		flex: none;
-		margin-left: 6px;
-		color: var(--lattice-muted);
-		font-family: var(--studio-family-ui, system-ui, sans-serif);
-		font-size: 10.5px;
-		white-space: nowrap;
-	}
-
-	/* a file built from another sits under it, indented by --depth */
-	& .lattice-file-open {
-		flex: 1;
-		min-width: 0;
-		padding-left: calc(18px + var(--depth, 0) * 14px);
-		padding-right: 4px;
-	}
-
-	/* the tree's dotted lines, down through the middle of the swatches: --at
-	   is the depth whose swatches the line runs under. a plain one carries on
-	   past this row; a tee branches off to this row's swatch, and so does the
-	   last one, ending there; down runs from a parent to its first child */
-	& .lattice-guide {
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: calc(23px + var(--at) * 14px);
-		border-left: 1px dotted var(--lattice-muted);
-		pointer-events: none;
-	}
-	& .lattice-guide-tee::after,
-	& .lattice-guide-last::after {
-		content: "";
-		position: absolute;
-		top: 50%;
-		left: 0;
-		width: 9px;
-		border-top: 1px dotted var(--lattice-muted);
-	}
-	& .lattice-guide-last {
-		bottom: 50%;
-	}
-	& .lattice-guide-last::after {
-		top: 100%;
-	}
-	& .lattice-guide-down {
-		top: calc(50% + 5px);
-	}
-
-	/* shown on hover, or while it's asking to be pressed again */
-	& .lattice-file-remove {
-		display: inline-grid;
-		flex: none;
-		place-items: center;
-		visibility: hidden;
-		margin-right: 6px;
-		padding: 0 5px;
-		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
-		background: none;
-		color: var(--studio-line-offset-30, currentColor);
-		font-family: var(--studio-family-ui, system-ui, sans-serif);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--studio-fill-offset-20, #0001);
-			color: var(--studio-danger-text, #e45649);
-		}
-	}
-	& .lattice-file:hover .lattice-file-remove,
-	& .lattice-file:focus-within .lattice-file-remove,
-	& .lattice-file[data-removing] .lattice-file-remove {
-		visibility: visible;
-	}
-	& .lattice-file[data-removing] .lattice-file-remove {
-		background: var(--studio-danger-fill, #e45649);
-		color: var(--studio-danger-line, white);
 	}
 
 	/* along a sidebar's right edge, over its border */
@@ -407,17 +280,6 @@
 		&[data-dragging] {
 			background: color-mix(in oklch, var(--studio-primary, #007aff) 45%, transparent);
 		}
-	}
-
-	& .lattice-file-name {
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	& .lattice-project > .knitoutjs-frame {
-		flex: 1;
-		width: auto;
-		min-width: 0;
 	}
 
 	/* ── the inspector ────────────────────────────────────────────────── */

@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knit Profiles Design</title>
+<meta name="description" content="Machine, yarn and swatch profiles as patchwork docs, and how a .k uses them to say what size it comes out.">
+<style>
+:root {
+	--bg: #fbfaf7;
+	--fg: #1f1d1a;
+	--muted: #6b665e;
+	--rule: #e3dfd6;
+	--panel: #f3f0ea;
+	--accent: #b4521c;
+	--accent-soft: #f6e4d8;
+	--code: #ece8e0;
+	--ok: #3d7a36;
+	--warn: #9a6a00;
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #17161a;
+		--fg: #ebe8e2;
+		--muted: #a29d94;
+		--rule: #34313a;
+		--panel: #201f24;
+		--accent: #f0905a;
+		--accent-soft: #3a2a20;
+		--code: #26252b;
+		--ok: #8bc77f;
+		--warn: #e3b453;
+	}
+}
+:root[data-theme="dark"] {
+	--bg: #17161a;
+	--fg: #ebe8e2;
+	--muted: #a29d94;
+	--rule: #34313a;
+	--panel: #201f24;
+	--accent: #f0905a;
+	--accent-soft: #3a2a20;
+	--code: #26252b;
+	--ok: #8bc77f;
+	--warn: #e3b453;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font: 16px/1.6 ui-serif, Georgia, "Iowan Old Style", serif;
+}
+main { max-width: 46rem; margin: 0 auto; padding: 3rem 16px 5rem; }
+h1, h2, h3 { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; line-height: 1.25; }
+h1 { font-size: 2rem; margin: 0 0 .25rem; letter-spacing: -.01em; }
+h2 { font-size: 1.3rem; margin: 3rem 0 .75rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+h3 { font-size: 1.05rem; margin: 1.75rem 0 .5rem; }
+p, li { max-width: 40rem; }
+a { color: var(--accent); }
+.meta { color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .9rem; margin-bottom: 2rem; }
+code, pre { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .85em; }
+code { background: var(--code); padding: .1em .35em; border-radius: 4px; }
+pre { background: var(--code); padding: 1rem; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; }
+.note { background: var(--accent-soft); border-left: 3px solid var(--accent); padding: .75rem 1rem; border-radius: 0 8px 8px 0; margin: 1.25rem 0; }
+.note p { margin: .25rem 0; }
+.table-wrap { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: .92rem; }
+th, td { text-align: left; vertical-align: top; padding: .45rem .6rem; border-bottom: 1px solid var(--rule); }
+th { font-family: ui-sans-serif, system-ui, sans-serif; font-weight: 600; color: var(--muted); font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+td:first-child { white-space: nowrap; }
+.tier { display: inline-block; font-family: ui-sans-serif, system-ui, sans-serif; font-size: .75rem; font-weight: 600; padding: .1em .5em; border-radius: 999px; background: var(--panel); border: 1px solid var(--rule); }
+.tier.measured { color: var(--ok); }
+.tier.loop { color: var(--warn); }
+.tier.guess { color: var(--muted); }
+ol.tiers { padding-left: 1.25rem; }
+ol.tiers li { margin: .5rem 0; }
+figure { margin: 1.5rem 0; }
+figure svg { width: 100%; height: auto; display: block; }
+figcaption { color: var(--muted); font-size: .85rem; margin-top: .5rem; font-family: ui-sans-serif, system-ui, sans-serif; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.cols > div { background: var(--panel); border-radius: 8px; padding: .75rem 1rem; }
+.cols h3 { margin-top: .25rem; }
+@media (max-width: 560px) { .cols { grid-template-columns: 1fr; } h1 { font-size: 1.6rem; } }
+nav.toc { font-family: ui-sans-serif, system-ui, sans-serif; font-size: .9rem; background: var(--panel); border-radius: 8px; padding: .75rem 1rem; }
+nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>Knit profiles</h1>
+<div class="meta">Design spec · 2026-11-07 · lattice.patchwork.inkandswitch.com · scope: profiles as docs, and the finished-size readout</div>
+
+<nav class="toc">
+<ol>
+<li><a href="#why">Why</a></li>
+<li><a href="#scope">Scope</a></li>
+<li><a href="#docs">The docs</a></li>
+<li><a href="#resolve">From a .k to its profiles</a></li>
+<li><a href="#match">From profiles to a size</a></li>
+<li><a href="#ui">The interface</a></li>
+<li><a href="#compat">What stays, and migrating</a></li>
+<li><a href="#errors">When things go wrong</a></li>
+<li><a href="#testing">Testing</a></li>
+<li><a href="#files">Files</a></li>
+<li><a href="#open">Open questions</a></li>
+</ol>
+</nav>
+
+<h2 id="why">1. Why</h2>
+
+<p>Lattice can already estimate how big a piece of knitting will come out. <code>size.js</code> has Munden's loop constants, tightness and grams per square metre, and the Poincloux stretch model. <code>loopsim.js</code> lays loops out the way Shima Seiki's loop-simulation patents do. What it lacks is somewhere real to keep what's been measured. All of it is one <code>fabric</code> blob in one browser's localStorage, it describes one yarn for the whole machine, and no .k says which yarn went in which carrier.</p>
+
+<p>The aim is to keep machines, yarns and the swatches knitted from them as <strong>shareable patchwork docs</strong>, and to let a .k point at them, so that the size estimate comes from real measurements and says where each number came from. The people working on them include someone with industry knitting experience (B Claxton), who should be able to open a profile, read it, correct it and comment on it without being walked through it.</p>
+
+<h3>What was said, and what's assumed</h3>
+<div class="cols">
+<div>
+<h3>Said</h3>
+<ul>
+<li>Profiles for the machine and for each yarn, added to a project or account, and used by a given .k.</li>
+<li>Kniterate at 7 gauge first. Other machines later, so a machine profile is real.</li>
+<li>B will open profiles herself (aim for this), and chee will also enter things from conversation. Import of B's own sheets will come later.</li>
+<li>Finished size, size across the piece, and the reverse (target size to needles) are all wanted. This spec covers the first.</li>
+<li>A swatch from another Kniterate counts as measured, but is marked as such.</li>
+</ul>
+</div>
+<div>
+<h3>Assumed</h3>
+<ul>
+<li>"Account" means a folder of your own that the same docs are also linked into. No account-specific storage is needed.</li>
+<li>Plain jersey and rib (1×1, 2×2) are sized. The first real swatch is a 2×2 rib. Interlock, tuck and the rest are recorded as "other" and only ever sized from a matching swatch.</li>
+<li>One machine per .k.</li>
+<li>Most early swatches won't have a .k, and some of what's known about them is believed rather than known.</li>
+</ul>
+</div>
+</div>
+
+<h2 id="scope">2. Scope</h2>
+<p>The work was split into four specs, done in order:</p>
+<ol>
+<li><strong>Profiles as docs (this spec):</strong> machine, yarn and swatch datatypes, their editors, and linking a .k to them.</li>
+<li><strong>Finished size (this spec):</strong> the checks panel reads linked profiles and reports width × height and grams for each relaxation state, with where each number came from.</li>
+<li><em>Later:</em> size across the piece, meaning width and height per row and an outline.</li>
+<li><em>Later:</em> the reverse, from a target size to needles and rows at a stitch number, available to the .js.</li>
+</ol>
+<p>Importing spreadsheets or spec sheets is out of scope until we've seen what B's look like.</p>
+
+<h2 id="docs">3. The docs</h2>
+
+<figure>
+<svg viewBox="0 0 640 300" role="img" aria-labelledby="dg-t">
+<title id="dg-t">How the docs link: a .k links a machine and, per carrier, yarns. A yarn lists its swatches. A swatch links a machine, its yarns and optionally the .k that knit it.</title>
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/>
+</marker>
+</defs>
+<g font-family="ui-sans-serif, system-ui, sans-serif" font-size="14">
+<rect x="20" y="30" width="150" height="70" rx="10" fill="var(--panel)" stroke="var(--rule)"/>
+<text x="95" y="60" text-anchor="middle" fill="var(--fg)" font-weight="600">.k</text>
+<text x="95" y="80" text-anchor="middle" fill="var(--muted)" font-size="12">knitout, yarns, machine</text>
+
+<rect x="470" y="30" width="150" height="70" rx="10" fill="var(--panel)" stroke="var(--rule)"/>
+<text x="545" y="60" text-anchor="middle" fill="var(--fg)" font-weight="600">machine</text>
+<text x="545" y="80" text-anchor="middle" fill="var(--muted)" font-size="12">Kniterate, 7 gauge</text>
+
+<rect x="20" y="200" width="150" height="70" rx="10" fill="var(--panel)" stroke="var(--rule)"/>
+<text x="95" y="230" text-anchor="middle" fill="var(--fg)" font-weight="600">yarn</text>
+<text x="95" y="250" text-anchor="middle" fill="var(--muted)" font-size="12">lambswool, Nm 2/30</text>
+
+<rect x="470" y="200" width="150" height="70" rx="10" fill="var(--accent-soft)" stroke="var(--accent)"/>
+<text x="545" y="230" text-anchor="middle" fill="var(--fg)" font-weight="600">swatch</text>
+<text x="545" y="250" text-anchor="middle" fill="var(--muted)" font-size="12">2×2 rib · lambswool</text>
+
+<line x1="170" y1="65" x2="466" y2="65" stroke="var(--muted)" marker-end="url(#arrow)"/>
+<text x="318" y="57" text-anchor="middle" fill="var(--muted)" font-size="12">machine</text>
+
+<line x1="95" y1="100" x2="95" y2="196" stroke="var(--muted)" marker-end="url(#arrow)"/>
+<text x="103" y="152" fill="var(--muted)" font-size="12">yarns[i].profiles</text>
+
+<line x1="170" y1="225" x2="466" y2="225" stroke="var(--muted)" marker-end="url(#arrow)"/>
+<text x="318" y="217" text-anchor="middle" fill="var(--muted)" font-size="12">swatches (an index)</text>
+
+<line x1="466" y1="250" x2="174" y2="250" stroke="var(--accent)" marker-end="url(#arrow)"/>
+<text x="318" y="268" text-anchor="middle" fill="var(--accent)" font-size="12">knit.feeds[].yarns (the source of truth)</text>
+
+<line x1="545" y1="200" x2="545" y2="104" stroke="var(--accent)" marker-end="url(#arrow)"/>
+<text x="553" y="152" fill="var(--accent)" font-size="12">knit.machine</text>
+
+<path d="M480 200 C 380 150, 260 140, 172 92" fill="none" stroke="var(--accent)" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+<text x="300" y="140" fill="var(--accent)" font-size="12">knit.k (optional)</text>
+</g>
+</svg>
+<figcaption>Each box is its own patchwork doc. Any of them can be filed in a project's folder, and in a library folder of your own, at the same time.</figcaption>
+</figure>
+
+<h3>Machine <code>lattice:machine</code></h3>
+<pre><code>{
+  title: "the studio kniterate",
+  make: "Kniterate", model: "Kniterate",
+  gauge: 7,                 // needles per inch
+  needles: 252,             // per bed
+  beds: 2,
+  carriers: ["1","2","3","4","5","6"],
+  stitchSizes: {min: 0, max: 15},   // what the machine calls "stitch size", and its range
+  stitches: {               // knitout's x-stitch-number → the machine's stitch size, per bed
+    "5": {front: null, rear: null, note: ""}
+  },
+  floatLimit: 7,            // longest float, in needles (manual p.25: "6-7 stitches")
+  notes: ""
+}</code></pre>
+<p>The Kniterate manual (training copy) says stitch size is <strong>0–15, set per row and separately for each bed</strong> (S/F, S/R, p.36). It gives no loop length for any number, so loop length is always measured on a swatch. Take-down (Roller, 0–999) and Speed (up to 800 mm/s) are also set per row, and both are recorded on swatches.</p>
+<p>Two machines are the <strong>same model</strong> when <code>make</code>, <code>model</code> and <code>gauge</code> all match.</p>
+
+<h3>Yarn <code>lattice:yarn</code></h3>
+<pre><code>{
+  title: "lambswool, oatmeal",
+  fibres: [{fibre: "lambswool", percent: 100}],
+  relaxesLike: "wool",       // wool | cotton | synthetic: which of Munden's tables applies
+  count: {system: "Nm", value: 30, ply: 2},   // Nm | Ne | tex | denier
+  supplier: "", colourway: "", colour: "#d8cbb0", lot: "",
+  swatches: ["automerge:…"], // an index of the swatches that use it
+  notes: ""
+}</code></pre>
+<p>Tex is <strong>worked out, not stored</strong>: Nm gives 1000 × ply ÷ Nm, so Nm 2/30 is 66.7 tex; Ne gives 590.5 × ply ÷ Ne; denier gives denier × ply ÷ 9; tex gives value × ply.</p>
+
+<h3>Swatch <code>lattice:swatch</code></h3>
+<pre><code>{
+  title: "lambswool 2×2 rib",
+  knit: {
+    machine: "automerge:…",
+    feeds: [{carrier: "3", yarns: ["automerge:…", "automerge:…"], plated: true}],
+    stitch: "5",             // knitout's x-stitch-number
+    stitchSize: {front: null, rear: null},  // what the machine was set to, 0–15
+    roller: null,            // take-down, 0–999
+    speed: null,             // mm/s
+    needles: null, rows: null, // needles: every needle in use, both beds together
+    structure: "rib-2x2",    // jersey | rib-1x1 | rib-2x2 | other
+    structureNote: "",       // what it is, for "other"
+    k: null,                 // the .k that knit it, if there is one
+    kHash: null,             // fingerprint of that .k when filled from it
+    sure: "guessed",         // known | believed | guessed
+    note: "freshly knit on the kniterate; needles, rows, stitch and plating to ask Agnes"
+  },
+  relaxed: {
+    dry:  {entered: "mm",    width: 98, height: 142, grams: 9.1, date: "2026-11-07", by: "chee"},
+    steamed: {entered: "per10", wales: 49, courses: 74, grams: null, date: "…", by: "B"},
+    wet:  null,
+    full: null
+  },
+  loop: {mm: null, date: null, by: null},   // mm of yarn per stitch, from unravelling 100 stitches
+  photos: [],                               // links to image docs (see open questions)
+  notes: ""
+}</code></pre>
+<p>Each relaxation state keeps <strong>which pair was entered</strong>: millimetres over the swatch's needles and rows, or wales and courses per 10 cm. The other pair is always derived from it, so the two can't disagree, and the record shows what was actually measured. (The values in the example are made up.) For rib, "wales" means <strong>needles per 10 cm, both beds counted</strong>, so that 1×1 and 2×2 can be compared and a rib's width follows from its needle count the same way jersey's does. Conventions vary, and this is one to check with B. There are four states. Three match <code>size.js</code>'s <code>RELAXED</code>: <em>dry</em> (off the machine, left to lie), <em>wet</em> (soaked, spun, dried flat) and <em>full</em> (washed hot and tumbled). The fourth is <em>steamed</em>, the Kniterate manual's own method (left at least 10 minutes, steamed, laid flat, measured in 10 cm, p.41), which is probably also how B works. There are no published constants for steaming, so <em>steamed</em> is measured only: never estimated from another state, and never used to estimate one.</p>
+<p>A swatch's <code>feeds[].yarns</code> are in the order <strong>knitting hole, then plating slit</strong>. Plated, the first shows on the face and the second on the back (manual p.23).</p>
+<p><strong>The swatch is the source of truth</strong> for which yarns it used. When the swatch editor sets or changes its feeds, it adds the swatch to each yarn's <code>swatches</code> index and removes it from any it no longer uses. The resolver only trusts an index entry whose swatch links back to that yarn.</p>
+
+<h3>What a .k gains</h3>
+<pre><code>{
+  …,
+  machine: "automerge:…" | null,
+  yarns: [                   // per carrier, as now, plus:
+    {colours: ["#d8cbb0", "#d8cbb0"], plated: true, profiles: ["automerge:…", "automerge:…"]},
+    …
+  ]
+}</code></pre>
+<p><code>profiles</code> lines up with <code>colours</code>: one yarn per strand.</p>
+
+<h3>A project</h3>
+<p>Nothing new is stored on a project. If a .k has no <code>machine</code> and the project's folder holds exactly one machine doc, that machine is used. Adding profiles to a project means filing them in its folder. Adding them to your account means also filing them in a folder of your own.</p>
+
+<h2 id="resolve">4. From a .k to its profiles</h2>
+<p>The check runs in a worker, so it needs plain data. A new <code>profiles.js</code> on the main thread does the following:</p>
+<ol>
+<li>Loads the .k's machine: its <code>machine</code> link, or else the project's only machine doc, or else none (falling back to today's gauge setting).</li>
+<li>For each carrier with <code>profiles</code>, loads those yarn docs, then every swatch in their <code>swatches</code> indexes, then each of those swatches' machines.</li>
+<li>Flattens all of it into a <strong>resolved profile</strong> and hands that to the check alongside the settings it already receives:</li>
+</ol>
+<pre><code>{
+  machine: {url, title, make, model, gauge, needles, carriers} | null,
+  carriers: {
+    "3": {
+      yarns: [{url, title, tex, relaxesLike}, …],
+      plated: true,
+      tex: 133.3,            // the strands' tex, summed
+      swatches: [{url, title, sure, machine: {url, make, model, gauge}, stitch,
+                  needles, rows, feeds, relaxed, loop}, …]
+    }
+  },
+  loading: false,
+  missing: [{url, why: "not found" | "no access" | "loading"}]
+}</code></pre>
+<p>It listens for changes on every doc it loaded. When any of them changes, the .k changes, or the project's folder changes, it resolves again and the check runs again. The resolved profile is also turned into the per-carrier <code>yarns</code> fabric that <code>loopsim.js</code>'s <code>sizer()</code> already accepts, so the 3D view and the animation agree with the readout.</p>
+
+<h2 id="match">5. From profiles to a size</h2>
+<p>This is worked out in <code>size.js</code>, as pure functions, for each <strong>carrier, stitch number and structure</strong> the .k uses. (Today it's done per stitch number alone.)</p>
+
+<h3>Which structure a pass is</h3>
+<p><code>knitcheck.js</code> already works out which bed each pass knits on, to find tubes. It also classifies each pass by the needles it knits:</p>
+<ul>
+<li><strong>jersey:</strong> one bed only. A tube is jersey too, going round.</li>
+<li><strong>1×1 rib:</strong> both beds, alternating front and back one needle at a time. On the Kniterate, knitting both beds needs half racking (±0.5, manual p.9 and p.34), so rib passes come at a half rack.</li>
+<li><strong>2×2 rib:</strong> both beds, alternating in twos.</li>
+<li><strong>other:</strong> anything else that knits on both beds in the same pass, such as other rib layouts or interlock-like patterns.</li>
+</ul>
+<p>The classification is made per pass and carried through to the size, so that a rib cuff and a jersey body in the same .k are each sized from their own structure.</p>
+
+<h3>Tiers</h3>
+<p>The first tier that applies wins:</p>
+<ol class="tiers">
+<li><span class="tier measured">measured</span> A swatch on <strong>this machine</strong> with the same yarns, plated or held the same way, at the same stitch number, <strong>in the same structure</strong>. Its width over its needles and its height over its rows give wales and courses per 10 cm.</li>
+<li><span class="tier measured">measured · other machine</span> As above, but on <strong>another machine of the same model and gauge</strong>. It's used as measured, and the readout names the machine it came from.</li>
+<li><span class="tier loop">from loop</span> A measured loop length for these yarns at this stitch number (from a swatch on any machine). Then courses ≈ 100 × kc ÷ loop and wales ≈ 100 × kw ÷ loop. kc and kw are fitted from this yarn's swatches that have both a loop length and a measured size, on any machine, since Munden says relaxed loop shape doesn't depend on the machine. Failing that, Munden's published values for the yarn's <code>relaxesLike</code> are used. This is what <code>constants()</code> and <code>stitchSize()</code> do now, fed per yarn. <strong>Jersey only</strong> to begin with. Rib gets this tier once Knapton et al.'s 1968 rib constants (1×1, 2×2, wool) are confirmed from the paper and added to <code>size.js</code>, fitted per structure the same way: kc and kw from a yarn's rib swatches only feed rib. "Other" never gets it.</li>
+<li><span class="tier guess">guess</span> Nothing measured. Jersey: one stitch per needle pitch wide, as the 3D view assumes now. Rib and other: the same, and the readout says plainly that relaxed rib comes out much narrower than that (<em>measure a rib swatch</em>).</li>
+</ol>
+<p>When several swatches qualify at the same tier, they're averaged and all of them are listed.</p>
+
+<h3>Relaxation states</h3>
+<p>Every state is reported. A state that was measured on the matching swatch is used as is. <em>Steamed</em> appears only when it was measured. Any other state that wasn't measured is <strong>estimated</strong> from a measured one: loop length is held constant, and courses scale by the ratio of kc between the two states, wales by the ratio of kw, using the <code>RELAXED</code> table for wool and the <code>FIBRES</code> ratios otherwise. An estimated state is marked as estimated.</p>
+
+<h3>Plating and holding</h3>
+<p>A carrier's tex is the sum of its strands, and that's what tightness and grams use. The Kniterate manual recommends a plated pair come to <strong>Nm 6–8 together</strong> (about 125–167 tex), and the readout notes a pair outside that range. A swatch only matches knitting fed the same way: single, plated or held. The plated lambswool swatch won't count as measured for single-strand lambswool, though its loop length still feeds into lambswool's kc and kw.</p>
+
+<h3>Provenance</h3>
+<p>Every size in the result carries its sources. <code>checkKnitout</code>'s <code>size</code> grows to:</p>
+<pre><code>size: {
+  states: {
+    dry:  {width: {mm, stitches}, length: {mm, rows}, around, grams, estimated: false},
+    wet:  {…, estimated: true},
+    full: {…, estimated: true}
+  },
+  sources: [{carrier: "3", stitch: "5", structure: "rib-2x2", tier: "measured" | "other-machine" | "loop" | "guess",
+             swatches: [{url, title, sure, machine}], count}],
+  on: …   // the stretched-round-a-body figure, as now
+}</code></pre>
+<p>The limits that are currently fixed to the Kniterate in <code>knitcheck.js</code> (<code>KNITERATE.needles</code>, its carriers and the pitch) come from the resolved machine when there is one.</p>
+
+<h2 id="ui">6. The interface</h2>
+
+<h3>Making profiles</h3>
+<p><code>index.js</code> registers <code>lattice:machine</code>, <code>lattice:yarn</code> and <code>lattice:swatch</code> as datatypes, each with a tool. The workspace's + menu already creates patchwork datatypes, so they appear there and land in the project's folder. In the project's file tree, a swatch sits under the first yarn it uses, the way a .k sits under its .js.</p>
+
+<h3>The editors</h3>
+<p>The editors are plain forms in the style of the checks panel. They're written to make sense to someone from industry: standard terms first, with plain words beside them.</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Shown as</th><th>Means</th></tr></thead>
+<tbody>
+<tr><td>wales / 10 cm</td><td>stitches across (for rib: needles across, both beds)</td></tr>
+<tr><td>structure</td><td>jersey, 1×1 rib, 2×2 rib, or other (described)</td></tr>
+<tr><td>courses / 10 cm</td><td>rows up</td></tr>
+<tr><td>loop length</td><td>mm of yarn in one stitch</td></tr>
+<tr><td>count</td><td>Nm, Ne, tex or denier, with ply (tex is shown, worked out)</td></tr>
+<tr><td>tightness factor</td><td>√tex ÷ loop length (cm)</td></tr>
+<tr><td>g/m²</td><td>fabric weight</td></tr>
+</tbody>
+</table>
+</div>
+<ul>
+<li><strong>Machine:</strong> make, model, gauge, needles, beds, carriers, and the stitch table (one row per stitch number: setting name, value, note).</li>
+<li><strong>Yarn:</strong> fibres, how it relaxes, count and ply (tex shown), supplier, colourway and colour, lot, notes. Below that, its swatches, each summarised in a line (<em>2×2 rib · st 5 · plated · 48 × 100 · washed: 98 × 142 mm · guessed</em>), and a <em>new swatch with this yarn</em> button.</li>
+<li><strong>Swatch:</strong>
+<ul>
+<li><em>How it was knit:</em> machine, feeds, stitch number, needles, rows, structure, and the known / believed / guessed switch with its note. There's a <em>fill from a .k</em> picker that takes needles, rows, stitch number and feeds from a .k's check.</li>
+<li><em>Measured:</em> one row per relaxation state. Enter width and height in mm, or wales and courses per 10 cm; the other pair is shown greyed. Then grams, date and who.</li>
+<li><em>Loop length</em>, photos, notes.</li>
+<li><em>How it was knit</em> includes the stitch size on each bed (0–15), the roller and the speed. A match whose roller or speed differs from the .k's says so. Next to the needles and rows is the manual's hint: "a good size for a reliable tension swatch is 80 needles by 80 rows", bigger for rib, which pulls in.</li>
+<li><em>What follows:</em> tightness factor, g/m², and this swatch's kc and kw (when it has a loop length).</li>
+</ul></li>
+</ul>
+<p>Comments come for free: the workspace's comment provider already watches any doc that's open.</p>
+
+<h3>Linking a .k</h3>
+<ul>
+<li><strong>Yarns:</strong> each carrier's swatch in the <code>yarns.js</code> picker gets a <em>yarn</em> field next to its colour. Pick a yarn doc from the project's files or paste a link: one per strand, so two for a plated or held pair. Colour stays separate, and defaults to the yarn's <code>colour</code> if it has one.</li>
+<li><strong>Machine:</strong> when the project has a machine doc, the checks panel's gauge setting becomes a machine choice, with <em>no machine (7 gauge)</em> as the fallback.</li>
+</ul>
+
+<h3>The readout</h3>
+<p>In the checks panel, in place of the current "how big it comes out":</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>relaxed</th><th>width × height</th><th>grams</th></tr></thead>
+<tbody>
+<tr><td>off the machine</td><td>186 × 142 mm</td><td>9.1 g</td></tr>
+<tr><td>washed</td><td>172 × 134 mm <span class="tier loop">estimated</span></td><td>9.1 g</td></tr>
+<tr><td>washed hot &amp; tumbled</td><td>168 × 129 mm <span class="tier loop">estimated</span></td><td>9.1 g</td></tr>
+</tbody>
+</table>
+</div>
+<p>Below that is one line per carrier, stitch number and structure, for example <em>carrier 3, st 5, jersey: <span class="tier measured">measured</span> from <a href="#">lambswool jersey, st 5</a> (believed), on the studio kniterate</em>. Where the estimate could be better, it says what to measure: <em>no swatch at st 7: knit one, or measure its loop length</em>. (The numbers above are only an illustration: a 51 × 100 jersey swatch at 186 × 142 mm off the machine, with the washed states scaled by Munden's kw and kc ratios. Washing shrinks wool both ways.)</p>
+
+<h2 id="compat">7. What stays, and migrating</h2>
+<ul>
+<li>A .k with no <code>profiles</code> and no <code>machine</code> works exactly as now, from the localStorage <code>fabric</code> and gauge.</li>
+<li>The old fabric box stays visible only in that case. It gains a <em>make profiles from this</em> button, which creates a yarn doc (fibre, tex as a tex count, strands as ply) and one swatch per stitch number entered (its across and up, as measured "off the machine", or whichever relaxation was set), files them in the project and links them to the open .k.</li>
+<li>A .k with profiles on some carriers and not others sizes the unlinked carriers from the localStorage fabric.</li>
+</ul>
+
+<h2 id="errors">8. When things go wrong</h2>
+<ul>
+<li><strong>A linked doc won't load</strong> (not found, no access, still syncing): it goes into <code>missing</code>, that carrier drops to the next tier, and the readout says so (<em>yarn profile not loaded: guessed</em>). It never fails silently and never blocks the check.</li>
+<li><strong>Still loading:</strong> the readout shows <em>loading profiles…</em> with the previous numbers until they're resolved.</li>
+<li><strong>A yarn with no swatches</strong> is sized "from loop" if it has a loop length, otherwise "guess", and the readout says what would improve it.</li>
+<li><strong>A swatch filled from a .k whose code has since changed</strong> (its hash differs): the swatch shows a notice and keeps its values, because the physical swatch hasn't changed. A <em>fill again</em> button is there if the change was a correction.</li>
+<li><strong>Nonsense input</strong> (zero, negative, blank): treated as not measured, the way <code>size.js</code>'s <code>measured()</code> does now.</li>
+<li><strong>Editing at the same time:</strong> every field is its own key, so you and B editing at once merge cleanly through automerge.</li>
+<li><strong>A feed that doesn't fit the machine</strong> (a carrier the machine hasn't got, more needles than its bed): shown as a warning on the swatch, and still saved.</li>
+</ul>
+
+<h2 id="testing">9. Testing</h2>
+<ul>
+<li><strong>Unit tests</strong> with <code>node --test</code> for <code>size.js</code> and the matching: each tier; jersey vs. 1×1 vs. 2×2 rib (a rib swatch never sizes jersey, and the reverse); rib without a swatch falling to guess with its warning; this machine vs. another of the same model vs. another model; single vs. plated vs. held; averaging several swatches; estimating a missing relaxation state; tex from each count system; entered mm vs. per 10 cm round-tripping. The repo's test script (currently <code>echo ':))'</code>) runs them.</li>
+<li><strong>Structure detection</strong> in <code>knitcheck.js</code>: small knitout fixtures for jersey, a tube, 1×1 rib, 2×2 rib, and a rib cuff followed by a jersey body.</li>
+<li><strong>Resolution</strong> in <code>profiles.js</code>, against an in-memory automerge repo: the project's only machine; a missing doc; an index entry whose swatch doesn't link back; re-resolving on change.</li>
+<li><strong>The round trip:</strong> a .k for the lambswool 2×2 rib swatch, once it's measured, must predict exactly the swatch's measured size at its own stitch number. This is the first real end-to-end check.</li>
+<li><strong>By hand:</strong> the editors and the readout in the dev server, and then B, for whether they make sense to someone from industry.</li>
+</ul>
+
+<h2 id="files">10. Files</h2>
+<div class="table-wrap">
+<table>
+<thead><tr><th>file</th><th>change</th></tr></thead>
+<tbody>
+<tr><td><code>src/frame/index.js</code></td><td>register the three datatypes and their tools</td></tr>
+<tr><td><code>src/frame/profiles.js</code></td><td><em>new:</em> resolve a .k's profiles into plain data, and watch them</td></tr>
+<tr><td><code>src/frame/counts.js</code></td><td><em>new:</em> yarn count systems to and from tex</td></tr>
+<tr><td><code>src/frame/machine.js</code>, <code>yarn.js</code>, <code>swatch.js</code> (+ <code>profiles.css</code>)</td><td><em>new:</em> the editors</td></tr>
+<tr><td><code>src/frame/size.js</code></td><td>tiers, matching, swatch to per-10 cm, estimating relaxation states, provenance</td></tr>
+<tr><td><code>src/frame/knitcheck.js</code></td><td>classify each pass's structure; sizes per carrier, stitch number and structure; machine limits from the resolved machine; the new <code>size</code> result</td></tr>
+<tr><td><code>src/frame/checks.js</code></td><td>machine choice, the readout, the migration button</td></tr>
+<tr><td><code>src/frame/yarns.js</code></td><td>the yarn field per strand; <code>profiles</code> in the .k's <code>yarns</code></td></tr>
+<tr><td><code>src/frame/loopsim.js</code> callers (<code>animation.js</code>, <code>knit3d.js</code>)</td><td>pass the resolved per-carrier fabric to <code>sizer()</code></td></tr>
+<tr><td><code>src/frame/workspace.js</code></td><td>swatches nested under their yarn in the file tree</td></tr>
+<tr><td><code>src/frame/test/</code>, <code>package.json</code></td><td><em>new:</em> tests and a real test script</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2 id="open">11. Open questions</h2>
+<ul>
+<li><strong>Where the yarn link goes.</strong> In each carrier's colour picker, as designed, or in a separate "what's loaded" panel beside the check. We'll start in the picker and move it if it gets crowded.</li>
+<li><strong>Photos.</strong> We need to confirm how patchwork holds images (an image or file datatype, or a blob in the doc) before the swatch editor gets a photo field. If that turns out to be awkward, photos are dropped from the first cut.</li>
+<li><strong>Stitch number to stitch size.</strong> The manual settles what the setting is (stitch size 0–15, per bed). What it doesn't say is how knitout's <code>x-stitch-number</code> becomes a stitch size in the knitout-to-kcode converter, or what default the converter uses. That needs reading in the vendored converter, and confirming with Agnes.</li>
+<li><strong>The lambswool swatch</strong> is a <strong>2×2 rib</strong>, so the jersey code that was a candidate for it (needles 50 to 100, single bed) isn't how it was knit. Its needle count, rows, stitch number and whether it was plated are all to ask Agnes. Until then it's entered as <em>guessed</em>, and its relaxed measurements are still worth recording now, since they don't depend on any of that.</li>
+<li><strong>Rib constants.</strong> We need to confirm Knapton et al. 1968 (the wool rib paper) and take its 1×1 and 2×2 rib constants, per relaxation state, before rib gets the "from loop" tier. Until then rib is measured or guessed only.</li>
+<li><strong>Counting rib.</strong> Rib is recorded as needles per 10 cm with both beds counted. Industry often counts face wales only. We need to check which B expects, and show both if needed.</li>
+<li><strong>Terms.</strong> Whether B would rather see different words (cpc/wpc, "course density", a different name for each relaxation state) once she's looked at it.</li>
+</ul>
+
+</main>
+</body>
+</html>
