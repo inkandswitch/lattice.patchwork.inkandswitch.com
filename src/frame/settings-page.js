@@ -11,7 +11,8 @@ import { createDoc } from "./knitoutjs/core/patchwork-docs.js";
 import { icon } from "./knitoutjs/core/icons.js";
 import { themeValue } from "./themes.js";
 import { ThemePreview } from "./theme-preview.js";
-import { fonts, firstFamily, KINDS } from "./fonts.js";
+import { fonts, firstFamily } from "./fonts.js";
+import { POINTER_PATH } from "./pointer.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
@@ -57,6 +58,11 @@ const FONTS = [
   { key: "--editor-family-code", label: "editor font" },
 ];
 const EDITOR_SIZE = "--text-editor-font-size";
+// the fonts, in the picker: lattice's own, then the ones on this computer
+const FONT_GROUPS = [
+  ["lattice", true],
+  ["on this computer", false],
+];
 // its colours are its palette's: a lattice theme's own (everything else in
 // it comes from those), or the studio's
 const LATTICE_COLOURS = [
@@ -110,7 +116,7 @@ function watchAlt() {
 // a pointer, in a colour. or, with alt held, a mouse
 function Pointer() {
   return html`<svg class="lattice-pointer" viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
-    <path d="M4 1.6v11.6l2.9-2.7 1.9 4.4 2.1-.9-1.9-4.3h4.1z" />
+    <path d=${POINTER_PATH} />
   </svg>`;
 }
 function Mouse() {
@@ -307,9 +313,9 @@ export function SettingsPage(props) {
         onChange=${(event) => own.set(key, event.currentTarget.value, { now: true })}
       >
         <option value="" selected=${() => !value()}>${() => `the theme's · ${theirs()}`}</option>
-        <${For} each=${KINDS}>
-          ${(kind) => html`<optgroup label=${kind}>
-            <${For} each=${() => fonts().filter((font) => font.kind === kind)}>
+        <${For} each=${FONT_GROUPS}>
+          ${([label, brought]) => html`<optgroup label=${label}>
+            <${For} each=${() => fonts().filter((font) => font.brought === brought)}>
               ${(font) => html`<option
                 value=${font.stack}
                 style=${{ "font-family": font.stack }}

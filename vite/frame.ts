@@ -6,6 +6,8 @@ const CONTENT_TYPES: Record<string, string> = {
 	".css": "text/css",
 	".js": "text/javascript",
 	".json": "application/json",
+	// the fonts it brings (src/frame/fonts)
+	".woff2": "font/woff2",
 }
 
 // how long a request for the frame's changes is held when nothing changes:

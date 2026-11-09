@@ -11,6 +11,18 @@
 	background: var(--studio-chrome-fill, #eaeaeb);
 	color: var(--studio-chrome-line, var(--studio-line, #383a42));
 	font: 13px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+	/* your mouse: your pointer, in your colour (frame.js). where there's
+	   text to type in, it's the text cursor still */
+	cursor: var(--lattice-pointer, auto);
+
+	& :is(
+		input:not([type="button"], [type="checkbox"], [type="color"], [type="file"], [type="radio"], [type="range"], [type="submit"]),
+		textarea,
+		[contenteditable]:not([contenteditable="false"]),
+		.cm-content
+	) {
+		cursor: text;
+	}
 
 	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
 	--lattice-muted: var(--studio-chrome-line-offset-30, #888);
@@ -567,7 +579,7 @@
 			outline: none;
 		}
 		&:disabled {
-			cursor: default;
+			cursor: inherit;
 		}
 	}
 	& .lattice-theme-name {

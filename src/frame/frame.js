@@ -33,9 +33,11 @@ import { tooltips } from "./knitoutjs/core/tooltip.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
+import { pointerCursor } from "./pointer.js";
 
-// latticework's, too, for its menus, before any project has brought it
-const STYLESHEETS = ["./knitoutjs/core/latticework.css", "./shell.css"].map(
+// latticework's, too, for its menus, before any project has brought it; and
+// the fonts lattice brings
+const STYLESHEETS = ["./fonts/fonts.css", "./knitoutjs/core/latticework.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 
@@ -286,6 +288,8 @@ function Frame(props) {
   };
   const [me] = useDocument(contactUrl);
   const myName = () => String(me()?.name ?? "").trim();
+  // your mouse, in the frame: your pointer, in your colour
+  const myPointer = createMemo(() => pointerCursor(me()?.color));
 
   // the headings down the side, folded or not
   const [projectsOpen, setProjectsOpen] = createSignal(remembered("lattice:projects-list:open", true));
@@ -897,6 +901,7 @@ function Frame(props) {
     return html`<div
         class="knitoutjs-editor-tool lattice-shell"
         data-inspector=${() => (inspector.open() ? "open" : "closed")}
+        style=${() => ({ "--lattice-pointer": myPointer() ?? undefined })}
       >
         <${TopBar} />
         <div class="lattice-body">

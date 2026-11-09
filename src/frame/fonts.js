@@ -1,7 +1,18 @@
-// fonts to pick from in the settings: the ones this computer has, out of a
-// list of likely ones. a font's there if text in it isn't the same width as
+// fonts to pick from in the settings: the ones lattice brings (fonts/
+// fonts.css), there wherever you are, and the ones this computer has, out of
+// a list of likely ones. a font's there if text in it isn't the same width as
 // in each of the generic families it'd otherwise fall back to
 const GENERIC = { sans: "sans-serif", serif: "serif", mono: "monospace", hand: "cursive" };
+
+const BROUGHT = [
+  ["Jost", "sans"],
+  ["Atkinson Hyperlegible Next", "sans"],
+  ["Fraunces", "serif"],
+  ["Fantasque Sans Mono", "mono"],
+  ["IBM Plex Mono", "mono"],
+  ["JetBrains Mono", "mono"],
+  ["Victor Mono", "mono"],
+];
 
 const LIKELY = {
   sans: [
@@ -14,8 +25,6 @@ const LIKELY = {
     "Verdana",
     "Inter",
     "IBM Plex Sans",
-    "Jost",
-    "Atkinson Hyperlegible",
     "Segoe UI",
     "Ubuntu",
     "Arial",
@@ -28,15 +37,12 @@ const LIKELY = {
     "Baskerville",
     "Hoefler Text",
     "Didot",
-    "Fraunces",
     "Times New Roman",
   ],
   mono: [
     "SF Mono",
     "Menlo",
     "Monaco",
-    "JetBrains Mono",
-    "IBM Plex Mono",
     "Fira Code",
     "Cascadia Code",
     "Iosevka",
@@ -65,13 +71,19 @@ function has(name) {
 export const stackOf = (name, kind) => (name === "system-ui" ? "system-ui, sans-serif" : `"${name}", ${GENERIC[kind]}`);
 
 let found = null;
-/** [{name, kind, stack}], the ones that are here, sans to hand */
+/**
+ * [{name, kind, stack, brought}]: lattice's own (`brought`), and then the
+ * ones this computer has, each sans to hand
+ */
 export function fonts() {
-  found ??= KINDS.flatMap((kind) =>
-    LIKELY[kind]
-      .filter((name) => name === "system-ui" || has(name))
-      .map((name) => ({ name, kind, stack: stackOf(name, kind) })),
-  );
+  found ??= [
+    ...BROUGHT.map(([name, kind]) => ({ name, kind, stack: stackOf(name, kind), brought: true })),
+    ...KINDS.flatMap((kind) =>
+      LIKELY[kind]
+        .filter((name) => name === "system-ui" || has(name))
+        .map((name) => ({ name, kind, stack: stackOf(name, kind), brought: false })),
+    ),
+  ];
   return found;
 }
 
