@@ -1,8 +1,8 @@
 // a pushwork directory: {"@patchwork": {type: "directory", title}, [path]: url},
 // its files kept by path. and a project's files, kept in one
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { shortUrl } from "./files.js";
-import { describeDoc } from "./patchwork-docs.js";
+import { shortUrl } from "../knitoutjs/core/files.js";
+import { describeDoc } from "./patchwork/docs.js";
 
 // keys that aren't files (pushwork no longer writes lastSyncAt, but old
 // directories have it)

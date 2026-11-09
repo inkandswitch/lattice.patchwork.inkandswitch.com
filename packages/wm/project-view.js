@@ -4,14 +4,14 @@ import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { mountLatticework } from "./latticework.js";
-import { PROJECT_TYPES, projectTitle, typeOf } from "./project.js";
-import { isOldKnitoutjs, updateKnitoutjs } from "./migrate.js";
+import { mountWorkspace } from "./workspace.js";
+import { PROJECT_TYPES, projectTitle, typeOf } from "./doc/project.js";
+import { isOldKnitoutjs, updateKnitoutjs } from "../knitoutjs/core/migrate.js";
 import { folderFiles } from "./folder.js";
 import { directoryFiles } from "./directory.js";
-import { createDoc } from "./patchwork-docs.js";
+import { createDoc } from "./patchwork/docs.js";
 
-const STYLESHEET = new URL("./latticework.css", import.meta.url).href;
+const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
@@ -170,7 +170,7 @@ export function mountProject(element, { project, repo, baseRepo = repo, hive, ..
     Promise.all([repo.find(string(doc.files)), baseRepo.find(string(doc.files))]).then(
       ([files, room]) => {
         if (now.dead || dead) return;
-        off = mountLatticework(box, {
+        off = mountWorkspace(box, {
           layout: project,
           files: titledFiles(filesOf(files, repo), project),
           room,

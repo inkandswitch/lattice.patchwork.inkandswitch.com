@@ -1,6 +1,6 @@
 /* the frame around a project: top bar, projects and /system down the left,
    and the inspector down the right. the project itself, its files beside its
-   panes, is latticework's (packages/knitoutjs/core/latticework.css) */
+   panes, is wm's (packages/wm/wm.css) */
 .knitoutjs-editor-tool.lattice-shell {
 	display: flex;
 	flex-direction: column;

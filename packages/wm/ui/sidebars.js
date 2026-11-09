@@ -6,10 +6,16 @@ export const MAX_WIDTH = 480;
 // dragged narrower than this, a sidebar closes
 const CLOSE_BELOW = 90;
 
-// remembered on this device
-export function remembered(key, fallback) {
+// remembered on this device. `was` is the key it had before, if it's been
+// renamed: what's there is copied over the first time (and left, in case
+// something else still reads it)
+export function remembered(key, fallback, was) {
   try {
-    const value = localStorage.getItem(key);
+    let value = localStorage.getItem(key);
+    if (value == null && was) {
+      value = localStorage.getItem(was);
+      if (value != null) localStorage.setItem(key, value);
+    }
     return value == null ? fallback : JSON.parse(value);
   } catch {
     return fallback;
@@ -22,23 +28,23 @@ export function remember(key, value) {
 }
 
 /**
- * a sidebar's open and width, remembered as `lattice:<name>:open` and
- * `lattice:<name>:width`
+ * a sidebar's open and width, remembered as `<key>:open` and `<key>:width`
+ * (`was`: the key they were remembered under before)
  */
-export function sidebarState(name, width) {
-  const [open, setOpenSignal] = createSignal(remembered(`lattice:${name}:open`, true));
-  const [size, setSizeSignal] = createSignal(remembered(`lattice:${name}:width`, width));
+export function sidebarState(key, width, was) {
+  const [open, setOpenSignal] = createSignal(remembered(`${key}:open`, true, was && `${was}:open`));
+  const [size, setSizeSignal] = createSignal(remembered(`${key}:width`, width, was && `${was}:width`));
   return {
     open,
     width: size,
     defaultWidth: width,
     setOpen(value) {
       setOpenSignal(value);
-      remember(`lattice:${name}:open`, value);
+      remember(`${key}:open`, value);
     },
     setWidth(value) {
       setSizeSignal(value);
-      remember(`lattice:${name}:width`, value);
+      remember(`${key}:width`, value);
     },
   };
 }

@@ -2,8 +2,8 @@
 // by side. nothing here imports a package (see core/project.js)
 import defaultJavaScriptContent from "./core/default-source.js";
 import { newFileDoc } from "./files.js";
-import { newPanel, newGroup, newSplit } from "./core/layout.js";
-import { newProjectParts, projectTitle } from "./core/project.js";
+import { newPanel, newGroup, newSplit } from "../wm/doc/layout.js";
+import { newProjectParts, projectTitle } from "../wm/doc/project.js";
 
 export const KnitoutJSDatatype = {
   // patchwork calls this inside handle.change without waiting for it, so

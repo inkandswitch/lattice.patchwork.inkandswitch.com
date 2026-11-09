@@ -74,6 +74,7 @@ export const TOOLS = {
     title: "a program on someone's computer, shared with latticex",
     position: 1,
     extensions: ["latticex"],
+    patchworkId: "latticex",
     // latticex shares on the doc itself, never on a draft's copy of it
     drafts: false,
     load: () => import("./terminal.js"),
@@ -84,6 +85,7 @@ export const TOOLS = {
     title: "a knitting machine: its gauge, beds, carriers and stitch table",
     position: 1,
     extensions: ["machine"],
+    patchworkId: "lattice:machine",
     load: () => import("./machine.js"),
   },
   yarn: {
@@ -92,6 +94,7 @@ export const TOOLS = {
     title: "a yarn: what it is, its count, and the swatches knitted from it",
     position: 1,
     extensions: ["yarn"],
+    patchworkId: "lattice:yarn",
     load: () => import("./yarn.js"),
   },
   swatch: {
@@ -100,6 +103,7 @@ export const TOOLS = {
     title: "a swatch: how it was knit, and what it measures",
     position: 1,
     extensions: ["swatch"],
+    patchworkId: "lattice:swatch",
     load: () => import("./swatch.js"),
   },
   patchwork: {
@@ -107,7 +111,7 @@ export const TOOLS = {
     name: "patchwork",
     title: "show this doc with patchwork's own tool for it",
     extensions: ["*"],
-    load: () => import("../../packages/knitoutjs/core/patchwork-pane.js"),
+    load: () => import("../../packages/wm/patchwork-pane.js"),
   },
 };
 

@@ -4,11 +4,11 @@
 // draft's copy of it. and the drafts go: they're forks of the old shape, and
 // merging one back would bring the old shape back with it
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { OLD_KNITOUTJS_TYPES, projectTitle, typeOf } from "./project.js";
-import * as Layout from "./layout.js";
-import { folderFiles, folderTitle } from "./folder.js";
-import { createDoc, findSoon } from "./patchwork-docs.js";
-import { seedActive } from "./active.js";
+import { OLD_KNITOUTJS_TYPES, projectTitle, typeOf } from "../../wm/doc/project.js";
+import * as Layout from "../../wm/doc/layout.js";
+import { folderFiles, folderTitle } from "../../wm/folder.js";
+import { createDoc, findSoon } from "../../wm/patchwork/docs.js";
+import { seedActive } from "../../wm/active.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));

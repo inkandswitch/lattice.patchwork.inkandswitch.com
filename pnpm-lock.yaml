@@ -31,6 +31,12 @@ importers:
         specifier: 3.4.1
         version: 3.4.1
 
+  packages/wm:
+    devDependencies:
+      '@automerge/automerge':
+        specifier: 3.4.1
+        version: 3.4.1
+
 packages:
 
   '@automerge/automerge-repo-keyhive@0.6.0-alpha.1':

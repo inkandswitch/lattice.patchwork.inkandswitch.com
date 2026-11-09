@@ -1,5 +1,5 @@
 import {moduleWorker} from "./files.js"
-import {icon} from "../../packages/knitoutjs/core/icons.js"
+import {icon} from "../../packages/wm/ui/icons.js"
 import {holdRows, machineLimits} from "./knitcheck.js"
 import {watchProfiles} from "./profiles.js"
 import {profilesFromFabric} from "./migrate-fabric.js"
@@ -7,7 +7,7 @@ import {RELAX_STATES, STATE_NAMES, STRUCTURE_NAMES} from "./profile-docs.js"
 import {docChoice} from "./profile-form.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
 import {FIBRES, RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
-import {stylesheet} from "../../packages/knitoutjs/core/stylesheet.js"
+import {stylesheet} from "../../packages/wm/ui/stylesheet.js"
 
 const WORKER_URL = new URL("./knitcheck-worker.js", import.meta.url)
 const STYLESHEET = new URL("./checks.css", import.meta.url).href

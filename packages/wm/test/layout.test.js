@@ -20,7 +20,7 @@ import {
   float,
   dock,
   findPanelShowing,
-} from "../core/layout.js";
+} from "../doc/layout.js";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 

@@ -12,6 +12,7 @@ export const TOOLS = {
     // where it sits in a tab's tool menu
     position: 2,
     extensions: ["k"],
+    patchworkId: "prototype-knitoutjs-panes-visualizer",
     load: () => import("./core/visualizer.js"),
   },
   editor: {
@@ -27,7 +28,7 @@ export const TOOLS = {
     name: "patchwork",
     title: "show this doc with patchwork's own tool for it",
     extensions: ["*"],
-    load: () => import("./core/patchwork-pane.js"),
+    load: () => import("../wm/patchwork-pane.js"),
   },
 };
 

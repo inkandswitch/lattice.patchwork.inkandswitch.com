@@ -1,8 +1,8 @@
 import {checkPanel, located} from "./checks.js"
 import {docText, moduleWorker, saveFile} from "./files.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "../../packages/knitoutjs/core/yarns.js"
-import {withIcon} from "../../packages/knitoutjs/core/icons.js"
-import {stylesheet} from "../../packages/knitoutjs/core/stylesheet.js"
+import {withIcon} from "../../packages/wm/ui/icons.js"
+import {stylesheet} from "../../packages/wm/ui/stylesheet.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
 const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)

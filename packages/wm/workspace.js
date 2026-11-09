@@ -1,5 +1,5 @@
-// latticework: a project's panes, and its files down the side. what each
-// app's project tool shows, and what lattice's frame has in its middle
+// wm: a project's panes, and its files down the side. what each app's
+// project tool shows, and what lattice's frame has in its middle
 import { createSignal, createMemo, createEffect, on, onCleanup, For, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { render } from "solid-js/web";
@@ -11,20 +11,20 @@ import {
   getRegistry,
   getSupportedToolsForType,
 } from "@inkandswitch/patchwork-plugins";
-import { docColour, docText, shortUrl, newFileDoc, textHash, withExtension } from "./files.js";
-import * as Layout from "./layout.js";
-import { urlFromText, loadDatatype, createDocOfDatatype, whenFound } from "./patchwork-docs.js";
-import defaultSource from "./default-source.js";
-import { Resizer, sidebarState } from "./sidebars.js";
-import { icon } from "./icons.js";
-import { builds, setBuild } from "./builds.js";
+import { docColour, docText, shortUrl, newFileDoc, textHash, withExtension } from "../knitoutjs/core/files.js";
+import * as Layout from "./doc/layout.js";
+import { urlFromText, loadDatatype, createDocOfDatatype, whenFound } from "./patchwork/docs.js";
+import defaultSource from "../knitoutjs/core/default-source.js";
+import { Resizer, sidebarState } from "./ui/sidebars.js";
+import { icon } from "./ui/icons.js";
+import { builds, setBuild } from "../knitoutjs/core/builds.js";
 import { readActive, writeActive, activeChannel } from "./active.js";
 import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
-import { tooltips } from "./tooltip.js";
+import { tooltips } from "./ui/tooltip.js";
 
-const STYLESHEET = new URL("./latticework.css", import.meta.url).href;
+const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
 // "just now", "4 min ago": how long since a .k was built
 function ago(time, now) {
@@ -91,8 +91,8 @@ function sameFields(a, b) {
 
 // what can be dragged in: our own tabs, the tools in a tab's tool menu (to
 // open that file with that tool somewhere else), and docs from the sidebar
-const PANEL_TYPE = "application/x-knitoutjs-panel";
-const TOOL_TYPE = "application/x-knitoutjs-tool";
+const PANEL_TYPE = "application/x-lattice-wm-panel";
+const TOOL_TYPE = "application/x-lattice-wm-tool";
 // drags that place a pane, rather than bring a doc in
 const LAYOUT_TYPES = [PANEL_TYPE, TOOL_TYPE];
 const DOC_TYPES = ["text/x-patchwork-dnd", "text/x-patchwork-urls", "text/uri-list"];
@@ -186,7 +186,7 @@ function cellStyle(node, direction) {
  *              giving "arrow" or "mouse" (read in an effect, so it can be a
  *              signal). an arrow, without one
  */
-export function mountLatticework(
+export function mountWorkspace(
   element,
   {
     layout: layoutHandle,
@@ -209,7 +209,7 @@ export function mountLatticework(
   let menu;
 
   tooltips();
-  const filesSidebar = sidebar ?? sidebarState("files", 200);
+  const filesSidebar = sidebar ?? sidebarState("lattice-wm:files", 200, "lattice:files");
 
   // a stylesheet added by script doesn't hold up painting, so stay hidden
   // until it's in, or you see the whole thing unstyled first
@@ -647,7 +647,7 @@ export function mountLatticework(
     const builder = builds[jsUrl]?.builder;
     if (builder) return builder.now();
     const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("./run.js"),
+      import("../knitoutjs/core/run.js"),
       repo.find(jsUrl),
       repo.find(kUrl),
     ]);
@@ -776,12 +776,15 @@ export function mountLatticework(
 
   // say a pane's doc is mounted (or not) as a <patchwork-view> would, so
   // providers above know what's open: comments watches those docs for
-  // threads, and drafts lists them. from latticework's element, which is
-  // still in the page when a pane's own has already gone
+  // threads, and drafts lists them. from wm's element, which is still in the
+  // page when a pane's own has already gone. the tool's id is patchwork's
+  // (which it preloads next time), so only one patchwork has: a patchwork
+  // tool's, or the `patchworkId` of one of ours, if it has one
   function announce(type, host) {
+    const toolId = host.patchworkTool ?? TOOLS[host.tool]?.patchworkId;
     element.dispatchEvent(
       new CustomEvent(type, {
-        detail: { url: host.url, toolId: `latticework:${host.tool}` },
+        detail: toolId ? { url: host.url, toolId } : { url: host.url },
         bubbles: true,
         composed: true,
       }),
@@ -916,7 +919,7 @@ export function mountLatticework(
       ),
     );
     const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("./run.js"),
+      import("../knitoutjs/core/run.js"),
       repo.find(js),
       repo.find(k),
     ]);
@@ -1209,7 +1212,7 @@ export function mountLatticework(
     sendTimer = null;
     if (!Object.keys(outgoing).length) return;
     try {
-      layoutHandle.broadcast({ latticework: "drag", from: me, n: ++sent, nodes: outgoing });
+      layoutHandle.broadcast({ "lattice-wm": "drag", from: me, n: ++sent, nodes: outgoing });
     } catch {}
     outgoing = {};
   }
@@ -1217,7 +1220,7 @@ export function mountLatticework(
   // theirs. messages can come out of order, so an older one is dropped
   const heard = new Map();
   function onDragMessage({ message }) {
-    if (message?.latticework !== "drag" || typeof message.from !== "string" || message.from === me) return;
+    if (message?.["lattice-wm"] !== "drag" || typeof message.from !== "string" || message.from === me) return;
     if (!(message.n > (heard.get(message.from) ?? 0))) return;
     heard.set(message.from, message.n);
     const until = Date.now() + LIVE_QUIET;

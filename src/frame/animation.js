@@ -5,8 +5,8 @@ import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
 import {YARNS_CHANGED, yarnPicker, yarnStrands} from "../../packages/knitoutjs/core/yarns.js"
-import {icon} from "../../packages/knitoutjs/core/icons.js"
-import {stylesheet} from "../../packages/knitoutjs/core/stylesheet.js"
+import {icon} from "../../packages/wm/ui/icons.js"
+import {stylesheet} from "../../packages/wm/ui/stylesheet.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
 const SVG = "http://www.w3.org/2000/svg"

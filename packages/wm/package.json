@@ -1,0 +1,13 @@
+{
+	"name": "wm",
+	"version": "0.0.1",
+	"private": true,
+	"license": "AGPL-3.0-or-later",
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/*.test.js"
+	},
+	"devDependencies": {
+		"@automerge/automerge": "3.4.1"
+	}
+}

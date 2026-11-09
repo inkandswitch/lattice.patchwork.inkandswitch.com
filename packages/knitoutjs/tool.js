@@ -1,6 +1,6 @@
 // knitoutjs's project tool: latticework on a project, its files down the side
-import { mountProject } from "./core/project-view.js";
-import { PROJECT_TOOLS } from "./core/project.js";
+import { mountProject } from "../wm/project-view.js";
+import { PROJECT_TOOLS } from "../wm/doc/project.js";
 import { TOOLS, toolsFor, fileExtension } from "./files.js";
 
 export default function KnitoutProjectTool(handle, element) {

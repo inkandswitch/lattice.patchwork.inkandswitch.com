@@ -3,7 +3,7 @@
 // screen as ephemeral messages on it, and keys typed here go back the same
 // way (see latticex/README.md for what the messages are)
 
-import {stylesheet} from "../../packages/knitoutjs/core/stylesheet.js"
+import {stylesheet} from "../../packages/wm/ui/stylesheet.js"
 
 const STYLESHEET = new URL("./terminal.css", import.meta.url).href
 // ask again this often while there's no screen, or it's gone quiet

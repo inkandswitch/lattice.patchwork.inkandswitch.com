@@ -12,8 +12,8 @@ import {
   OLD_KNITOUTJS_TYPES,
   projectTitle,
   typeOf,
-} from "../../packages/knitoutjs/core/project.js";
-import { createProject, mountProject, mountUpdate } from "../../packages/knitoutjs/core/project-view.js";
+} from "../../packages/wm/doc/project.js";
+import { createProject, mountProject, mountUpdate } from "../../packages/wm/project-view.js";
 import {
   isOldKnitoutjs,
   isOldLatticeFolder,
@@ -22,14 +22,14 @@ import {
   updateLatticeFolder,
   updatedTo,
 } from "../../packages/knitoutjs/core/migrate.js";
-import { createDoc, findSoon, urlFromText } from "../../packages/knitoutjs/core/patchwork-docs.js";
-import { seedActive } from "../../packages/knitoutjs/core/active.js";
+import { createDoc, findSoon, urlFromText } from "../../packages/wm/patchwork/docs.js";
+import { seedActive } from "../../packages/wm/active.js";
 import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
-import { folderTitle } from "../../packages/knitoutjs/core/folder.js";
-import { directoryTitle } from "../../packages/knitoutjs/core/directory.js";
-import { Resizer, remember, remembered, sidebarState } from "../../packages/knitoutjs/core/sidebars.js";
-import { icon } from "../../packages/knitoutjs/core/icons.js";
-import { tooltips } from "../../packages/knitoutjs/core/tooltip.js";
+import { folderTitle } from "../../packages/wm/folder.js";
+import { directoryTitle } from "../../packages/wm/directory.js";
+import { Resizer, remember, remembered, sidebarState } from "../../packages/wm/ui/sidebars.js";
+import { icon } from "../../packages/wm/ui/icons.js";
+import { tooltips } from "../../packages/wm/ui/tooltip.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
@@ -38,7 +38,7 @@ import { useToolStorage } from "./storage.js";
 
 // latticework's, too, for its menus, before any project has brought it; and
 // the fonts lattice brings
-const STYLESHEETS = ["./fonts/fonts.css", "../../packages/knitoutjs/core/latticework.css", "./shell.css"].map(
+const STYLESHEETS = ["./fonts/fonts.css", "../../packages/wm/wm.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 
@@ -415,9 +415,9 @@ function Frame(props) {
 
   // the projects, the project's files and the inspector are each resizable,
   // and each opens and closes on its own
-  const folders = sidebarState("folders", 200);
-  const files = sidebarState("files", 200);
-  const inspector = sidebarState("inspector", 300);
+  const folders = sidebarState("lattice:folders", 200);
+  const files = sidebarState("lattice:files", 200);
+  const inspector = sidebarState("lattice:inspector", 300);
 
   // ── the open project ───────────────────────────────────────────────────
 

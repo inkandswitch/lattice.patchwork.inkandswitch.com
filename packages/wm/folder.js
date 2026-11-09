@@ -2,8 +2,8 @@
 // docs, as patchwork's folder tool makes them. and a project's files, kept
 // in one
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { shortUrl } from "./files.js";
-import { describeDoc } from "./patchwork-docs.js";
+import { shortUrl } from "../knitoutjs/core/files.js";
+import { describeDoc } from "./patchwork/docs.js";
 
 // a string in a doc can be a plain string or an ImmutableString (pushwork
 // writes links that way); read them the same

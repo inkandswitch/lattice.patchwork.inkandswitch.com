@@ -2,10 +2,22 @@
 // localStorage by project and group, so a reload finds it, and passed
 // round a BroadcastChannel, so this browser's other tabs follow along.
 // switching tabs writes nothing to the doc
-const key = (layoutUrl) => `latticework:active:${layoutUrl}`;
+const key = (layoutUrl) => `lattice-wm:active:${layoutUrl}`;
+// where it was kept before: moved over the first time it's read
+const was = (layoutUrl) => `latticework:active:${layoutUrl}`;
+
+function moveOver(layoutUrl) {
+  try {
+    const old = localStorage.getItem(was(layoutUrl));
+    if (old == null) return;
+    if (localStorage.getItem(key(layoutUrl)) == null) localStorage.setItem(key(layoutUrl), old);
+    localStorage.removeItem(was(layoutUrl));
+  } catch {}
+}
 
 // {[group id]: panel id}
 export function readActive(layoutUrl) {
+  moveOver(layoutUrl);
   try {
     const active = JSON.parse(localStorage.getItem(key(layoutUrl)) ?? "{}");
     return active && typeof active === "object" && !Array.isArray(active) ? active : {};

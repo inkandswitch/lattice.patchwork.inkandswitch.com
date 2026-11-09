@@ -25,7 +25,7 @@ const ARRIVING = [0, 1000, 3000, 8000];
 const ASK_EVERY = 2000;
 // many asking at once get one answer
 const ANSWER_AFTER = 100;
-const HELLO = "latticework:hello?";
+const HELLO = "lattice-wm:hello?";
 
 const string = (value) => (value == null ? "" : String(value));
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
