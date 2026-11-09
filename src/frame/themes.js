@@ -12,8 +12,8 @@
 import { createEffect, createMemo, createResource, createSignal, mapArray, onCleanup } from "solid-js";
 import { isValidAutomergeUrl, parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { getRegistry } from "@inkandswitch/patchwork-plugins";
-import { subscribe } from "@inkandswitch/patchwork-providers";
 import { useDocument } from "./vendor/solid-automerge.js";
+import { useToolStorage } from "./storage.js";
 import { createDoc } from "./knitoutjs/core/patchwork-docs.js";
 
 export const THEME_TYPE = "lattice:theme";
@@ -111,13 +111,8 @@ export function useThemes(element, { repo, hive }) {
   darkQuery.addEventListener("change", onMode);
   onCleanup(() => darkQuery.removeEventListener("change", onMode));
 
-  // the preferences: found through the frame's tool storage
-  const [prefsUrl, setPrefsUrl] = createSignal();
-  const unsubscribe = subscribe(element, { type: "patchwork:tool-storage", toolId: PREFERENCES }, (url) => {
-    if (isUrl(url)) setPrefsUrl(string(url));
-  });
-  onCleanup(() => unsubscribe?.());
-  const [prefs, prefsHandle] = useDocument(prefsUrl, { repo });
+  // the preferences: theme-preferences' tool storage
+  const [prefs, prefsHandle] = useToolStorage(element, PREFERENCES, { repo });
   createEffect(() => {
     const handle = prefsHandle();
     if (handle && !handle.doc()?.["@patchwork"]) {

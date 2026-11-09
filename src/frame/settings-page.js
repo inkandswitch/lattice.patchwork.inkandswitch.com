@@ -12,28 +12,10 @@ import { icon } from "./knitoutjs/core/icons.js";
 import { themeValue } from "./themes.js";
 import { ThemePreview } from "./theme-preview.js";
 import { fonts, firstFamily } from "./fonts.js";
-import { POINTER_PATH } from "./pointer.js";
+import { COLOURS, colourFor, MOUSE, POINTER_PATH } from "./pointer.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
-
-// patchwork's presence colours (the account package's palette)
-const COLOURS = [
-  ["sky", "hsl(200, 70%, 50%)"],
-  ["coral", "hsl(10, 75%, 58%)"],
-  ["emerald", "hsl(145, 70%, 45%)"],
-  ["violet", "hsl(270, 70%, 55%)"],
-  ["amber", "hsl(38, 85%, 50%)"],
-  ["rose", "hsl(350, 70%, 55%)"],
-  ["teal", "hsl(178, 70%, 45%)"],
-  ["indigo", "hsl(235, 70%, 58%)"],
-  ["lime", "hsl(85, 70%, 45%)"],
-  ["fuchsia", "hsl(310, 70%, 55%)"],
-  ["orange", "hsl(25, 80%, 52%)"],
-  ["cyan", "hsl(188, 75%, 48%)"],
-];
-const colourFor = (url) =>
-  COLOURS[[...url].reduce((sum, char) => sum + char.charCodeAt(0), 0) % COLOURS.length][1];
 
 // a picture, made square (the middle of it) and small
 const PICTURE = 256;
@@ -120,22 +102,24 @@ function Pointer() {
   </svg>`;
 }
 function Mouse() {
+  const { tail, body, ear, inner, eye, nose } = MOUSE;
   return html`<svg class="lattice-mouse" viewBox="0 0 20 16" width="22" height="18" aria-hidden="true">
-    <path class="lattice-mouse-tail" d="M4.4 12.2c-2.6.2-3.8-1.6-3-3.6.5-1.2 1.8-1.4 2.4-.7" />
-    <path d="M3.9 12.6c-.3-3.7 2.6-6.2 6.4-6.1 2.7.1 4.6 1.6 7 3.5.6.5.4 1.3-.3 1.5-1.6.5-3.3 1.1-5.4 1.2H5.1c-.6 0-1.1-.1-1.2-.1z" />
-    <circle cx="11.6" cy="6.3" r="2.5" />
-    <circle class="lattice-mouse-ear" cx="11.6" cy="6.3" r="1.25" />
-    <circle class="lattice-mouse-eye" cx="14.5" cy="9.1" r=".75" />
-    <circle class="lattice-mouse-nose" cx="17.5" cy="10.6" r=".65" />
+    <path class="lattice-mouse-tail" d=${tail} />
+    <path d=${body} />
+    <circle cx=${ear[0]} cy=${ear[1]} r=${ear[2]} />
+    <circle class="lattice-mouse-ear" cx=${inner[0]} cy=${inner[1]} r=${inner[2]} />
+    <circle class="lattice-mouse-eye" cx=${eye[0]} cy=${eye[1]} r=${eye[2]} />
+    <circle class="lattice-mouse-nose" cx=${nose[0]} cy=${nose[1]} r=${nose[2]} />
   </svg>`;
 }
 
 /**
  * the settings, in `props`: account (the account doc's handle), accountDoc
- * (its live view), repo, hive, themes (themes.js's useThemes)
+ * (its live view), repo, hive, themes (themes.js's useThemes), pointer
+ * ({kind(), set(kind)}: whether your mouse is an arrow or a mouse)
  */
 export function SettingsPage(props) {
-  const { account, accountDoc, repo, hive, themes } = props;
+  const { account, accountDoc, repo, hive, themes, pointer } = props;
 
   // ── you ────────────────────────────────────────────────────────────────
 
@@ -259,13 +243,16 @@ export function SettingsPage(props) {
               style=${{ "--mouse": value }}
               aria-checked=${() => String(myColour() === value)}
               aria-label=${name}
-              title=${name}
-              onClick=${() =>
+              title=${() => `${name}${alt() ? " · a mouse" : ""}`}
+              onClick=${(event) => {
+                // with alt held, your mouse is a mouse
+                pointer.set(event.altKey ? "mouse" : "arrow");
                 changeMe((doc) => {
                   doc.color = value;
-                })}
+                });
+              }}
             >
-              ${() => (alt() ? Mouse() : Pointer())}
+              ${() => (alt() || (pointer.kind() === "mouse" && myColour() === value) ? Mouse() : Pointer())}
             </button>`}
           <//>
         </span>

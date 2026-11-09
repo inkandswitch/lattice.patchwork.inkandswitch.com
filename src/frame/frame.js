@@ -33,7 +33,8 @@ import { tooltips } from "./knitoutjs/core/tooltip.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
-import { pointerCursor } from "./pointer.js";
+import { colourFor, pointerCursor } from "./pointer.js";
+import { useToolStorage } from "./storage.js";
 
 // latticework's, too, for its menus, before any project has brought it; and
 // the fonts lattice brings
@@ -281,6 +282,30 @@ function Frame(props) {
   // what's in the middle instead of the project, when it isn't: "settings"
   const [page, setPage] = createSignal(null);
 
+  // the page's title: the file you're in, and its project (as patchwork's
+  // own router has it, "<what> | <site>"). when patchwork's router puts its
+  // own there, ours goes back
+  const [focusedFile, setFocusedFile] = createSignal(null);
+  const titleBefore = document.title;
+  const siteTitle = titleBefore.split(" | ").pop() || "Patchwork";
+  const title = createMemo(() => {
+    const what =
+      page() === "settings"
+        ? "settings"
+        : [focusedFile()?.name, current()?.name].filter(Boolean).join(" · ");
+    return what ? `${what} | ${siteTitle}` : titleBefore;
+  });
+  const putTitle = () => {
+    if (document.title !== title()) document.title = title();
+  };
+  createEffect(putTitle);
+  const titleWatcher = new MutationObserver(putTitle);
+  titleWatcher.observe(document.head, { subtree: true, childList: true, characterData: true });
+  onCleanup(() => {
+    titleWatcher.disconnect();
+    document.title = titleBefore;
+  });
+
   // your contact (your picture and name, down the bottom of the projects)
   const contactUrl = () => {
     const url = String(account.contactUrl ?? "");
@@ -289,7 +314,22 @@ function Frame(props) {
   const [me] = useDocument(contactUrl);
   const myName = () => String(me()?.name ?? "").trim();
   // your mouse, in the frame: your pointer, in your colour
-  const myPointer = createMemo(() => pointerCursor(me()?.color));
+  // (an arrow, or a mouse: lattice's own, in the account's tool storage, so
+  // it's yours wherever you open lattice, from as soon as it's loaded)
+  const [mine, myStorage] = useToolStorage(element, "lattice", { repo: baseRepo });
+  const pointer = {
+    kind: () => (mine()?.pointer === "mouse" ? "mouse" : "arrow"),
+    set(kind) {
+      const handle = myStorage();
+      if (handle && handle.doc()?.pointer !== kind) {
+        handle.change((doc) => {
+          doc.pointer = kind;
+        });
+      }
+    },
+  };
+  const myColour = () => String(me()?.color ?? "") || (contactUrl() ? colourFor(contactUrl()) : null);
+  const myPointer = createMemo(() => pointerCursor(myColour(), pointer.kind()));
 
   // the headings down the side, folded or not
   const [projectsOpen, setProjectsOpen] = createSignal(remembered("lattice:projects-list:open", true));
@@ -459,6 +499,7 @@ function Frame(props) {
         hive,
         sidebar: files,
         onShowing: setShowing,
+        onFocused: (file) => setFocusedFile(file ? { ...file } : null),
         onOpen: (open) => (openInProject = open),
         ...latticeOptions(baseRepo),
       });
@@ -482,6 +523,7 @@ function Frame(props) {
       unmount = () => {
         unmountInspector();
         unmountProject();
+        setFocusedFile(null);
       };
     })();
 
@@ -873,7 +915,14 @@ function Frame(props) {
   const themes = useThemes(element, { repo: baseRepo, hive });
   function Settings() {
     return html`<div class="lattice-main lattice-settings-main">
-      <${SettingsPage} account=${handle} accountDoc=${account} repo=${baseRepo} hive=${hive} themes=${themes} />
+      <${SettingsPage}
+        account=${handle}
+        accountDoc=${account}
+        repo=${baseRepo}
+        hive=${hive}
+        themes=${themes}
+        pointer=${pointer}
+      />
     </div>`;
   }
 
