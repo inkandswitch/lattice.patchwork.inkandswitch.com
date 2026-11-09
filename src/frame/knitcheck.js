@@ -21,7 +21,8 @@ export const KNITERATE = {needles: 252, carriers: ["1", "2", "3", "4", "5", "6"]
 export function machineLimits(profiles) {
 	const machine = profiles?.machine
 	return {
-		name: machine?.title || "kniterate",
+		// (what to call it: as its profile does, or the kniterate)
+		name: machine?.title || "the kniterate",
 		needles: machine?.needles > 0 ? machine.needles : KNITERATE.needles,
 		carriers: machine?.carriers?.length ? machine.carriers : KNITERATE.carriers,
 	}
@@ -202,7 +203,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 		}
 		for (const c of op.carriers) {
 			if (!limits.carriers.includes(c)) {
-				report("error", i, `the ${limits.name} has carriers ${limits.carriers.join(", ")}: there's no carrier ${c}`, "carrier-name")
+				report("error", i, `${limits.name} has carriers ${limits.carriers.join(", ")}: there's no carrier ${c}`, "carrier-name")
 			}
 			else if (makesLoop(op) && !active.has(c)) report("error", i, `carrier ${c} isn't in: bring it in first`, "carrier-out")
 		}
@@ -344,7 +345,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	const [min, max] = knitout.range
 	const width = ops.some(op => op.needle) ? max - min + 1 : 0
 	if (width > limits.needles) {
-		problems.push({level: "error", kind: "width", text: `it's ${width} needles wide: the ${limits.name}'s beds are ${limits.needles}`, op: null, line: null, lastLine: null, count: 1})
+		problems.push({level: "error", kind: "width", text: `it's ${width} needles wide: ${limits.name}'s beds are ${limits.needles}`, op: null, line: null, lastLine: null, count: 1})
 	}
 
 	const order = {error: 0, risk: 1, note: 2}

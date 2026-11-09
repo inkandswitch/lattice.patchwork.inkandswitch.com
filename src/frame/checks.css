@@ -239,6 +239,10 @@
 }
 
 /* how big it comes out, each way it's let relax */
+.checks-settings[hidden] {
+	display: none;
+}
+
 .checks-size-table {
 	border-collapse: collapse;
 	margin: 4px 0;
@@ -247,6 +251,10 @@
 	& td {
 		padding: 1px 10px 1px 0;
 		vertical-align: baseline;
+	}
+
+	& td:last-child {
+		white-space: nowrap;
 	}
 
 	& td:first-child {

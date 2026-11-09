@@ -151,3 +151,11 @@ test("without profiles, a washed swatch's numbers are the washed state's", () =>
 	near(result.size.states.wet.width.mm, (20 * 100) / 27.5)
 	assert.equal(result.size.states.wet.estimated, false)
 })
+
+test("a machine's named as its profile names it, a kniterate as the kniterate", () => {
+	const wide = checkKnitout(knitout({width: 120, rows: 2}), null, {gauge: 7, profiles: {...profiles(), machine: {...studio, needles: 100}}})
+	const text = wide.problems.find(problem => problem.kind === "width").text
+	assert.match(text, /: the studio kniterate's beds are 100$/)
+	assert.equal(machineLimits(null).name, "the kniterate")
+	assert.equal(machineLimits({machine: {...studio, title: ""}}).name, "the kniterate")
+})

@@ -465,7 +465,7 @@ export function checkPanel(stage, onPick, {handle = null, context = {}, onProfil
 				(grams == null ? "" : ` (${grams < 10 ? grams.toFixed(1) : Math.round(grams)} g)`),
 		)
 		facts.textContent =
-			`${width} of the ${limits.name}'s ${limits.needles} needles` +
+			`${width} of ${limits.name}'s ${limits.needles} needles` +
 			(metres.length ? ` · yarn${guessed ? ", at a middling stitch size" : ""}: ${metres.join(", ")}` : "")
 		heading.append(verdict, close, facts, sizeFacts(result, context, stage))
 		used = [...new Set(result.size.sources.map(source => source.stitch))]
