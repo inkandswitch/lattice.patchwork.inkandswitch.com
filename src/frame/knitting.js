@@ -4,6 +4,12 @@ import {twistStep} from "./strands.js"
 // a .k's knitting, op by op, on a pretend machine: what the animation and the
 // 3d view both play out
 
+// how far the rollers pull the fabric down, and how fast the carriage goes,
+// till a .k says otherwise (x-roller-advance, x-speed-number): the
+// kniterate's converter's
+export const ROLLER = 100
+export const SPEED = 100
+
 const NEEDLE_RE = /^(f|b|fs|bs)(-?\d+)$/
 
 function needleOf(token) {
@@ -14,11 +20,13 @@ function needleOf(token) {
 }
 
 // every op in a .k, as {kind, dir, needle, to, carriers, rack, stitch (the
-// x-stitch-number it's knitted at), kLine, jsLine, text}, with the carriers
+// x-stitch-number it's knitted at), roller, speed, kLine, jsLine, text}, with the carriers
 // it names (in the order the header gives them) and the needles it uses
 export function readKnitout(text) {
 	const ops = []
 	let stitch = STITCH
+	let roller = ROLLER
+	let speed = SPEED
 	const carriers = []
 	const problems = []
 	let min = Infinity
@@ -45,7 +53,7 @@ export function readKnitout(text) {
 		if (!opText) return
 		const source = raw.match(/;!source:(-?\d+)/)
 		const [name, ...args] = opText.split(/\s+/)
-		const op = {kLine, jsLine: source ? Number(source[1]) : null, text: opText, carriers: [], stitch}
+		const op = {kLine, jsLine: source ? Number(source[1]) : null, text: opText, carriers: [], stitch, roller, speed}
 		try {
 			if (name === "knit" || name === "tuck" || name === "miss") {
 				op.kind = name
@@ -82,6 +90,12 @@ export function readKnitout(text) {
 				// stitch number's kept: the loops after are that size)
 				op.kind = "other"
 				if (name === "x-stitch-number" && args[0]) op.stitch = stitch = args[0]
+				const value = Number(args[0])
+				if (Number.isFinite(value) && args[0] !== "") {
+					if (name === "x-roller-advance") op.roller = roller = value
+					if (name === "x-add-roller-advance") op.roller = roller = roller + value
+					if (name === "x-speed-number") op.speed = speed = value
+				}
 			}
 		} catch (problem) {
 			problems.push({line: kLine, text: String(problem)})
