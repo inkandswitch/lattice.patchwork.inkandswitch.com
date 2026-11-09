@@ -1,0 +1,172 @@
+/* the machine, yarn and swatch editors (profile-form.js): a form, in the
+   knitoutjs tools' colours where there are any (in lattice), and the page's
+   where there aren't (in patchwork's own view) */
+.profile-editor {
+	--profile-ink: var(--knitoutjs-ink, CanvasText);
+	--profile-muted: var(--knitoutjs-muted, color-mix(in oklab, CanvasText 55%, transparent));
+	--profile-line: var(--knitoutjs-line-soft, color-mix(in oklab, CanvasText 15%, transparent));
+	--profile-sheet: var(--knitoutjs-sheet, Canvas);
+	--profile-accent: var(--knitoutjs-accent, #ff2284);
+	--profile-danger: var(--knitoutjs-danger, #c0392b);
+
+	box-sizing: border-box;
+	height: 100%;
+	overflow: auto;
+	padding: 12px 16px 32px;
+	background: var(--profile-sheet);
+	color: var(--profile-ink);
+	font: 13px/1.45 var(--knitoutjs-sans, system-ui, sans-serif);
+
+	& input,
+	& select,
+	& textarea {
+		font: inherit;
+		color: inherit;
+		accent-color: var(--profile-accent);
+	}
+
+	& input[type="number"] {
+		width: 5em;
+	}
+
+	& textarea {
+		width: 100%;
+		min-height: 4em;
+		resize: vertical;
+	}
+
+	& button {
+		font: inherit;
+	}
+}
+
+.profile-title {
+	width: 100%;
+	margin: 0 0 8px;
+	border: 0;
+	border-bottom: 1px solid var(--profile-line);
+	background: transparent;
+	font-size: 18px !important;
+	font-weight: 600;
+}
+
+.profile-section {
+	display: grid;
+	gap: 6px;
+	margin: 0;
+	padding: 12px 0;
+	border-top: 1px solid var(--profile-line);
+
+	& h3 {
+		margin: 0;
+		font-size: 12px;
+		font-weight: 600;
+		text-transform: lowercase;
+		letter-spacing: 0.02em;
+	}
+}
+
+.profile-field {
+	display: grid;
+	grid-template-columns: minmax(7em, 11em) 1fr;
+	gap: 8px;
+	align-items: baseline;
+
+	@container (width < 360px) {
+		grid-template-columns: 1fr;
+		gap: 2px;
+	}
+}
+
+.profile-editor {
+	container-type: inline-size;
+}
+
+.profile-field-name {
+	color: var(--profile-muted);
+}
+
+.profile-field-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	align-items: baseline;
+	min-width: 0;
+}
+
+.profile-unit,
+.profile-hint,
+.profile-derived {
+	color: var(--profile-muted);
+	font-size: 12px;
+}
+
+.profile-hint {
+	margin: 0;
+}
+
+.profile-derived {
+	font-variant-numeric: tabular-nums;
+}
+
+.profile-warning {
+	margin: 0;
+	color: var(--profile-danger);
+	font-size: 12px;
+}
+
+.profile-doc-choice {
+	display: inline-flex;
+	gap: 4px;
+	min-width: 0;
+
+	& select {
+		max-width: 16em;
+	}
+}
+
+.profile-list {
+	display: grid;
+	gap: 2px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+
+	& button.profile-link {
+		padding: 2px 0;
+		border: 0;
+		background: none;
+		color: var(--profile-accent);
+		text-align: left;
+		cursor: pointer;
+	}
+}
+
+.profile-table {
+	display: grid;
+	gap: 4px;
+}
+
+.profile-sure {
+	display: inline-flex;
+	gap: 0;
+	border: 1px solid var(--profile-line);
+	border-radius: 4px;
+	overflow: hidden;
+
+	& label {
+		padding: 1px 8px;
+		cursor: pointer;
+	}
+
+	& label:has(input:checked) {
+		background: var(--profile-accent);
+		color: var(--knitoutjs-accent-ink, #fff);
+	}
+
+	& input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+}

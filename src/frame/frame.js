@@ -501,7 +501,7 @@ function Frame(props) {
         onShowing: setShowing,
         onFocused: (file) => setFocusedFile(file ? { ...file } : null),
         onOpen: (open) => (openInProject = open),
-        ...latticeOptions(baseRepo),
+        ...latticeOptions(baseRepo, projectRepo),
       });
       const unmountInspector = render(() => {
         createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));
@@ -602,7 +602,7 @@ function Frame(props) {
             data-old=${isOld(project) ? "" : undefined}
             title=${isOld(project)
               ? "made with an older version: open it to update it"
-              : "double click to rename · right click for its links"}
+              : "double click to rename · right click for menu"}
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
             onContextMenu=${(event) => openProjectMenu(event, project)}

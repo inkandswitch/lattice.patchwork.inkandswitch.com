@@ -1,6 +1,7 @@
 // the files lattice shows, and which tools open them. what we know about
 // the files themselves is in knitoutjs's core (shared with it)
 import { fileExtension as fileExtensionOf } from "./knitoutjs/core/files.js";
+import { profileKind } from "./profile-docs.js";
 
 // all of core's, but fileExtension: lattice's own (below) is the one
 export * from "./knitoutjs/core/files.js";
@@ -12,9 +13,12 @@ export function shareUrl(filesUrl) {
 }
 
 // "js", "k", or whatever else the file says it is. a latticex terminal isn't
-// a file, but it opens in a tool of ours as if it were
+// a file, nor is a machine, a yarn or a swatch (profile-docs.js), but each
+// opens in a tool of ours as if it were
 export function fileExtension(doc) {
   if (doc?.["@patchwork"]?.type === "latticex") return "latticex";
+  const kind = profileKind(doc);
+  if (kind) return kind;
   return fileExtensionOf(doc);
 }
 
@@ -71,6 +75,30 @@ export const TOOLS = {
     // latticex shares on the doc itself, never on a draft's copy of it
     drafts: false,
     load: () => import("./terminal.js"),
+  },
+  machine: {
+    id: "machine",
+    name: "machine",
+    title: "a knitting machine: its gauge, beds, carriers and stitch table",
+    position: 1,
+    extensions: ["machine"],
+    load: () => import("./machine.js"),
+  },
+  yarn: {
+    id: "yarn",
+    name: "yarn",
+    title: "a yarn: what it is, its count, and the swatches knitted from it",
+    position: 1,
+    extensions: ["yarn"],
+    load: () => import("./yarn.js"),
+  },
+  swatch: {
+    id: "swatch",
+    name: "swatch",
+    title: "a swatch: how it was knit, and what it measures",
+    position: 1,
+    extensions: ["swatch"],
+    load: () => import("./swatch.js"),
   },
   patchwork: {
     id: "patchwork",

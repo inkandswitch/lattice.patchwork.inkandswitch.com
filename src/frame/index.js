@@ -89,6 +89,34 @@ export const plugins = [
       };
     },
   },
+  // what knitting's knitted with: a machine, a yarn, and a swatch knitted
+  // on the one from the other (profile-docs.js), each with its editor
+  ...[
+    ["lattice:machine", "Knitting Machine", "Cog", () => import("./machine.js")],
+    ["lattice:yarn", "Yarn", "Spool", () => import("./yarn.js")],
+    ["lattice:swatch", "Swatch", "Square", () => import("./swatch.js")],
+  ].flatMap(([id, name, icon, editor]) => [
+    {
+      type: "patchwork:datatype",
+      id,
+      name,
+      icon,
+      async load() {
+        const { datatypeFor } = await import("./profile-docs.js");
+        return datatypeFor(id);
+      },
+    },
+    {
+      type: "patchwork:tool",
+      id,
+      name,
+      icon,
+      supportedDatatypes: [id],
+      async load() {
+        return (await editor()).default;
+      },
+    },
+  ]),
   // a terminal latticex shares from someone's computer. unlisted: you make
   // one from a frame's + menu, holding alt
   {
