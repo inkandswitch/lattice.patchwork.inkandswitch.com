@@ -73,6 +73,60 @@ export function munden(fabric) {
 	return {kc: shape.kc * scale, kw: shape.kw * scale}
 }
 
+// Munden's kc and kw for a yarn that relaxes like `relaxesLike` (one of
+// FIBRES), relaxed as `state` is. steamed hasn't any: nobody's measured how
+// far steaming relaxes it
+export function kOf(relaxesLike, state) {
+	if (!RELAXED[state]) return null
+	const {kc, kw} = munden({relax: state, fibre: FIBRES[relaxesLike] ? relaxesLike : "wool"})
+	return {kc, kw}
+}
+
+// a stitch's size (mm: `across`, its width, `up`, its height, and `loop`,
+// its yarn) as it's let relax each way, from what's `measured` of it
+// ({state: {across, up}}, either of them null if it isn't known). a state
+// measured is as it was; one half measured has its other half from the
+// loop's shape (Munden's), and is `estimated`; and those not measured are
+// estimated from the first measured of dry, wet and full, the loop staying as
+// long as it was and the stitch taking each state's shape. steamed is only
+// ever as measured (and only with both halves): there's nothing to say how it
+// goes from or to the others
+export function statesFrom(measured, relaxesLike, loop = null) {
+	const known = value => Number.isFinite(value) && value > 0
+	const states = {dry: null, steamed: null, wet: null, full: null}
+	for (const state of Object.keys(states)) {
+		const {across = null, up = null} = measured?.[state] ?? {}
+		if (!known(across) && !known(up)) continue
+		if (known(across) && known(up)) {
+			states[state] = {across, up, loop: null, estimated: false}
+			continue
+		}
+		const k = kOf(relaxesLike, state)
+		if (!k) continue
+		states[state] = known(across)
+			? {across, up: (across * k.kw) / k.kc, loop: null, estimated: true}
+			: {across: (up * k.kc) / k.kw, up, loop: null, estimated: true}
+	}
+	const base = ["dry", "wet", "full"].find(state => states[state])
+	const baseK = base && kOf(relaxesLike, base)
+	const yarn = known(loop) ? loop : base ? states[base].across * baseK.kw : null
+	for (const state of Object.keys(states)) {
+		if (states[state]) {
+			states[state].loop = yarn
+			continue
+		}
+		const k = kOf(relaxesLike, state)
+		if (!base || !k) continue
+		states[state] = {
+			across: (states[base].across * baseK.kw) / k.kw,
+			up: (states[base].up * baseK.kc) / k.kc,
+			loop: yarn,
+			estimated: true,
+		}
+	}
+	return states
+}
+
 // kc and kw for this yarn: from the swatches that have their loop, or else
 // Munden's
 export function constants(fabric) {
