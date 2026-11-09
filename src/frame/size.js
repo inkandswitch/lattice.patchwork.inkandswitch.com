@@ -1,3 +1,5 @@
+import {PLATED_TEX, nmOf} from "./counts.js"
+
 // how big the knitting comes out, in mm: what a stitch number makes of the
 // yarn, and what the yarn makes of the fabric
 //
@@ -200,4 +202,102 @@ export function onBody(fabric, around, body, length) {
 	const {shorten} = shortening(fabric)
 	const factor = 1 - shorten * Math.max(0, stretch)
 	return {stretch, length: length * Math.max(0, factor), shorter: 1 - factor, jammed: factor < 0.5}
+}
+
+// ── sizes from profiles: a machine, and each carrier's yarns and their
+// swatches, as profiles.js resolves them
+
+// does a swatch knitted on `swatchMachine` count for knitting on `machine`:
+// "measured" if it's the same machine, "other-machine" if it's another of
+// the same make, model and gauge (the same stitch number's near enough the
+// same stitch), and not at all otherwise. with no machine, any swatch knitted
+// at the gauge in use is another machine's
+export function machineTier(swatchMachine, machine, gauge) {
+	if (!swatchMachine) return null
+	if (machine && swatchMachine.url === machine.url) return "measured"
+	if (!machine) return swatchMachine.gauge === gauge ? "other-machine" : null
+	const same = swatchMachine.make === machine.make && swatchMachine.model === machine.model && swatchMachine.gauge === machine.gauge
+	return same ? "other-machine" : null
+}
+
+// was a swatch fed as the carrier is: the same yarns (which is in the hole
+// and which in the slit doesn't change the size), and two of them plated if
+// they're plated, held if they're held
+export function feedMatches(swatch, carrier) {
+	const wanted = carrier.yarns.map(yarn => yarn.url).sort()
+	return (swatch.feeds ?? []).some(feed => {
+		const yarns = [...(feed.yarns ?? [])].sort()
+		if (yarns.length !== wanted.length || yarns.some((url, i) => url !== wanted[i])) return false
+		return yarns.length < 2 || !!feed.plated === !!carrier.plated
+	})
+}
+
+const mean = list => (list.length ? list.reduce((sum, value) => sum + value, 0) / list.length : null)
+const NO_STATES = {dry: null, steamed: null, wet: null, full: null}
+
+// a carrier's stitch, at stitch number `stitch` in `structure`, on `machine`
+// (or none, at `gauge`): its size as it's let relax each way, and where
+// that's from (`tier`): swatches of these yarns at this stitch, on this
+// machine ("measured") or another like it ("other-machine"); a swatch's loop
+// length, for jersey, by Munden ("loop"); or nothing ("guess": a stitch as
+// wide as a needle). a carrier with no profiles (null) is sized from what
+// this browser keeps (`fabric`), as it always was
+export function stitchSizes({carrier, stitch, structure, machine, gauge, fabric}) {
+	const pitch = 25.4 / gauge
+	if (!carrier) {
+		const kept = fabricOf({fabric})
+		const s = stitchSize(kept, stitch, pitch)
+		const tier = s.from === "swatch" ? "measured" : s.from
+		return {tier, swatches: [], states: statesFrom({[kept.relax]: {across: s.across, up: s.up}}, kept.fibre, s.loop), roller: null, speed: null}
+	}
+	const relaxesLike = carrier.yarns[0]?.relaxesLike ?? "wool"
+	const theirs = carrier.swatches.filter(
+		swatch => feedMatches(swatch, carrier) && swatch.stitch === stitch && swatch.structure === structure && machineTier(swatch.machine, machine, gauge),
+	)
+	const measured = swatch => Object.values(swatch.relaxed ?? {}).some(Boolean)
+	const best = list => {
+		const here = list.filter(swatch => machineTier(swatch.machine, machine, gauge) === "measured")
+		return here.length ? {tier: "measured", list: here} : {tier: "other-machine", list}
+	}
+	const listed = list => list.map(({url, title, sure, machine}) => ({url, title, sure, machine}))
+	const result = (tier, list, states) => ({tier, swatches: listed(list), states, roller: list[0]?.roller ?? null, speed: list[0]?.speed ?? null})
+
+	const sized = theirs.filter(measured)
+	if (sized.length) {
+		const {tier, list} = best(sized)
+		const each = {}
+		for (const state of Object.keys(NO_STATES)) {
+			const densities = list.map(swatch => swatch.relaxed[state]).filter(Boolean)
+			if (!densities.length) continue
+			each[state] = {
+				across: mean(densities.filter(d => d.wales > 0).map(d => 100 / d.wales)),
+				up: mean(densities.filter(d => d.courses > 0).map(d => 100 / d.courses)),
+			}
+		}
+		const loop = mean(list.map(swatch => swatch.loop).filter(loop => loop > 0))
+		return result(tier, list, statesFrom(each, relaxesLike, loop))
+	}
+
+	const looped = theirs.filter(swatch => swatch.loop > 0)
+	if (structure === "jersey" && looped.length) {
+		const {list} = best(looped)
+		const loop = mean(list.map(swatch => swatch.loop))
+		const fitted = carrier.swatches.filter(swatch => swatch.structure === "jersey" && swatch.loop > 0 && swatch.relaxed?.dry?.wales > 0 && swatch.relaxed?.dry?.courses > 0)
+		const k = fitted.length
+			? {kc: mean(fitted.map(s => (s.loop * s.relaxed.dry.courses) / 100)), kw: mean(fitted.map(s => (s.loop * s.relaxed.dry.wales) / 100))}
+			: kOf(relaxesLike, "dry")
+		return result("loop", list, statesFrom({dry: {across: loop / k.kw, up: loop / k.kc}}, relaxesLike, loop))
+	}
+
+	const k = kOf(relaxesLike, "dry")
+	return result("guess", [], statesFrom({dry: {across: pitch, up: (pitch * k.kw) / k.kc}}, relaxesLike))
+}
+
+// two strands plated that aren't Nm 6–8 together, as the kniterate's manual
+// would have them: what to say about it (or null)
+export function platingNote(carrier) {
+	const tex = carrier?.tex
+	if (!carrier?.plated || !(tex > 0)) return null
+	if (tex >= PLATED_TEX.low && tex <= PLATED_TEX.high) return null
+	return `the two strands come to Nm ${nmOf(tex).toFixed(1)} together: the kniterate's manual says Nm 6–8 knits best`
 }
