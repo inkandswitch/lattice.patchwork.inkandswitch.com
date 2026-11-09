@@ -5,6 +5,7 @@
 	"main": "./index.js",
 	"scripts": {
 		"push": "pushwork sync",
+		"test": "node --test test/*.test.js",
 		"register": "pw-modules add \"$MODULE_SETTINGS_DOC_URL\" \"$(pushwork url)\""
 	}
 }
