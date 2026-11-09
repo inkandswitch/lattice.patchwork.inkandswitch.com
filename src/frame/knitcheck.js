@@ -1,6 +1,8 @@
 import {REACH, SQUASH, WALE} from "./fabric.js"
 import {across, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
-import {FIBRES, RELAXED, STITCH, fabricOf, grams, onBody, stitchSize, tightness} from "./size.js"
+import {FIBRES, RELAXED, STITCH, fabricOf, grams, onBody, platingNote, stitchSizes, tightness} from "./size.js"
+import {passStructures} from "./structure.js"
+import {RELAX_STATES} from "./profile-docs.js"
 
 // will a .k knit on a kniterate, and where might it go wrong: it's played on
 // a pretend machine, looking for what drops stitches, breaks yarn, or stops
@@ -13,6 +15,17 @@ import {FIBRES, RELAXED, STITCH, fabricOf, grams, onBody, stitchSize, tightness}
 // the kniterate: beds 252 needles wide, carriers 1–6 (as its converter has
 // them). its gauge (7 needles to the inch, as it comes) is a setting
 export const KNITERATE = {needles: 252, carriers: ["1", "2", "3", "4", "5", "6"]}
+
+// the beds' width and the carriers of the machine a .k's profiles name (see
+// profiles.js), or a kniterate's
+export function machineLimits(profiles) {
+	const machine = profiles?.machine
+	return {
+		name: machine?.title || "kniterate",
+		needles: machine?.needles > 0 ? machine.needles : KNITERATE.needles,
+		carriers: machine?.carriers?.length ? machine.carriers : KNITERATE.carriers,
+	}
+}
 // loops on one needle it mightn't clear, knitting them together
 const STACK = 3
 // how long (mm) a float gets before it snags
@@ -31,16 +44,34 @@ const RACK_SLACK = 2
 const MOST = 300
 
 // `settings`: {gauge (needles to the inch), squash, fabric}, as settings.js
-// has them
+// has them, and `profiles`: the machine and yarns the .k says it's knitted
+// with, as profiles.js resolves them (a carrier they don't name is sized from
+// `fabric`, as it always was)
 export function checkKnitout(text, converted = null, settings = {}) {
-	const {gauge = 7, squash = SQUASH} = settings
+	const {squash = SQUASH, profiles = null} = settings
+	const machineProfile = profiles?.machine ?? null
+	const gauge = machineProfile?.gauge > 0 ? machineProfile.gauge : (settings.gauge ?? 7)
 	const pitch = 25.4 / gauge // mm
+	const limits = machineLimits(profiles)
 	const fabric = fabricOf(settings)
-	const sizes = {} // stitch number → its stitch (see size.js), and how many
-	const sizeOf = number => (sizes[number] ??= {...stitchSize(fabric, number, pitch), count: 0})
 	const HOLD_ROWS = holdRows(squash)
 	const knitout = readKnitout(text)
 	const {ops} = knitout
+	// each carrier's stitch at each stitch number, in each structure (see
+	// size.js's stitchSizes), and how many were knitted, from which op on
+	const sizes = {}
+	const sizeOf = (carrier, stitch, structure, i) =>
+		(sizes[`${carrier}|${stitch}|${structure}`] ??= {
+			...stitchSizes({carrier: profiles?.carriers?.[carrier] ?? null, stitch, structure, machine: machineProfile, gauge, fabric}),
+			carrier,
+			stitch,
+			structure,
+			count: 0,
+			kRoller: ops[i]?.roller ?? null,
+			kSpeed: ops[i]?.speed ?? null,
+		})
+	// a size's yarn, and its size in the first state there is
+	const firstOf = size => RELAX_STATES.map(state => size.states[state]).find(Boolean)
 	const problems = []
 	const report = (level, i, text, kind = text) => {
 		const op = i == null ? null : ops[i]
@@ -68,6 +99,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	}
 
 	const track = carriageTrack(ops)
+	const structureAt = passStructures(ops, track)
 	const machine = newMachine()
 	const yarnOf = name => Math.max(0, knitout.carriers.indexOf(name)) % 6
 	const children = [] // loop id → loops pulled through it, still there
@@ -76,12 +108,13 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	const besideAt = new Map() // loop id → [knits on the needles beside it, when it was made]
 	const active = new Set()
 	const yarn = new Map() // carrier → {loops (mm of yarn), floats (needles)}
-	// how long each loop's wale is, from the bottom edge up to it (mm, and
-	// rows): its own height on the longest of the loops it's pulled through
-	const tall = []
+	// how long each loop's wale is, from the bottom edge up to it (mm, in each
+	// state, and rows): its own height on the longest of the loops it's pulled
+	// through
+	const tallBy = Object.fromEntries(RELAX_STATES.map(state => [state, []]))
 	const rows = []
 	// each pass's knitting, as wide as its stitches are, on each bed
-	const passes = [] // pass → {carrier, front: {mm, stitches}, back: {…}}
+	const passes = [] // pass → {carrier, front: {mm: {state: mm}, stitches}, back: {…}}
 	let pass = 0
 	let lastMaking = -1
 	ops.forEach((op, i) => {
@@ -151,6 +184,8 @@ export function checkKnitout(text, converted = null, settings = {}) {
 		// carriers
 		const name = op.text.split(/\s+/)[0]
 		const stitch = op.stitch ?? STITCH
+		const structure = structureAt[i] ?? "jersey"
+		const carrier = op.carriers[0]
 		if (name === "inhook" || name === "outhook" || name === "releasehook") {
 			report("error", i, `the kniterate has no yarn inserting hook: use ${name === "inhook" ? "in" : "out"} instead of ${name}`, "hook")
 		}
@@ -166,7 +201,9 @@ export function checkKnitout(text, converted = null, settings = {}) {
 			}
 		}
 		for (const c of op.carriers) {
-			if (!KNITERATE.carriers.includes(c)) report("error", i, `the kniterate has carriers 1–6: there's no carrier ${c}`, "carrier-name")
+			if (!limits.carriers.includes(c)) {
+				report("error", i, `the ${limits.name} has carriers ${limits.carriers.join(", ")}: there's no carrier ${c}`, "carrier-name")
+			}
 			else if (makesLoop(op) && !active.has(c)) report("error", i, `carrier ${c} isn't in: bring it in first`, "carrier-out")
 		}
 
@@ -207,7 +244,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 			for (const c of op.carriers.slice(0, 1)) {
 				const last = machine.lastLoops.get(c)
 				const usage = yarn.get(c) ?? {loops: 0, floats: 0}
-				usage.loops += sizeOf(stitch).loop
+				usage.loops += firstOf(sizeOf(c, stitch, structure, i)).loop
 				if (last) {
 					const gap = Math.abs(across(machine, op.needle) - last.x)
 					usage.floats += Math.max(0, gap - 1)
@@ -236,21 +273,23 @@ export function checkKnitout(text, converted = null, settings = {}) {
 		}
 		for (let id = before; id < machine.loops.length; id++) {
 			const loop = machine.loops[id]
-			const size = sizeOf(stitch)
+			const size = sizeOf(carrier, stitch, structure, i)
 			size.count++
-			let below = 0
 			let rowsBelow = 0
-			for (const parent of loop.parents) {
-				if (tall[parent] > below) below = tall[parent]
-				if (rows[parent] > rowsBelow) rowsBelow = rows[parent]
-			}
-			tall[id] = below + size.up
+			for (const parent of loop.parents) if (rows[parent] > rowsBelow) rowsBelow = rows[parent]
 			rows[id] = rowsBelow + 1
-			if (op.kind === "knit") {
-				const row = (passes[pass] ??= {carrier: op.carriers[0], front: {mm: 0, stitches: 0}, back: {mm: 0, stitches: 0}})
-				const bed = loop.back ? row.back : row.front
-				bed.mm += size.across
-				bed.stitches++
+			const row =
+				op.kind === "knit" ? (passes[pass] ??= {carrier: op.carriers[0], front: {mm: {}, stitches: 0}, back: {mm: {}, stitches: 0}}) : null
+			const bed = row && (loop.back ? row.back : row.front)
+			if (bed) bed.stitches++
+			for (const state of RELAX_STATES) {
+				const stitchThen = size.states[state]
+				if (!stitchThen) continue
+				const tall = tallBy[state]
+				let below = 0
+				for (const parent of loop.parents) if (tall[parent] > below) below = tall[parent]
+				tall[id] = below + stitchThen.up
+				if (bed) bed.mm[state] = (bed.mm[state] ?? 0) + stitchThen.across
 			}
 			children[id] = 0
 			for (const parent of loop.parents) children[parent] = (children[parent] ?? 0) + 1
@@ -304,13 +343,19 @@ export function checkKnitout(text, converted = null, settings = {}) {
 
 	const [min, max] = knitout.range
 	const width = ops.some(op => op.needle) ? max - min + 1 : 0
-	if (width > KNITERATE.needles) {
-		problems.push({level: "error", kind: "width", text: `it's ${width} needles wide: the kniterate's beds are ${KNITERATE.needles}`, op: null, line: null, lastLine: null, count: 1})
+	if (width > limits.needles) {
+		problems.push({level: "error", kind: "width", text: `it's ${width} needles wide: the ${limits.name}'s beds are ${limits.needles}`, op: null, line: null, lastLine: null, count: 1})
 	}
 
 	const order = {error: 0, risk: 1, note: 2}
 	problems.sort((a, b) => order[a.level] - order[b.level] || (a.line ?? 0) - (b.line ?? 0))
 	const strands = Number.isFinite(fabric.strands) && fabric.strands > 0 ? fabric.strands : 1
+	// a carrier's yarn's tex: its profiles', or what this browser keeps
+	const texOf = carrier => {
+		const linked = profiles?.carriers?.[carrier]
+		if (linked) return linked.tex > 0 ? linked.tex : null
+		return fabric.tex > 0 ? fabric.tex * strands : null
+	}
 	return {
 		problems,
 		width,
@@ -319,51 +364,110 @@ export function checkKnitout(text, converted = null, settings = {}) {
 		// weighs, if the yarn's tex is known)
 		yarn: [...yarn].map(([carrier, {loops, floats}]) => {
 			const metres = (loops + floats * pitch) / 1000
-			return {carrier, metres, grams: fabric.tex > 0 ? (metres * fabric.tex * strands) / 1000 : null}
+			const tex = texOf(carrier)
+			return {carrier, metres, grams: tex ? (metres * tex) / 1000 : null}
 		}),
-		size: sizeOfFabric(fabric, sizes, passes, tall, rows),
+		size: sizeOfFabric(fabric, profiles, sizes, passes, tallBy, rows),
 	}
 }
 
-// how big it comes out, relaxed: {width, around (if it's knitted as a tube),
-// length (mm, and stitches or rows), stitches (each stitch number's), relaxed,
-// on (stretched round what it's to go round, if that's set)}
-function sizeOfFabric(fabric, sizes, passes, tall, rows) {
-	let length = {mm: 0, rows: 0}
-	for (let id = 0; id < tall.length; id++) {
-		if (tall[id] > length.mm) length = {mm: tall[id], rows: rows[id]}
-	}
+// how big it comes out, in each state it's let relax: {states: {state:
+// {width, around (if it's knitted as a tube), length (mm, and stitches or
+// rows), estimated} or null}, sources (each carrier's stitch, at each stitch
+// number in each structure, and what it's sized from), notes, on (stretched
+// round what it's to go round, if that's set)}; and, as it was before
+// profiles, stitches and relaxed
+function sizeOfFabric(fabric, profiles, sizes, passes, tallBy, rows) {
+	const used = Object.values(sizes).filter(size => size.count)
+	// a state's only said if every stitch knitted has a size in it
+	const whole = state => used.length > 0 && used.every(size => size.states[state])
 	// the bed a pass knitted on, if it knitted on only one
 	const onlyOn = row => (row.front.stitches && !row.back.stitches ? "front" : row.back.stitches && !row.front.stitches ? "back" : null)
-	let width = null
-	// a tube: a pass on one bed, then the same yarn's next pass on the other
-	let around = null
-	const last = {} // carrier → its last pass's knitting
-	for (const row of passes) {
-		if (!row) continue
-		for (const bed of [row.front, row.back]) if (bed.stitches && bed.mm > (width?.mm ?? 0)) width = {...bed}
-		const before = last[row.carrier]
-		const only = onlyOn(row)
-		const beforeOnly = before && onlyOn(before)
-		if (only && beforeOnly && only !== beforeOnly) {
-			const round = {mm: row[only].mm + before[beforeOnly].mm, stitches: row[only].stitches + before[beforeOnly].stitches}
-			if (round.mm > (around?.mm ?? 0)) around = round
+	const states = {}
+	for (const state of RELAX_STATES) {
+		if (!whole(state)) {
+			states[state] = null
+			continue
 		}
-		last[row.carrier] = row
+		const tall = tallBy[state]
+		let length = {mm: 0, rows: 0}
+		for (let id = 0; id < tall.length; id++) {
+			if (tall[id] > length.mm) length = {mm: tall[id], rows: rows[id]}
+		}
+		const bedOf = bed => ({mm: bed.mm[state] ?? 0, stitches: bed.stitches})
+		let width = null
+		// a tube: a pass on one bed, then the same yarn's next pass on the other
+		let around = null
+		const last = {} // carrier → its last pass's knitting
+		for (const row of passes) {
+			if (!row) continue
+			for (const bed of [row.front, row.back]) if (bed.stitches && bedOf(bed).mm > (width?.mm ?? 0)) width = bedOf(bed)
+			const before = last[row.carrier]
+			const only = onlyOn(row)
+			const beforeOnly = before && onlyOn(before)
+			if (only && beforeOnly && only !== beforeOnly) {
+				const round = {mm: bedOf(row[only]).mm + bedOf(before[beforeOnly]).mm, stitches: row[only].stitches + before[beforeOnly].stitches}
+				if (round.mm > (around?.mm ?? 0)) around = round
+			}
+			last[row.carrier] = row
+		}
+		states[state] = {width, around, length, estimated: used.some(size => size.states[state].estimated)}
 	}
-	const stitches = Object.entries(sizes)
-		.filter(([, size]) => size.count)
-		.sort(([, a], [, b]) => b.count - a.count)
-		.map(([number, size]) => ({number, ...size, tightness: tightness(fabric, size), grams: grams(fabric, size)}))
+
+	const sources = used
+		.sort((a, b) => b.count - a.count)
+		.map(({carrier, stitch, structure, tier, swatches, count, roller, speed, kRoller, kSpeed}) => ({
+			carrier,
+			stitch,
+			structure,
+			tier,
+			swatches,
+			count,
+			roller,
+			speed,
+			kRoller,
+			kSpeed,
+		}))
+	const notes = []
+	for (const carrier of new Set(used.map(size => size.carrier))) {
+		const note = platingNote(profiles?.carriers?.[carrier])
+		if (note) notes.push(`carrier ${carrier}: ${note}`)
+	}
+	for (const source of sources) {
+		const at = `carrier ${source.carrier}, stitch ${source.stitch}`
+		if (source.roller != null && source.kRoller != null && source.roller !== source.kRoller) {
+			notes.push(`${at}: the swatch was knitted at roller ${source.roller}, this at ${source.kRoller}`)
+		}
+		if (source.speed != null && source.kSpeed != null && source.speed !== source.kSpeed) {
+			notes.push(`${at}: the swatch was knitted at speed ${source.speed}, this at ${source.kSpeed}`)
+		}
+	}
+
+	// (the state the old fabric's swatches were let relax, while nothing's
+	// linked: or the first there is)
+	const first = (profiles ? null : states[fabric.relax]) ??
+		RELAX_STATES.map(state => states[state]).find(Boolean) ?? {width: null, around: null, length: {mm: 0, rows: 0}}
+	const FROM = {measured: "swatch", "other-machine": "swatch", loop: "loop", guess: "guess"}
+	// (as the checks panel's had them, until it reads `states` and `sources`)
+	const stitches = used.map(size => {
+		const stitch = RELAX_STATES.map(state => size.states[state]).find(Boolean)
+		const linked = profiles?.carriers?.[size.carrier]
+		const yarn = linked ? {...fabric, tex: linked.tex, strands: 1} : fabric
+		const own = {loop: stitch.loop, across: stitch.across, up: stitch.up, from: FROM[size.tier]}
+		return {number: size.stitch, ...own, count: size.count, tightness: tightness(yarn, own), grams: grams(yarn, own)}
+	})
 	const body = Number.isFinite(fabric.around) && fabric.around > 0 ? fabric.around * 10 : null
 	return {
-		width,
-		around,
-		length,
+		states,
+		sources,
+		notes,
+		width: first.width,
+		around: first.around,
+		length: first.length,
 		stitches,
 		relaxed: `${FIBRES[fabric.fibre].name}, ${RELAXED[fabric.relax].name}`,
 		// (only a tube goes round anything)
-		on: body && around && length.mm ? {body, ...onBody(fabric, around.mm, body, length.mm)} : null,
+		on: body && first.around && first.length.mm ? {body, ...onBody(fabric, first.around.mm, body, first.length.mm)} : null,
 	}
 }
 
