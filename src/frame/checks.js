@@ -1,6 +1,10 @@
 import {moduleWorker} from "./files.js"
 import {icon} from "./knitoutjs/core/icons.js"
-import {KNITERATE, holdRows} from "./knitcheck.js"
+import {holdRows, machineLimits} from "./knitcheck.js"
+import {watchProfiles} from "./profiles.js"
+import {profilesFromFabric} from "./migrate-fabric.js"
+import {RELAX_STATES, STATE_NAMES, STRUCTURE_NAMES} from "./profile-docs.js"
+import {docChoice} from "./profile-form.js"
 import {DEFAULTS, SETTINGS_CHANGED, readSettings, storeSetting} from "./settings.js"
 import {FIBRES, RELAXED, STITCH, USUAL_TIGHTNESS, fabricOf, shortening} from "./size.js"
 import {stylesheet} from "./knitoutjs/core/stylesheet.js"
@@ -99,10 +103,15 @@ export function located(handle, op) {
 // (over `stage`) with what the check takes the machine and yarn to be, and
 // what might go wrong, each going to its op when it's picked
 // (`onPick(problem)`). `check(text)` checks some .k (and again, with the
-// same text, when the settings change)
-export function checkPanel(stage, onPick) {
+// same text, when the settings change). given the .k's `handle` (and the
+// tool's `context`), it reads the machine and yarns the .k's knitted with
+// (profiles.js), says which they are, lets them be chosen, and tells
+// `onProfiles(resolved)` whenever they change
+export function checkPanel(stage, onPick, {handle = null, context = {}, onProfiles = null} = {}) {
 	const checks = checker()
 	let text = null
+	let resolved = null
+	let lastResult = null
 
 	const link = stylesheet(STYLESHEET)
 	stage.appendChild(link)
@@ -310,9 +319,114 @@ export function checkPanel(stage, onPick) {
 	}
 	readFabric()
 
+	// ── what it's knitted with: the .k's machine, and each carrier's yarns
+
+	const loadedBox = document.createElement("div")
+	loadedBox.className = "checks-settings checks-loaded"
+	loadedBox.hidden = !handle
+	const files = () => context.project?.files?.() ?? []
+	const linkProfiles = fn =>
+		handle.change(doc => {
+			doc.profiles ??= {machine: null, carriers: {}}
+			doc.profiles.carriers ??= {}
+			fn(doc.profiles)
+		})
+	const machineChoice = docChoice({
+		files,
+		kind: "machine",
+		none: "no machine (7 gauge)",
+		title: "the machine it's knitted on: its gauge, and the swatches knitted on it",
+		onValue: url => linkProfiles(profiles => (profiles.machine = url)),
+	})
+	const carrierRows = document.createElement("div")
+	carrierRows.className = "checks-carriers"
+	const loadedState = document.createElement("div")
+	loadedState.className = "checks-hint"
+	loadedState.textContent = "loading profiles…"
+	loadedBox.append(setting("machine", "the machine it's knitted on", machineChoice.element), carrierRows, loadedState)
+
+	let shownCarriers = ""
+	let carrierChoices = {}
+	function showLoaded() {
+		if (!handle) return
+		const doc = handle.doc()
+		machineChoice.update(doc?.profiles?.machine ?? resolved?.machine?.url ?? null)
+		const carriers = (lastResult?.yarn ?? []).map(({carrier}) => carrier)
+		const strandsOf = carrier => (doc?.yarns?.[Number(carrier) - 1]?.colours?.length > 1 ? 2 : 1)
+		const shape = carriers.map(carrier => `${carrier}:${strandsOf(carrier)}`).join()
+		if (shape !== shownCarriers) {
+			shownCarriers = shape
+			carrierChoices = {}
+			carrierRows.replaceChildren(
+				...carriers.map(carrier => {
+					const two = strandsOf(carrier) > 1
+					const choices = [0, ...(two ? [1] : [])].map(slot =>
+						docChoice({
+							files,
+							kind: "yarn",
+							none: "not said",
+							title: two ? (slot ? "the yarn through the plating slit" : "the yarn through the knitting hole") : "the yarn in this carrier",
+							onValue: url =>
+								linkProfiles(profiles => {
+									const list = Array.from(profiles.carriers[carrier] ?? []).map(String)
+									if (url) list[slot] = url
+									else list.splice(slot, 1)
+									const kept = list.filter(Boolean)
+									if (kept.length) profiles.carriers[carrier] = kept
+									else delete profiles.carriers[carrier]
+								}),
+						}),
+					)
+					carrierChoices[carrier] = choices
+					const parts = choices.flatMap((choice, slot) => (two ? [slot ? "slit" : "hole", choice.element] : [choice.element]))
+					return setting(`carrier ${carrier}`, "the yarn knitted from this carrier", parts[0], null, null, null, parts.slice(1))
+				}),
+			)
+		}
+		for (const [carrier, choices] of Object.entries(carrierChoices)) {
+			const linked = doc?.profiles?.carriers?.[carrier] ?? []
+			choices.forEach((choice, slot) => choice.update(linked[slot] ?? null))
+		}
+		const missing = resolved?.missing ?? []
+		loadedState.textContent = !resolved
+			? "loading profiles…"
+			: missing.length
+				? missing.map(({url, why}) => `couldn't load …${url.slice(-8)}: ${why}`).join(" · ")
+				: ""
+		gauge.disabled = !!resolved?.machine
+		gauge.title = resolved?.machine ? `from ${resolved.machine.title || "the machine"}` : ""
+		fabricBox.hidden = !!handle && !!doc?.profiles
+		migrate.hidden = !handle || !context.repo
+	}
+
+	// what this browser kept, as profiles: a yarn, and a swatch for each
+	// stitch number, linked to every carrier the .k knits with
+	const migrate = document.createElement("button")
+	migrate.type = "button"
+	migrate.className = "checks-reset"
+	migrate.textContent = "make profiles from this"
+	migrate.title = "keep what's measured here as a yarn and its swatches, which anyone you share them with can see, and link them to this .k"
+	migrate.hidden = true
+	migrate.addEventListener("click", async () => {
+		const {yarn, swatches} = profilesFromFabric(readSettings().fabric ?? {})
+		const yarnHandle = await context.repo.create2(yarn)
+		const made = await Promise.all(
+			swatches.map(swatch => {
+				swatch.knit.feeds = [{carrier: "1", yarns: [yarnHandle.url], plated: false}]
+				return context.repo.create2(swatch)
+			}),
+		)
+		yarnHandle.change(doc => (doc.swatches = made.map(found => found.url)))
+		linkProfiles(profiles => {
+			for (const {carrier} of lastResult?.yarn ?? []) profiles.carriers[carrier] = [yarnHandle.url]
+		})
+		context.open?.(yarnHandle.url, stage)
+	})
+	fabricBox.append(migrate)
+
 	const results = document.createElement("div")
 	results.className = "checks-results"
-	panel.append(settingsBox, fabricBox, results)
+	panel.append(loadedBox, settingsBox, fabricBox, results)
 
 	// ── what the check found
 
@@ -342,18 +456,21 @@ export function checkPanel(stage, onPick) {
 		close.addEventListener("click", () => (panel.hidden = true))
 		const facts = document.createElement("div")
 		facts.className = "checks-facts"
-		const guessed = result.size.stitches.some(stitch => stitch.from === "guess")
+		lastResult = result
+		const limits = machineLimits(resolved)
+		const guessed = result.size.sources.some(source => source.tier === "guess")
 		const metres = yarn.map(
 			({carrier, metres, grams}) =>
 				`carrier ${carrier} ≈ ${metres < 10 ? metres.toFixed(1) : Math.round(metres)} m` +
 				(grams == null ? "" : ` (${grams < 10 ? grams.toFixed(1) : Math.round(grams)} g)`),
 		)
 		facts.textContent =
-			`${width} of the kniterate's ${KNITERATE.needles} needles` +
+			`${width} of the ${limits.name}'s ${limits.needles} needles` +
 			(metres.length ? ` · yarn${guessed ? ", at a middling stitch size" : ""}: ${metres.join(", ")}` : "")
-		heading.append(verdict, close, facts, sizeFacts(result.size))
-		used = result.size.stitches.map(stitch => stitch.number)
+		heading.append(verdict, close, facts, sizeFacts(result, context, stage))
+		used = [...new Set(result.size.sources.map(source => source.stitch))]
 		showStitches(used)
+		showLoaded()
 
 		const list = document.createElement("ol")
 		list.className = "checks-list"
@@ -388,8 +505,25 @@ export function checkPanel(stage, onPick) {
 	function check(next = text) {
 		text = next
 		if (text == null) return
-		checks.check(text, readSettings()).then(show)
+		checks.check(text, {...readSettings(), profiles: resolved}).then(show)
 	}
+
+	const watcher =
+		handle && context.repo
+			? watchProfiles({
+					repo: context.repo,
+					handle,
+					project: context.project,
+					onChange(next) {
+						resolved = next
+						showLoaded()
+						onProfiles?.(next)
+						check()
+					},
+				})
+			: null
+	const onDocChange = () => showLoaded()
+	handle?.on("change", onDocChange)
 
 	function onSettings() {
 		readBack()
@@ -403,6 +537,8 @@ export function checkPanel(stage, onPick) {
 		check,
 		remove() {
 			removeEventListener(SETTINGS_CHANGED, onSettings)
+			watcher?.stop()
+			handle?.off("change", onDocChange)
 			checks.close()
 			panel.remove()
 			link.remove()
@@ -410,40 +546,84 @@ export function checkPanel(stage, onPick) {
 	}
 }
 
-// how big it comes out, as lines for the panel's heading: its size, relaxed;
-// each stitch number's stitch, and where that's from; and, round what it's to
-// go round, how stretched it is and how long that leaves it
-const FROM = {
-	swatch: "from your swatch",
-	loop: "from its loop, by Munden's constants",
-	guess: "a guess: measure a swatch, or a loop, below",
+// how big it comes out, for the panel's heading: a row for each way it's
+// let relax that there's a size for (an estimated one says so), what it
+// weighs; then each carrier's stitch, and what it's sized from (a swatch
+// links to it, through `context.open`); then anything to know, and, round
+// what it's to go round, how stretched it is and how long that leaves it
+const TIERS = {
+	measured: "measured",
+	"other-machine": "measured on another machine",
+	loop: "from its loop length, by Munden's constants",
+	guess: "a guess",
 }
-function sizeFacts(size) {
+function sizeFacts(result, context, stage) {
+	const {size, yarn} = result
 	const box = document.createElement("div")
 	box.className = "checks-size"
-	if (!size.length.mm) return box
 	const cm = mm => (mm / 10).toFixed(mm < 100 ? 1 : 0)
-	const line = text => {
+	const line = (...parts) => {
 		const div = document.createElement("div")
-		div.textContent = text
+		div.append(...parts)
 		box.appendChild(div)
 		return div
 	}
-	const across = size.around
-		? `${cm(size.around.mm)} cm round (${size.around.stitches} stitches)`
-		: size.width
-			? `${cm(size.width.mm)} cm wide (${size.width.stitches} stitches)`
-			: null
-	line(`about ${across ? `${across} × ` : ""}${cm(size.length.mm)} cm long (${size.length.rows} rows), ${size.relaxed}`).className =
-		"checks-size-main"
-	for (const stitch of size.stitches) {
-		const tight = stitch.tightness == null ? "" : ` · tightness ${stitch.tightness.toFixed(1)} (plain knitting's usually about ${USUAL_TIGHTNESS})`
-		const gsm = stitch.grams == null ? "" : ` · ${Math.round(stitch.grams)} g/m²`
-		const div = line(
-			`stitch ${stitch.number}: ${stitch.across.toFixed(1)} mm wide, ${stitch.up.toFixed(1)} mm tall, ${stitch.loop.toFixed(1)} mm of yarn${tight}${gsm} · ${FROM[stitch.from]}`,
-		)
-		div.dataset.from = stitch.from
+	const grams = yarn.every(each => each.grams != null) && yarn.length ? yarn.reduce((sum, each) => sum + each.grams, 0) : null
+
+	const table = document.createElement("table")
+	table.className = "checks-size-table"
+	for (const state of RELAX_STATES) {
+		const piece = size.states[state]
+		if (!piece?.length?.mm) continue
+		const row = table.insertRow()
+		row.insertCell().textContent = STATE_NAMES[state]
+		const across = piece.around
+			? `${cm(piece.around.mm)} cm round`
+			: piece.width
+				? `${cm(piece.width.mm)} cm wide`
+				: ""
+		const dims = row.insertCell()
+		dims.textContent = `${across ? `${across} × ` : ""}${cm(piece.length.mm)} cm long`
+		if (piece.estimated) {
+			const chip = document.createElement("span")
+			chip.className = "checks-chip"
+			chip.textContent = "estimated"
+			chip.title = "not measured so: worked out from another way it was let relax, by Munden's constants"
+			dims.append(" ", chip)
+		}
+		row.insertCell().textContent = grams == null ? "" : `${grams < 10 ? grams.toFixed(1) : Math.round(grams)} g`
 	}
+	if (table.rows.length) box.append(table)
+
+	for (const source of size.sources) {
+		const where = `carrier ${source.carrier}, st ${source.stitch}, ${STRUCTURE_NAMES[source.structure] ?? source.structure}: `
+		const parts = [where, TIERS[source.tier]]
+		if (source.swatches.length) {
+			parts.push(" from ")
+			source.swatches.forEach((swatch, i) => {
+				if (i) parts.push(", ")
+				const link = document.createElement("a")
+				link.href = "#"
+				link.textContent = swatch.title || "a swatch"
+				link.addEventListener("click", event => {
+					event.preventDefault()
+					context.open?.(swatch.url, stage)
+				})
+				parts.push(link, ` (${swatch.sure})`)
+			})
+			const machine = source.swatches[0].machine
+			if (source.tier === "other-machine" && machine) parts.push(`, on another kniterate`)
+		}
+		if (source.tier === "guess") {
+			parts.push(`: knit a swatch at stitch ${source.stitch} in ${STRUCTURE_NAMES[source.structure] ?? source.structure}`)
+			if (source.structure === "jersey") parts.push(", or measure its loop length")
+			if (String(source.structure).startsWith("rib")) parts.push(". relaxed rib comes out much narrower than this")
+		}
+		if (source.tightness != null) parts.push(` · tightness ${source.tightness.toFixed(1)} (plain knitting's usually about ${USUAL_TIGHTNESS})`)
+		if (source.gsm != null) parts.push(` · ${Math.round(source.gsm)} g/m²`)
+		line(...parts).dataset.from = source.tier
+	}
+	for (const note of size.notes) line(note).className = "checks-size-note"
 	if (size.on) {
 		const {body, stretch, length, shorter, jammed} = size.on
 		line(

@@ -54,21 +54,23 @@ const profiles = (carriers = {"3": carrier()}) => ({machine: studio, carriers, m
 
 test("without profiles, the size is as it always was", () => {
 	const guessed = checkKnitout(knitout(), null, {gauge: 7})
-	near(guessed.size.width.mm, 72.57142857142857)
-	near(guessed.size.length.mm, 27.577142857142857)
-	assert.equal(guessed.size.length.rows, 10)
-	assert.equal(guessed.size.stitches[0].from, "guess")
-	assert.equal(guessed.size.stitches[0].count, 200)
-	assert.equal(guessed.size.relaxed, "wool, off the machine")
+	near(guessed.size.states.dry.width.mm, 72.57142857142857)
+	near(guessed.size.states.dry.length.mm, 27.577142857142857)
+	assert.equal(guessed.size.states.dry.length.rows, 10)
+	assert.equal(guessed.size.sources[0].tier, "guess")
+	assert.equal(guessed.size.sources[0].count, 200)
+	assert.equal(guessed.size.sources[0].tightness, null)
 	near(guessed.yarn[0].metres, 2.7577142857142785)
 
 	const measured = checkKnitout(knitout(), null, {gauge: 7, fabric: {stitches: {"5": {across: 27.5, up: 70}}, tex: 67}})
-	near(measured.size.width.mm, 72.7272727272727)
-	near(measured.size.length.mm, 14.285714285714286)
-	assert.equal(measured.size.stitches[0].from, "swatch")
-	near(measured.size.stitches[0].tightness, 5.923610558591906)
-	near(measured.size.stitches[0].grams, 178.22)
+	near(measured.size.states.dry.width.mm, 72.7272727272727)
+	near(measured.size.states.dry.length.mm, 14.285714285714286)
+	assert.equal(measured.size.sources[0].tier, "measured")
+	near(measured.size.sources[0].tightness, 5.923610558591906)
+	near(measured.size.sources[0].gsm, 178.22)
 	near(measured.yarn[0].grams, 0.18516363636363675)
+	assert.equal(measured.size.stitches, undefined)
+	assert.equal(measured.size.relaxed, undefined)
 })
 
 test("a measured swatch sizes the knitting, in each state", () => {
@@ -143,9 +145,9 @@ test("the machine's limits come from its profile", () => {
 	assert.ok(wide.problems.some(problem => problem.kind === "width"))
 })
 
-test("without profiles, the size is for however this browser's swatches were let relax", () => {
+test("without profiles, a washed swatch's numbers are the washed state's", () => {
 	const fabric = {relax: "wet", stitches: {"5": {across: 27.5, up: 70}}}
 	const result = checkKnitout(knitout(), null, {gauge: 7, fabric})
-	near(result.size.width.mm, (20 * 100) / 27.5)
-	assert.equal(result.size.relaxed, "wool, washed")
+	near(result.size.states.wet.width.mm, (20 * 100) / 27.5)
+	assert.equal(result.size.states.wet.estimated, false)
 })

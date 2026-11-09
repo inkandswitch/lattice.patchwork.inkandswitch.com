@@ -1,6 +1,6 @@
 import {REACH, SQUASH, WALE} from "./fabric.js"
 import {across, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
-import {FIBRES, RELAXED, STITCH, fabricOf, grams, onBody, platingNote, stitchSizes, tightness} from "./size.js"
+import {STITCH, fabricOf, grams, onBody, platingNote, stitchSizes, tightness} from "./size.js"
 import {passStructures} from "./structure.js"
 import {RELAX_STATES} from "./profile-docs.js"
 
@@ -374,9 +374,8 @@ export function checkKnitout(text, converted = null, settings = {}) {
 // how big it comes out, in each state it's let relax: {states: {state:
 // {width, around (if it's knitted as a tube), length (mm, and stitches or
 // rows), estimated} or null}, sources (each carrier's stitch, at each stitch
-// number in each structure, and what it's sized from), notes, on (stretched
-// round what it's to go round, if that's set)}; and, as it was before
-// profiles, stitches and relaxed
+// number in each structure, what it's sized from, and its tightness and
+// g/m²), notes, on (stretched round what it's to go round, if that's set)}
 function sizeOfFabric(fabric, profiles, sizes, passes, tallBy, rows) {
 	const used = Object.values(sizes).filter(size => size.count)
 	// a state's only said if every stitch knitted has a size in it
@@ -414,20 +413,32 @@ function sizeOfFabric(fabric, profiles, sizes, passes, tallBy, rows) {
 		states[state] = {width, around, length, estimated: used.some(size => size.states[state].estimated)}
 	}
 
+	// each source's tightness and g/m², in the first state it has a size in,
+	// from its carrier's tex (its profiles', or this browser's)
+	const yarnOf = carrier => {
+		const linked = profiles?.carriers?.[carrier]
+		return linked ? {...fabric, tex: linked.tex, strands: 1} : fabric
+	}
 	const sources = used
 		.sort((a, b) => b.count - a.count)
-		.map(({carrier, stitch, structure, tier, swatches, count, roller, speed, kRoller, kSpeed}) => ({
-			carrier,
-			stitch,
-			structure,
-			tier,
-			swatches,
-			count,
-			roller,
-			speed,
-			kRoller,
-			kSpeed,
-		}))
+		.map(({carrier, stitch, structure, tier, swatches, count, roller, speed, kRoller, kSpeed, states: sized}) => {
+			const first = RELAX_STATES.map(state => sized[state]).find(Boolean)
+			const own = {loop: first.loop, across: first.across, up: first.up, from: tier === "guess" ? "guess" : "swatch"}
+			return {
+				carrier,
+				stitch,
+				structure,
+				tier,
+				swatches,
+				count,
+				roller,
+				speed,
+				kRoller,
+				kSpeed,
+				tightness: tightness(yarnOf(carrier), own),
+				gsm: grams(yarnOf(carrier), own),
+			}
+		})
 	const notes = []
 	for (const carrier of new Set(used.map(size => size.carrier))) {
 		const note = platingNote(profiles?.carriers?.[carrier])
@@ -443,31 +454,16 @@ function sizeOfFabric(fabric, profiles, sizes, passes, tallBy, rows) {
 		}
 	}
 
-	// (the state the old fabric's swatches were let relax, while nothing's
-	// linked: or the first there is)
-	const first = (profiles ? null : states[fabric.relax]) ??
-		RELAX_STATES.map(state => states[state]).find(Boolean) ?? {width: null, around: null, length: {mm: 0, rows: 0}}
-	const FROM = {measured: "swatch", "other-machine": "swatch", loop: "loop", guess: "guess"}
-	// (as the checks panel's had them, until it reads `states` and `sources`)
-	const stitches = used.map(size => {
-		const stitch = RELAX_STATES.map(state => size.states[state]).find(Boolean)
-		const linked = profiles?.carriers?.[size.carrier]
-		const yarn = linked ? {...fabric, tex: linked.tex, strands: 1} : fabric
-		const own = {loop: stitch.loop, across: stitch.across, up: stitch.up, from: FROM[size.tier]}
-		return {number: size.stitch, ...own, count: size.count, tightness: tightness(yarn, own), grams: grams(yarn, own)}
-	})
+	// (round what it's to go round: in the state the old fabric's swatches
+	// were let relax, while nothing's linked, or the first there is)
+	const first = (profiles ? null : states[fabric.relax]) ?? RELAX_STATES.map(state => states[state]).find(Boolean)
 	const body = Number.isFinite(fabric.around) && fabric.around > 0 ? fabric.around * 10 : null
 	return {
 		states,
 		sources,
 		notes,
-		width: first.width,
-		around: first.around,
-		length: first.length,
-		stitches,
-		relaxed: `${FIBRES[fabric.fibre].name}, ${RELAXED[fabric.relax].name}`,
 		// (only a tube goes round anything)
-		on: body && first.around && first.length.mm ? {body, ...onBody(fabric, first.around.mm, body, first.length.mm)} : null,
+		on: body && first?.around && first.length.mm ? {body, ...onBody(fabric, first.around.mm, body, first.length.mm)} : null,
 	}
 }
 

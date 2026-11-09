@@ -232,7 +232,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		pause()
 		seek(op + 1)
 		dispatch("knitout:select-source", located(handle, knitout.ops[op]))
-	})
+	}, {handle, context, onProfiles: resolved => onProfiles(resolved)})
 	bar.appendChild(panel.button)
 
 	const errorBar = document.createElement("div")
@@ -1160,12 +1160,18 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	strainBox.addEventListener("change", requestFrame)
 	// the machine and yarn, as they're set (see settings.js)
+	// (and the machine and yarns the .k's knitted with, as the check finds them)
 	let settings = readSettings()
+	let profiles = null
 	let loopSize = sizer(settings)
 	function onSettings() {
 		settings = readSettings()
-		loopSize = sizer(settings)
+		loopSize = sizer({...settings, profiles})
 		requestFrame()
+	}
+	function onProfiles(resolved) {
+		profiles = resolved
+		onSettings()
 	}
 	addEventListener(SETTINGS_CHANGED, onSettings)
 	speedSelect.addEventListener("change", () => {

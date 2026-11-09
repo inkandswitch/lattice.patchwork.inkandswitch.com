@@ -279,7 +279,7 @@ export default function KniterateTool(handle, element, context = {}) {
 		if (problem.line == null) return
 		const jsLine = jsLinesOf(docText(handle.doc()))[problem.line - 1]
 		dispatch("knitout:select-source", located(handle, {kLine: problem.line, jsLine}))
-	})
+	}, {handle, context})
 	bar.insertBefore(panel.button, warningsBadge)
 
 	const empty = document.createElement("div")

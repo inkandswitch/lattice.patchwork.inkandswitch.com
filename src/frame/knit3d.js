@@ -367,7 +367,7 @@ void main() {
  * turn it round to see its backing. scrub through the knitting, or play it,
  * to watch the fabric grow
  */
-export default function Knit3dTool(handle, element) {
+export default function Knit3dTool(handle, element, context = {}) {
 	const root = document.createElement("div")
 	root.className = "knitoutjs-editor-tool knit3d"
 	const link = stylesheet(STYLESHEET, root)
@@ -453,7 +453,7 @@ export default function Knit3dTool(handle, element) {
 		element.dispatchEvent(
 			new CustomEvent("knitout:select-source", {detail: located(handle, knitout.ops[op]), bubbles: true, composed: true}),
 		)
-	})
+	}, {handle, context, onProfiles: resolved => onProfiles(resolved)})
 	bar.appendChild(panel.button)
 
 	const empty = document.createElement("div")
@@ -1003,13 +1003,19 @@ export default function Knit3dTool(handle, element) {
 	strainBox.addEventListener("change", refresh)
 	// the machine and yarn, as they're set (see settings.js), and so how big
 	// each stitch is
+	// (and the machine and yarns the .k's knitted with, as the check finds them)
 	let settings = readSettings()
+	let profiles = null
 	let loopSize = sizer(settings)
 	function onSettings() {
 		settings = readSettings()
-		loopSize = sizer(settings)
+		loopSize = sizer({...settings, profiles})
 		settling = 0
 		refresh()
+	}
+	function onProfiles(resolved) {
+		profiles = resolved
+		onSettings()
 	}
 	addEventListener(SETTINGS_CHANGED, onSettings)
 
