@@ -653,6 +653,48 @@
 		}
 	}
 
+	/* reset: at the end, over to the right, past a line, away from what
+	   you'd be pressing; and it asks */
+	& .lattice-theme-reset {
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+		align-items: center;
+		gap: 8px;
+		min-height: 30px;
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px dashed var(--lattice-rule);
+	}
+	& .lattice-reset {
+		padding: 4px 8px;
+		border: 1px solid transparent;
+		border-radius: var(--studio-radius, 6px);
+		background: none;
+		color: var(--lattice-muted);
+		cursor: pointer;
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover:not(:disabled) {
+				border-color: var(--lattice-rule);
+				color: var(--studio-danger, #e45649);
+			}
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: inherit;
+		}
+	}
+	& .lattice-reset-ask {
+		margin-right: 4px;
+		color: var(--lattice-muted);
+	}
+	& .lattice-button.lattice-button-danger {
+		border-color: var(--studio-danger, #e45649);
+		background: var(--studio-danger, #e45649);
+		color: var(--studio-danger-line, #fff);
+	}
+
 	& .lattice-colours {
 		display: flex;
 		flex-wrap: wrap;

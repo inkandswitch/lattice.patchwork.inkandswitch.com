@@ -377,10 +377,41 @@ export function SettingsPage(props) {
           <//>
         </span>
       </div>
-      <div class="lattice-setting">
-        <span class="lattice-settings-label"></span>
-        <button class="lattice-button" disabled=${() => !own.changed()} onClick=${() => own.reset()}>as it was</button>
-      </div>
+      <${Reset} own=${own} />
+    </div>`;
+  }
+
+  // putting the theme back how it came: off on its own, away from what
+  // you'd be pressing, and it asks first (keep's where the focus goes)
+  function Reset(props) {
+    const own = props.own;
+    const [asking, setAsking] = createSignal(false);
+    let button;
+    const done = (reset) => {
+      if (reset) own.reset();
+      setAsking(false);
+      if (!reset) queueMicrotask(() => button?.focus());
+    };
+    return html`<div
+      class="lattice-theme-reset"
+      onKeyDown=${(event) => event.key === "Escape" && asking() && done(false)}
+    >
+      <${Show}
+        when=${asking}
+        fallback=${html`<button
+          class="lattice-reset"
+          ref=${(el) => (button = el)}
+          disabled=${() => !own.changed()}
+          title=${() => (own.changed() ? `undo all your changes to ${own.name}` : "nothing's changed")}
+          onClick=${() => setAsking(true)}
+        >
+          reset
+        </button>`}
+      >
+        <span class="lattice-reset-ask" role="status">${() => `reset ${own.name}? your changes to it go`}</span>
+        <button class="lattice-button" ref=${(el) => queueMicrotask(() => el.focus())} onClick=${() => done(false)}>keep</button>
+        <button class="lattice-button lattice-button-danger" onClick=${() => done(true)}>reset</button>
+      <//>
     </div>`;
   }
 
