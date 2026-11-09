@@ -408,7 +408,9 @@ export function checkPanel(stage, onPick, {handle = null, context = {}, onProfil
 	migrate.title = "keep what's measured here as a yarn and its swatches, which anyone you share them with can see, and link them to this .k"
 	migrate.hidden = true
 	migrate.addEventListener("click", async () => {
-		const {yarn, swatches} = profilesFromFabric(readSettings().fabric ?? {})
+		const machines = files().filter(file => file.extension === "machine")
+		const machine = resolved?.machine?.url ?? (machines.length === 1 ? machines[0].url : null)
+		const {yarn, swatches} = profilesFromFabric(readSettings().fabric ?? {}, {machine})
 		const yarnHandle = await context.repo.create2(yarn)
 		const made = await Promise.all(
 			swatches.map(swatch => {
@@ -588,7 +590,7 @@ function sizeFacts(result, context, stage) {
 			const chip = document.createElement("span")
 			chip.className = "checks-chip"
 			chip.textContent = "estimated"
-			chip.title = "not measured so: worked out from another way it was let relax, by Munden's constants"
+			chip.title = "not measured so: a guess, or worked out from a loop length or another way it was let relax, by Munden's constants"
 			dims.append(" ", chip)
 		}
 		row.insertCell().textContent = grams == null ? "" : `${grams < 10 ? grams.toFixed(1) : Math.round(grams)} g`
@@ -612,7 +614,7 @@ function sizeFacts(result, context, stage) {
 				parts.push(link, ` (${swatch.sure})`)
 			})
 			const machine = source.swatches[0].machine
-			if (source.tier === "other-machine" && machine) parts.push(`, on another kniterate`)
+			if (source.tier === "other-machine") parts.push(machine ? `, on ${machine.title || "another machine"}` : ", on a machine nobody's named")
 		}
 		if (source.tier === "guess") {
 			parts.push(`: knit a swatch at stitch ${source.stitch} in ${STRUCTURE_NAMES[source.structure] ?? source.structure}`)

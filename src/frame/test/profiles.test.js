@@ -108,3 +108,20 @@ test("the 3d view's loops are sized from the profiles", async () => {
 	const pitch = 25.4 / 7
 	near(size("5", 2).across, 100 / 27.5 / pitch)
 })
+
+test("a swatch of the yarn in the project counts, even if the yarn's list missed it", async () => {
+	const find = world({y1: yarn({swatches: []}), s1: swatch(["y1"])})
+	const resolved = await resolveProfiles({find, k: kDoc({machine: null, carriers: {"3": ["y1"]}}), projectFiles: [{url: "s1", extension: "swatch"}]})
+	assert.deepEqual(
+		resolved.carriers["3"].swatches.map(s => s.url),
+		["s1"],
+	)
+})
+
+test("profiles that link nothing size the 3d view as if there were none", () => {
+	const fabric = {relax: "wet", stitches: {"5": {across: 27.5, up: 70}}}
+	const without = sizer({gauge: 7, fabric})("5", 2)
+	const empty = sizer({gauge: 7, fabric, profiles: {machine: null, carriers: {}, missing: [], urls: []}})("5", 2)
+	near(empty.up, without.up, 0.0001)
+	near(empty.across, without.across, 0.0001)
+})

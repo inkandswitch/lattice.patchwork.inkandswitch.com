@@ -42,6 +42,12 @@ export default function SwatchTool(handle, element, context = {}) {
 		const before = swatchYarns(handle.doc())
 		change(mutate)
 		const {add, remove: gone} = indexChanges(before, swatchYarns(handle.doc()))
+		await reindex(add, gone)
+	}
+	// (each of `add` lists this swatch, and none of `gone` does. it's done
+	// again as the editor opens, in case it didn't take before: a yarn that
+	// hadn't synced, say)
+	async function reindex(add, gone = []) {
 		if (!repo) return
 		for (const url of [...add, ...gone]) {
 			try {
@@ -152,7 +158,8 @@ export default function SwatchTool(handle, element, context = {}) {
 		const kDoc = kHandle.doc()
 		const text = docText(kDoc)
 		const result = checkKnitout(text, null, {...readSettings()})
-		const filled = knitFromCheck(result, kDoc, url, text)
+		const feeds = Array.from(handle.doc()?.knit?.feeds ?? []).map(feed => ({carrier: String(feed.carrier), yarns: Array.from(feed.yarns ?? []).map(String), plated: !!feed.plated}))
+		const filled = knitFromCheck(result, kDoc, url, text, feeds)
 		await setFeeds(doc => Object.assign(doc.knit, filled))
 	}
 	async function checkK(doc) {
@@ -349,6 +356,7 @@ export default function SwatchTool(handle, element, context = {}) {
 	handle.on("change", redraw)
 	offs.push(() => handle.off("change", redraw))
 	redraw()
+	if (handle.doc()?.knit) reindex(swatchYarns(handle.doc()))
 
 	return () => {
 		for (const off of offs) off()

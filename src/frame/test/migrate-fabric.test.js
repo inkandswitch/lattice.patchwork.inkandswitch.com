@@ -23,3 +23,8 @@ test("a stitch number with only its loop measured keeps just that", () => {
 	assert.equal(swatches[0].relaxed.wet, null)
 	assert.equal(swatches[0].loop.mm, 12)
 })
+
+test("migrated swatches are on the project's machine, if it has one", () => {
+	const {swatches} = profilesFromFabric({relax: "dry", fibre: "wool", stitches: {"5": {across: 27.5, up: 70}}}, {machine: "automerge:m"})
+	assert.equal(swatches[0].knit.machine, "automerge:m")
+})

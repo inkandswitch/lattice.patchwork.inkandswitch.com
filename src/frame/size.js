@@ -211,9 +211,11 @@ export function onBody(fabric, around, body, length) {
 // "measured" if it's the same machine, "other-machine" if it's another of
 // the same make, model and gauge (the same stitch number's near enough the
 // same stitch), and not at all otherwise. with no machine, any swatch knitted
-// at the gauge in use is another machine's
+// at the gauge in use is another machine's. a swatch nobody's said the
+// machine of counts too (it's most likely this one, and it's all there is):
+// as this machine's if neither says, and another's if the knitting does
 export function machineTier(swatchMachine, machine, gauge) {
-	if (!swatchMachine) return null
+	if (!swatchMachine) return machine ? "other-machine" : "measured"
 	if (machine && swatchMachine.url === machine.url) return "measured"
 	if (!machine) return swatchMachine.gauge === gauge ? "other-machine" : null
 	const same = swatchMachine.make === machine.make && swatchMachine.model === machine.model && swatchMachine.gauge === machine.gauge
@@ -241,14 +243,17 @@ const NO_STATES = {dry: null, steamed: null, wet: null, full: null}
 // machine ("measured") or another like it ("other-machine"); a swatch's loop
 // length, for jersey, by Munden ("loop"); or nothing ("guess": a stitch as
 // wide as a needle). a carrier with no profiles (null) is sized from what
-// this browser keeps (`fabric`), as it always was
+// this browser keeps (`fabric`), as it always was. `base` is the state that's
+// its own: the kept fabric's, or the first measured; and a size that wasn't
+// measured at all (a guess, or from a loop) is estimated in every state
 export function stitchSizes({carrier, stitch, structure, machine, gauge, fabric}) {
 	const pitch = 25.4 / gauge
 	if (!carrier) {
 		const kept = fabricOf({fabric})
 		const s = stitchSize(kept, stitch, pitch)
 		const tier = s.from === "swatch" ? "measured" : s.from
-		return {tier, swatches: [], states: statesFrom({[kept.relax]: {across: s.across, up: s.up}}, kept.fibre, s.loop), roller: null, speed: null}
+		const states = statesFrom({[kept.relax]: {across: s.across, up: s.up}}, kept.fibre, s.loop)
+		return {tier, base: kept.relax, swatches: [], states: tier === "measured" ? states : estimated(states), roller: null, speed: null}
 	}
 	const relaxesLike = carrier.yarns[0]?.relaxesLike ?? "wool"
 	const theirs = carrier.swatches.filter(
@@ -260,8 +265,17 @@ export function stitchSizes({carrier, stitch, structure, machine, gauge, fabric}
 		return here.length ? {tier: "measured", list: here} : {tier: "other-machine", list}
 	}
 	const listed = list => list.map(({url, title, sure, machine}) => ({url, title, sure, machine}))
-	const result = (tier, list, states) => ({tier, swatches: listed(list), states, roller: list[0]?.roller ?? null, speed: list[0]?.speed ?? null})
+	const result = (tier, list, states) => ({
+		tier,
+		base: baseOf(states),
+		swatches: listed(list),
+		states: tier === "measured" || tier === "other-machine" ? states : estimated(states),
+		roller: list[0]?.roller ?? null,
+		speed: list[0]?.speed ?? null,
+	})
 
+	// (swatches whose measurements come to no size at all, half a steamed
+	// state say, are passed over for the next tier)
 	const sized = theirs.filter(measured)
 	if (sized.length) {
 		const {tier, list} = best(sized)
@@ -275,7 +289,8 @@ export function stitchSizes({carrier, stitch, structure, machine, gauge, fabric}
 			}
 		}
 		const loop = mean(list.map(swatch => swatch.loop).filter(loop => loop > 0))
-		return result(tier, list, statesFrom(each, relaxesLike, loop))
+		const states = statesFrom(each, relaxesLike, loop)
+		if (Object.values(states).some(Boolean)) return result(tier, list, states)
 	}
 
 	const looped = theirs.filter(swatch => swatch.loop > 0)
@@ -291,6 +306,17 @@ export function stitchSizes({carrier, stitch, structure, machine, gauge, fabric}
 
 	const k = kOf(relaxesLike, "dry")
 	return result("guess", [], statesFrom({dry: {across: pitch, up: (pitch * k.kw) / k.kc}}, relaxesLike))
+}
+
+// every state there is, marked estimated
+function estimated(states) {
+	return Object.fromEntries(Object.entries(states).map(([state, size]) => [state, size && {...size, estimated: true}]))
+}
+
+// the first state measured, or else the first there is
+function baseOf(states) {
+	const names = Object.keys(NO_STATES)
+	return names.find(state => states[state] && !states[state].estimated) ?? names.find(state => states[state]) ?? null
 }
 
 // two strands plated that aren't Nm 6–8 together, as the kniterate's manual

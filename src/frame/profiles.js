@@ -63,8 +63,14 @@ export async function resolveProfiles({find, k, projectFiles = []}) {
 		}
 		if (!yarns.length) continue
 		const texes = yarns.map(({doc}) => texOf(doc.count))
+		// (each yarn's list of its swatches, and the project's swatches: a
+		// swatch whose yarn's list missed it is still found, if it's here)
 		const swatchUrls = []
-		for (const {doc} of yarns) for (const target of Array.from(doc.swatches ?? []).map(url)) if (target && !swatchUrls.includes(target)) swatchUrls.push(target)
+		const listed = [
+			...yarns.flatMap(({doc}) => Array.from(doc.swatches ?? []).map(url)),
+			...projectFiles.filter(file => file.extension === "swatch").map(file => url(file.url)),
+		]
+		for (const target of listed) if (target && !swatchUrls.includes(target)) swatchUrls.push(target)
 		const swatches = []
 		for (const target of swatchUrls) {
 			const doc = await want(target, "swatch")
@@ -116,7 +122,7 @@ function swatchOf(at, doc, machine) {
 		url: at,
 		title: text(doc.title),
 		sure: text(knit.sure) || "guessed",
-		machine: machine && {url: machine.url, make: machine.make, model: machine.model, gauge: machine.gauge},
+		machine: machine && {url: machine.url, title: machine.title, make: machine.make, model: machine.model, gauge: machine.gauge},
 		stitch: text(knit.stitch) || "5",
 		structure: text(knit.structure) || "jersey",
 		needles: number(knit.needles),

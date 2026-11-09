@@ -2,13 +2,14 @@
 // FABRIC, as settings.js keeps it), as docs: a yarn, and a swatch for each
 // stitch number something was measured of. its across and up were swatches
 // measured per 10 cm, let relax as it said; its loops, loop lengths. how
-// they were knit wasn't kept, so it's "believed", jersey
+// they were knit wasn't kept, so it's "believed", jersey, on `machine` (the
+// project's, if it has one)
 import {newSwatch, newYarn} from "./profile-docs.js"
 import {fabricOf} from "./size.js"
 
 const positive = value => (Number(value) > 0 ? Number(value) : null)
 
-export function profilesFromFabric(kept) {
+export function profilesFromFabric(kept, {machine = null} = {}) {
 	const fabric = fabricOf({fabric: kept})
 	const yarn = newYarn()
 	yarn.title = `${fabric.fibre} (from this browser)`
@@ -18,6 +19,7 @@ export function profilesFromFabric(kept) {
 		const swatch = newSwatch()
 		swatch.title = `${fabric.fibre}, stitch ${number} (from this browser)`
 		swatch.knit.stitch = number
+		swatch.knit.machine = machine
 		swatch.knit.structure = "jersey"
 		swatch.knit.sure = "believed"
 		swatch.knit.note = "measured before lattice kept swatches: how it was knit wasn't kept"

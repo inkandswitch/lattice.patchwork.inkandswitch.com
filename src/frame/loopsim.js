@@ -181,8 +181,8 @@ export function sizer({fabric = null, yarns = null, gauge = 7, profiles = null} 
 		let s
 		if (profiles) {
 			const carrier = profiles.carriers?.[String(yarn + 1)] ?? null
-			const {states} = stitchSizes({carrier, stitch: number, structure: "jersey", machine: profiles.machine, gauge: atGauge, fabric: yarns?.[yarn] ?? fabric})
-			s = RELAX_STATES.map(state => states[state]).find(Boolean)
+			const {states, base} = stitchSizes({carrier, stitch: number, structure: "jersey", machine: profiles.machine, gauge: atGauge, fabric: yarns?.[yarn] ?? fabric})
+			s = states[base] ?? RELAX_STATES.map(state => states[state]).find(Boolean)
 		} else {
 			s = stitchSize(fabricOf({fabric: yarns?.[yarn] ?? fabric}), number, pitch)
 		}

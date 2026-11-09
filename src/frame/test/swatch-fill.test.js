@@ -38,3 +38,30 @@ test("the feeds take the .k's yarns, and how they're plated", () => {
 	const k = {profiles: {machine: null, carriers: {"3": ["a", "b"]}}, yarns: [null, null, {colours: ["#fff", "#000"], plated: true}]}
 	assert.deepEqual(knitFromCheck(result, k, "automerge:k", text).feeds[0], {carrier: "3", yarns: ["a", "b"], plated: true})
 })
+
+// 10 rows of waste on carrier 1, then 30 of the main yarn on carrier 3
+function wasteThenMain() {
+	const lines = [";!knitout-2", ";;Carriers: 1 2 3 4 5 6", "in 1"]
+	const rows = (carrier, count) => {
+		for (let r = 0; r < count; r++) {
+			const dir = r % 2 ? "-" : "+"
+			let needles = [...Array(20).keys()].map(i => `f${i + 1}`)
+			if (dir === "-") needles = needles.reverse()
+			for (const needle of needles) lines.push(`knit ${dir} ${needle} ${carrier}`)
+		}
+	}
+	rows("1", 10)
+	lines.push("out 1", "in 3")
+	rows("3", 30)
+	lines.push("out 3")
+	return lines.join("\n")
+}
+
+test("filling counts the main yarn's rows, not the waste's, and keeps the yarns already picked", () => {
+	const text = wasteThenMain()
+	const result = checkKnitout(text, null, {gauge: 7})
+	const knit = knitFromCheck(result, {yarns: []}, "automerge:k", text, [{carrier: "3", yarns: ["picked"], plated: false}])
+	assert.equal(knit.rows, 30)
+	assert.equal(knit.needles, 20)
+	assert.deepEqual(knit.feeds, [{carrier: "3", yarns: ["picked"], plated: false}])
+})

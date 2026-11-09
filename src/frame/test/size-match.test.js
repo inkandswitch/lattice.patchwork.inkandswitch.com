@@ -43,7 +43,9 @@ test("which machines' swatches count", () => {
 	assert.equal(machineTier(shima, studio, 7), null)
 	assert.equal(machineTier(other, null, 7), "other-machine")
 	assert.equal(machineTier(shima, null, 7), null)
-	assert.equal(machineTier(null, studio, 7), null)
+	// (a swatch whose machine nobody said: counted, but not as this machine's)
+	assert.equal(machineTier(null, studio, 7), "other-machine")
+	assert.equal(machineTier(null, null, 7), "measured")
 })
 
 test("a swatch on this machine, of these yarns, at this stitch, is measured", () => {
@@ -120,4 +122,30 @@ test("a plated pair that isn't Nm 6–8 together says so", () => {
 	assert.match(platingNote(carrier({plated: true, tex: 66.7})), /Nm 15\.0 together/)
 	assert.equal(platingNote(carrier({plated: true, tex: 140})), null)
 	assert.equal(platingNote(carrier({plated: false, tex: 66.7})), null)
+})
+
+test("a swatch only half measured steamed falls through to the next tier", () => {
+	const half = swatch({relaxed: {...NONE, steamed: {wales: 29, courses: null}}})
+	const size = sizes(carrier({swatches: [half]}))
+	assert.equal(size.tier, "guess")
+	assert.ok(size.states.dry)
+})
+
+test("a guess, or a loop's size, is estimated in every state", () => {
+	const guess = sizes(carrier({swatches: []}))
+	assert.equal(guess.states.dry.estimated, true)
+	const loop = sizes(carrier({swatches: [swatch({relaxed: NONE, loop: 14})]}))
+	assert.equal(loop.states.dry.estimated, true)
+	assert.equal(sizes(carrier()).states.dry.estimated, false)
+})
+
+test("each size says which state is its own: the kept fabric's, or the first measured", () => {
+	assert.equal(sizes(null, {fabric: {relax: "wet", stitches: {"5": {across: 27.5, up: 70}}}}).base, "wet")
+	assert.equal(sizes(carrier()).base, "dry")
+	const steamed = swatch({relaxed: {...NONE, steamed: {wales: 29, courses: 74}}})
+	assert.equal(sizes(carrier({swatches: [steamed]})).base, "steamed")
+})
+
+test("a swatch's machine is named", () => {
+	assert.equal(sizes(carrier({swatches: [swatch({machine: other})]})).swatches[0].machine.title, "agnes's kniterate")
 })

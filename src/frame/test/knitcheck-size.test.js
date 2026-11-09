@@ -159,3 +159,43 @@ test("a machine's named as its profile names it, a kniterate as the kniterate", 
 	assert.equal(machineLimits(null).name, "the kniterate")
 	assert.equal(machineLimits({machine: {...studio, title: ""}}).name, "the kniterate")
 })
+
+test("a rib piece knitted as its swatch was comes out as wide as the swatch", () => {
+	const rib = swatch({structure: "rib-2x2", needles: 16, rows: 20, relaxed: {...NONE, dry: {wales: 16, courses: 140}}})
+	const result = checkKnitout(knitout({width: 16, rows: 20, pattern: "FFBB", rack: 0.5}), null, {gauge: 7, profiles: profiles({"3": carrier({swatches: [rib]})})})
+	near(result.size.states.dry.width.mm, 100)
+	near(result.size.states.dry.length.mm, (20 * 100) / 140)
+})
+
+test("a swatch half measured steamed doesn't stop the check", () => {
+	const half = swatch({relaxed: {...NONE, steamed: {wales: 29, courses: null}}})
+	assert.doesNotThrow(() => checkKnitout(knitout(), null, {gauge: 7, profiles: profiles({"3": carrier({swatches: [half]})})}))
+})
+
+test("profiles that link nothing leave a washed fabric's numbers as they were", () => {
+	const fabric = {relax: "wet", stitches: {"5": {across: 27.5, up: 70}}, tex: 67, around: 5}
+	const tube = knitout({width: 20, rows: 10, pattern: null})
+	const without = checkKnitout(tube, null, {gauge: 7, fabric})
+	const empty = checkKnitout(tube, null, {gauge: 7, fabric, profiles: {machine: null, carriers: {}, missing: [], urls: []}})
+	near(empty.size.sources[0].gsm, without.size.sources[0].gsm)
+	assert.deepEqual(empty.size.on, without.size.on)
+	// (as the code before profiles had it: 192 g/m², washed)
+	near(without.size.sources[0].gsm, 192.29, 0.01)
+})
+
+test("steamed main yarn, and a waste yarn nothing's measured of: every state still has a size", () => {
+	const steamed = swatch({relaxed: {...NONE, steamed: {wales: 29, courses: 74}}})
+	const result = checkKnitout(knitout({carriers: ["1", "3"], rows: 20}), null, {gauge: 7, profiles: profiles({"3": carrier({swatches: [steamed]})})})
+	assert.ok(result.size.states.steamed)
+	assert.equal(result.size.states.steamed.estimated, true)
+	assert.ok(result.size.states.dry)
+})
+
+test("each source says how many needles and rows it knitted", () => {
+	const result = checkKnitout(knitout({carriers: ["1", "3"], rows: 20}), null, {gauge: 7, profiles: profiles()})
+	const main = result.size.sources.find(source => source.carrier === "3")
+	assert.equal(main.needles, 20)
+	assert.equal(main.rows, 10)
+	const rib = checkKnitout(knitout({width: 8, rows: 2, pattern: "FB", rack: 0.5}), null, {gauge: 7})
+	assert.equal(rib.size.sources[0].needles, 8)
+})
