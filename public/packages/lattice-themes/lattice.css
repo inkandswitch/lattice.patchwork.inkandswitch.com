@@ -1,10 +1,11 @@
 /* plain desktop-software themes with a little bamboo-and-cocoa character:
    surfaces carry a faint plum tint, the accent is a pink, and the syntax
    colours are an even-contrast pastel set (light: inked, dark: soft). every
-   ink and syntax colour clears 4.5:1 on the window and the chrome (comments
-   included), and the accent's own ink clears 4.5:1 on it. each theme only
-   sets the --lattice-* palette; the block below maps it onto the studio,
-   editor and syntax tokens once for both. */
+   ink and syntax colour clears 4.5:1 on the window, the chrome and the
+   editor's active line (comments included), and the accent clears 4.5:1 as
+   text and under its own ink. each theme only sets the --lattice-* palette;
+   the block below maps it onto the studio, editor and syntax tokens once
+   for both. */
 
 [theme="lattice-light"] {
 	color-scheme: light;
@@ -13,8 +14,8 @@
 	--lattice-chrome: #f1eef8;
 	--lattice-ink: #2d2b39;
 	--lattice-ink-mute: #555363;
-	--lattice-ink-faint: #6b6a7a;
-	--lattice-accent: #c13c86;
+	--lattice-ink-faint: #615f70;
+	--lattice-accent: #b5357c;
 	--lattice-accent-ink: white;
 	--lattice-cursor: var(--lattice-accent);
 	--lattice-selection: #d6c8f7cc;
@@ -36,7 +37,7 @@
 	--lattice-chrome: #1a1923;
 	--lattice-ink: #d7d5e7;
 	--lattice-ink-mute: #a6a4b6;
-	--lattice-ink-faint: #8a899a;
+	--lattice-ink-faint: #9998aa;
 	/* a pastel button with dark ink, rather than a dim one with white */
 	--lattice-accent: #f197c2;
 	--lattice-accent-ink: var(--lattice-window);
@@ -62,6 +63,20 @@
 	/* the derived greys lean a little plum */
 	--studio-offset-tint: var(--lattice-purple);
 	--studio-offset-tint-amount: 6%;
+	/* the gentle inks, for text that's said quietly: from the ink to the
+	   faint ink, never fainter (patchwork's own ramp runs on to nearly the
+	   fill, which no text can be read in). so each clears 4.5:1 wherever the
+	   faint ink does */
+	--studio-line-offset-10: color-mix(in oklch, var(--lattice-ink), var(--lattice-ink-faint) 20%);
+	--studio-line-offset-20: color-mix(in oklch, var(--lattice-ink), var(--lattice-ink-faint) 40%);
+	--studio-line-offset-30: color-mix(in oklch, var(--lattice-ink), var(--lattice-ink-faint) 60%);
+	--studio-line-offset-40: color-mix(in oklch, var(--lattice-ink), var(--lattice-ink-faint) 80%);
+	--studio-line-offset-50: var(--lattice-ink-faint);
+	--studio-chrome-line-offset-10: var(--studio-line-offset-10);
+	--studio-chrome-line-offset-20: var(--studio-line-offset-20);
+	--studio-chrome-line-offset-30: var(--studio-line-offset-30);
+	--studio-chrome-line-offset-40: var(--studio-line-offset-40);
+	--studio-chrome-line-offset-50: var(--studio-line-offset-50);
 
 	--studio-primary: var(--lattice-accent);
 	--studio-primary-line: var(--lattice-accent-ink);

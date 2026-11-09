@@ -25,7 +25,10 @@
 	}
 
 	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
-	--lattice-muted: var(--studio-chrome-line-offset-30, #888);
+	/* gentle text: the chrome's own colour, half oklch's lightness from it,
+	   towards black on a light chrome and white on a dark one. that's 4.5:1
+	   or more on the chrome and the window, whatever the theme */
+	--lattice-muted: oklch(from var(--studio-chrome-fill, #eaeaeb) calc(l + (1 - 2 * round(l)) * 0.5) c h);
 	/* headings, and the names of things: the theme's code font, unless
 	   there's a heading font of its own */
 	--lattice-path-family: var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace));
@@ -935,6 +938,14 @@
 		border-radius: var(--studio-radius, 6px);
 		background: var(--studio-fill, #fff);
 		cursor: pointer;
+	}
+
+	/* the drafts panel's "+ more" avatar is filled with a gentle ink, which
+	   is light in a dark theme: its + is black or white by contrast */
+	@supports (color: contrast-color(red)) {
+		& .draft-avatar--extra {
+			color: contrast-color(var(--drafts-faint-fg, #888));
+		}
 	}
 
 	/* along a sidebar's right edge, over its border */

@@ -6,7 +6,9 @@
    swatch's numbers come to */
 .profile-editor {
 	--profile-ink: var(--knitoutjs-ink, CanvasText);
-	--profile-muted: var(--lattice-muted, var(--studio-line-offset-50, color-mix(in oklab, var(--profile-ink) 62%, transparent)));
+	/* gentle text: the sheet's own colour, half oklch's lightness from it
+	   (see latticework.css's --knitoutjs-muted) */
+	--profile-muted: oklch(from var(--profile-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
 	--profile-line: var(--knitoutjs-line-soft, color-mix(in oklab, CanvasText 15%, transparent));
 	--profile-rule: var(--studio-fill-offset-30, color-mix(in oklab, var(--profile-ink) 22%, transparent));
 	--profile-sheet: var(--knitoutjs-sheet, Canvas);
@@ -30,6 +32,11 @@
 
 	& > * {
 		max-width: 36rem;
+	}
+
+	& ::placeholder {
+		color: var(--profile-muted);
+		opacity: 1;
 	}
 
 	& :is(input, select, textarea, button) {

@@ -772,17 +772,8 @@ function Frame(props) {
         onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
       >
         ${icon("link")}
-        copy share url
+        copy link
         <small>a link here · they get their own</small>
-      </button>
-      <button
-        class="knitoutjs-menu-item"
-        disabled=${() => !menuFiles()}
-        onClick=${() => copyFromMenu(menuFiles())}
-      >
-        ${icon("copy")}
-        copy automerge url
-        <small>${() => (menuFiles() ? `${menuFiles().slice(0, 20)}…` : "…")}</small>
       </button>
       <button
         class="knitoutjs-menu-item"
