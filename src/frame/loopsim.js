@@ -46,7 +46,8 @@
 // part of it, on its side: a heel cups out of the leg, not into it.
 
 import {across} from "./knitting.js"
-import {DELTA, STITCH, fabricOf, stitchSize} from "./size.js"
+import {DELTA, STITCH, fabricOf, stitchSize, stitchSizes} from "./size.js"
+import {RELAX_STATES} from "./profile-docs.js"
 
 export const LOOP = 3.8
 export const WALE = LOOP / 5
@@ -165,16 +166,29 @@ function grow(f, need) {
 // a loop's size in pitches, from the settings (see size.js): `fabric` (or,
 // per yarn, `yarns[yarn]`) and the gauge. as WALE and REACH have it, and a
 // needle's pitch wide, till anything's measured
-export function sizer({fabric = null, yarns = null, gauge = 7} = {}) {
-	const pitch = 25.4 / gauge
+//
+// with `profiles` (a .k's, as profiles.js resolves them), each yarn's from
+// its carrier's yarns and swatches (size.js's stitchSizes), as jersey, in the
+// first state there's a size for. (the yarn's its carrier's place in the
+// .k's ;;Carriers: header, which the kniterate's is always 1 2 3 4 5 6)
+export function sizer({fabric = null, yarns = null, gauge = 7, profiles = null} = {}) {
+	const atGauge = profiles?.machine?.gauge > 0 ? profiles.machine.gauge : gauge
+	const pitch = 25.4 / atGauge
 	const known = {}
 	const size = (number, yarn = 0) => {
 		const key = `${number}|${yarn}`
 		if (known[key]) return known[key]
-		const s = stitchSize(fabricOf({fabric: yarns?.[yarn] ?? fabric}), number, pitch)
+		let s
+		if (profiles) {
+			const carrier = profiles.carriers?.[String(yarn + 1)] ?? null
+			const {states} = stitchSizes({carrier, stitch: number, structure: "jersey", machine: profiles.machine, gauge: atGauge, fabric: yarns?.[yarn] ?? fabric})
+			s = RELAX_STATES.map(state => states[state]).find(Boolean)
+		} else {
+			s = stitchSize(fabricOf({fabric: yarns?.[yarn] ?? fabric}), number, pitch)
+		}
 		return (known[key] = {up: s.up / pitch, far: s.loop / pitch / 2, across: s.across / pitch})
 	}
-	size.key = JSON.stringify([fabric, yarns, gauge])
+	size.key = JSON.stringify([fabric, yarns, atGauge, profiles])
 	return size
 }
 const PLAIN = sizer()
