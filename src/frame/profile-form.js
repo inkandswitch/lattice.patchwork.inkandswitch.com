@@ -13,8 +13,8 @@
 // put), so what's spliced is always into what's there. numbers and colours
 // are kept once they've stopped changing for a moment, or on leaving them
 import {splice} from "@automerge/automerge"
-import {stylesheet} from "./knitoutjs/core/stylesheet.js"
-import {urlFromText} from "./knitoutjs/core/patchwork-docs.js"
+import {stylesheet} from "../../packages/knitoutjs/core/stylesheet.js"
+import {urlFromText} from "../../packages/knitoutjs/core/patchwork-docs.js"
 import {editBetween, moved} from "./edits.js"
 
 const STYLESHEET = new URL("./profiles.css", import.meta.url).href

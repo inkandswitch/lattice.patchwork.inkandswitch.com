@@ -12,8 +12,8 @@ import {
   OLD_KNITOUTJS_TYPES,
   projectTitle,
   typeOf,
-} from "./knitoutjs/core/project.js";
-import { createProject, mountProject, mountUpdate } from "./knitoutjs/core/project-view.js";
+} from "../../packages/knitoutjs/core/project.js";
+import { createProject, mountProject, mountUpdate } from "../../packages/knitoutjs/core/project-view.js";
 import {
   isOldKnitoutjs,
   isOldLatticeFolder,
@@ -21,15 +21,15 @@ import {
   updateKnitoutjs,
   updateLatticeFolder,
   updatedTo,
-} from "./knitoutjs/core/migrate.js";
-import { createDoc, findSoon, urlFromText } from "./knitoutjs/core/patchwork-docs.js";
-import { seedActive } from "./knitoutjs/core/active.js";
+} from "../../packages/knitoutjs/core/migrate.js";
+import { createDoc, findSoon, urlFromText } from "../../packages/knitoutjs/core/patchwork-docs.js";
+import { seedActive } from "../../packages/knitoutjs/core/active.js";
 import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
-import { folderTitle } from "./knitoutjs/core/folder.js";
-import { directoryTitle } from "./knitoutjs/core/directory.js";
-import { Resizer, remember, remembered, sidebarState } from "./knitoutjs/core/sidebars.js";
-import { icon } from "./knitoutjs/core/icons.js";
-import { tooltips } from "./knitoutjs/core/tooltip.js";
+import { folderTitle } from "../../packages/knitoutjs/core/folder.js";
+import { directoryTitle } from "../../packages/knitoutjs/core/directory.js";
+import { Resizer, remember, remembered, sidebarState } from "../../packages/knitoutjs/core/sidebars.js";
+import { icon } from "../../packages/knitoutjs/core/icons.js";
+import { tooltips } from "../../packages/knitoutjs/core/tooltip.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
@@ -38,7 +38,7 @@ import { useToolStorage } from "./storage.js";
 
 // latticework's, too, for its menus, before any project has brought it; and
 // the fonts lattice brings
-const STYLESHEETS = ["./fonts/fonts.css", "./knitoutjs/core/latticework.css", "./shell.css"].map(
+const STYLESHEETS = ["./fonts/fonts.css", "../../packages/knitoutjs/core/latticework.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 

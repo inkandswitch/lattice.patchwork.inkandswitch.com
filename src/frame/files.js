@@ -1,10 +1,10 @@
 // the files lattice shows, and which tools open them. what we know about
 // the files themselves is in knitoutjs's core (shared with it)
-import { fileExtension as fileExtensionOf } from "./knitoutjs/core/files.js";
+import { fileExtension as fileExtensionOf } from "../../packages/knitoutjs/core/files.js";
 import { profileKind } from "./profile-docs.js";
 
 // all of core's, but fileExtension: lattice's own (below) is the one
-export * from "./knitoutjs/core/files.js";
+export * from "../../packages/knitoutjs/core/files.js";
 
 // a link to a project's files (its folder or directory) on this site, and
 // the name it's going by: whoever opens it gets a project of their own on
@@ -34,7 +34,7 @@ export const TOOLS = {
     // where it sits in a tab's tool menu
     position: 2,
     extensions: ["k"],
-    load: () => import("./knitoutjs/core/visualizer.js"),
+    load: () => import("../../packages/knitoutjs/core/visualizer.js"),
   },
   kniterate: {
     id: "kniterate",
@@ -66,7 +66,7 @@ export const TOOLS = {
     title: "see the file's text (and change it, if it isn't generated)",
     position: 1,
     extensions: ["js", "k"],
-    load: () => import("./knitoutjs/core/editor.js"),
+    load: () => import("../../packages/knitoutjs/core/editor.js"),
   },
   terminal: {
     id: "terminal",
@@ -107,7 +107,7 @@ export const TOOLS = {
     name: "patchwork",
     title: "show this doc with patchwork's own tool for it",
     extensions: ["*"],
-    load: () => import("./knitoutjs/core/patchwork-pane.js"),
+    load: () => import("../../packages/knitoutjs/core/patchwork-pane.js"),
   },
 };
 

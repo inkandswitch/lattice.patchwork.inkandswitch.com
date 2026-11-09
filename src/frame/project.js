@@ -1,8 +1,8 @@
 // lattice's project tool: latticework on a project, with lattice's tools. the
 // frame shows the same in its middle
 import { createRoot } from "solid-js";
-import { mountProject } from "./knitoutjs/core/project-view.js";
-import { PROJECT_TOOLS } from "./knitoutjs/core/project.js";
+import { mountProject } from "../../packages/knitoutjs/core/project-view.js";
+import { PROJECT_TOOLS } from "../../packages/knitoutjs/core/project.js";
 import { TOOLS, toolsFor, fileExtension } from "./files.js";
 import { newMachine, newSwatch, newYarn } from "./profile-docs.js";
 import { useToolStorage } from "./storage.js";

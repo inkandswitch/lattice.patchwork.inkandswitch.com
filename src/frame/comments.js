@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For, onCleanup } from "solid-js";
 import html from "solid-js/html";
-import { icon } from "./knitoutjs/core/icons.js";
+import { icon } from "../../packages/knitoutjs/core/icons.js";
 import { parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { subscribe } from "@inkandswitch/patchwork-providers";
 
