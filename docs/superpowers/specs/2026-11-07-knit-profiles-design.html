@@ -263,22 +263,22 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 <h3>What a .k gains</h3>
 <pre><code>{
   …,
-  machine: "automerge:…" | null,
-  yarns: [                   // per carrier, as now, plus:
-    {colours: ["#d8cbb0", "#d8cbb0"], plated: true, profiles: ["automerge:…", "automerge:…"]},
-    …
-  ]
+  yarns: […],                // knitoutjs's: colours and plating, untouched
+  profiles: {                // lattice's own
+    machine: "automerge:…" | null,
+    carriers: {"3": ["automerge:…", "automerge:…"]}   // knitting hole, then plating slit
+  }
 }</code></pre>
-<p><code>profiles</code> lines up with <code>colours</code>: one yarn per strand.</p>
+<p>The links live in a key of lattice's own, <code>profiles</code>. <code>yarns</code> belongs to knitoutjs (<code>knitoutjs/core/yarns.js</code>), whose picker replaces a carrier's whole entry whenever its colour changes, so anything kept inside it would be lost. Whether a carrier is plated or held is still read from <code>yarns[i].plated</code>.</p>
 
 <h3>A project</h3>
-<p>Nothing new is stored on a project. If a .k has no <code>machine</code> and the project's folder holds exactly one machine doc, that machine is used. Adding profiles to a project means filing them in its folder. Adding them to your account means also filing them in a folder of your own.</p>
+<p>Nothing new is stored on a project. If a .k has no <code>profiles.machine</code> and the project's folder holds exactly one machine doc, that machine is used. Adding profiles to a project means filing them in its folder. Adding them to your account means also filing them in a folder of your own.</p>
 
 <h2 id="resolve">4. From a .k to its profiles</h2>
 <p>The check runs in a worker, so it needs plain data. A new <code>profiles.js</code> on the main thread does the following:</p>
 <ol>
-<li>Loads the .k's machine: its <code>machine</code> link, or else the project's only machine doc, or else none (falling back to today's gauge setting).</li>
-<li>For each carrier with <code>profiles</code>, loads those yarn docs, then every swatch in their <code>swatches</code> indexes, then each of those swatches' machines.</li>
+<li>Loads the .k's machine: its <code>profiles.machine</code> link, or else the project's only machine doc, or else none (falling back to today's gauge setting).</li>
+<li>For each carrier in <code>profiles.carriers</code>, loads those yarn docs, then every swatch in their <code>swatches</code> indexes, then each of those swatches' machines.</li>
 <li>Flattens all of it into a <strong>resolved profile</strong> and hands that to the check alongside the settings it already receives:</li>
 </ol>
 <pre><code>{
@@ -343,7 +343,7 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 <h2 id="ui">6. The interface</h2>
 
 <h3>Making profiles</h3>
-<p><code>index.js</code> registers <code>lattice:machine</code>, <code>lattice:yarn</code> and <code>lattice:swatch</code> as datatypes, each with a tool. The workspace's + menu already creates patchwork datatypes, so they appear there and land in the project's folder. In the project's file tree, a swatch sits under the first yarn it uses, the way a .k sits under its .js.</p>
+<p><code>index.js</code> registers <code>lattice:machine</code>, <code>lattice:yarn</code> and <code>lattice:swatch</code> as datatypes, each with a tool. Lattice adds <em>machine</em>, <em>yarn</em> and <em>swatch</em> to the latticework's + menu (<code>project.js</code>'s <code>latticeOptions().menu</code>). Opening a new doc there files it in the project. Lattice's <code>fileExtension</code> gives each profile datatype an extension of its own (<code>machine</code>, <code>yarn</code>, <code>swatch</code>), so <code>TOOLS</code> opens each in its editor. (Nesting swatches under their yarn in the file tree would mean changing knitoutjs's latticework, so it's left for later.)</p>
 
 <h3>The editors</h3>
 <p>The editors are plain forms in the style of the checks panel. They're written to make sense to someone from industry: standard terms first, with plain words beside them.</p>
@@ -377,8 +377,7 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 
 <h3>Linking a .k</h3>
 <ul>
-<li><strong>Yarns:</strong> each carrier's swatch in the <code>yarns.js</code> picker gets a <em>yarn</em> field next to its colour. Pick a yarn doc from the project's files or paste a link: one per strand, so two for a plated or held pair. Colour stays separate, and defaults to the yarn's <code>colour</code> if it has one.</li>
-<li><strong>Machine:</strong> when the project has a machine doc, the checks panel's gauge setting becomes a machine choice, with <em>no machine (7 gauge)</em> as the fallback.</li>
+<li><strong>What's loaded:</strong> a section of the checks panel, above the readout. It has a machine choice (the project's machine docs, or <em>no machine (7 gauge)</em>), and one row for each carrier the .k uses, with a yarn choice per strand (one, or two when <code>yarns[i]</code> has two colours). The choices are the project's yarn docs, or a pasted link. The colours stay knitoutjs's, set in its picker as now.</li>
 </ul>
 
 <h3>The readout</h3>
@@ -397,7 +396,7 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 
 <h2 id="compat">7. What stays, and migrating</h2>
 <ul>
-<li>A .k with no <code>profiles</code> and no <code>machine</code> works exactly as now, from the localStorage <code>fabric</code> and gauge.</li>
+<li>A .k with no <code>profiles</code> works exactly as now, from the localStorage <code>fabric</code> and gauge.</li>
 <li>The old fabric box stays visible only in that case. It gains a <em>make profiles from this</em> button, which creates a yarn doc (fibre, tex as a tex count, strands as ply) and one swatch per stitch number entered (its across and up, as measured "off the machine", or whichever relaxation was set), files them in the project and links them to the open .k.</li>
 <li>A .k with profiles on some carriers and not others sizes the unlinked carriers from the localStorage fabric.</li>
 </ul>
@@ -417,7 +416,7 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 <ul>
 <li><strong>Unit tests</strong> with <code>node --test</code> for <code>size.js</code> and the matching: each tier; jersey vs. 1×1 vs. 2×2 rib (a rib swatch never sizes jersey, and the reverse); rib without a swatch falling to guess with its warning; this machine vs. another of the same model vs. another model; single vs. plated vs. held; averaging several swatches; estimating a missing relaxation state; tex from each count system; entered mm vs. per 10 cm round-tripping. The repo's test script (currently <code>echo ':))'</code>) runs them.</li>
 <li><strong>Structure detection</strong> in <code>knitcheck.js</code>: small knitout fixtures for jersey, a tube, 1×1 rib, 2×2 rib, and a rib cuff followed by a jersey body.</li>
-<li><strong>Resolution</strong> in <code>profiles.js</code>, against an in-memory automerge repo: the project's only machine; a missing doc; an index entry whose swatch doesn't link back; re-resolving on change.</li>
+<li><strong>Resolution</strong> in <code>profiles.js</code>, with an injected <code>find(url)</code> over plain objects: the project's only machine; a missing doc; an index entry whose swatch doesn't link back; re-resolving on change.</li>
 <li><strong>The round trip:</strong> a .k for the lambswool 2×2 rib swatch, once it's measured, must predict exactly the swatch's measured size at its own stitch number. This is the first real end-to-end check.</li>
 <li><strong>By hand:</strong> the editors and the readout in the dev server, and then B, for whether they make sense to someone from industry.</li>
 </ul>
@@ -434,9 +433,9 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 <tr><td><code>src/frame/size.js</code></td><td>tiers, matching, swatch to per-10 cm, estimating relaxation states, provenance</td></tr>
 <tr><td><code>src/frame/knitcheck.js</code></td><td>classify each pass's structure; sizes per carrier, stitch number and structure; machine limits from the resolved machine; the new <code>size</code> result</td></tr>
 <tr><td><code>src/frame/checks.js</code></td><td>machine choice, the readout, the migration button</td></tr>
-<tr><td><code>src/frame/yarns.js</code></td><td>the yarn field per strand; <code>profiles</code> in the .k's <code>yarns</code></td></tr>
 <tr><td><code>src/frame/loopsim.js</code> callers (<code>animation.js</code>, <code>knit3d.js</code>)</td><td>pass the resolved per-carrier fabric to <code>sizer()</code></td></tr>
-<tr><td><code>src/frame/workspace.js</code></td><td>swatches nested under their yarn in the file tree</td></tr>
+<tr><td><code>src/frame/files.js</code>, <code>project.js</code></td><td>extensions and tools for the profile datatypes; + menu entries</td></tr>
+<tr><td><code>src/frame/knitting.js</code></td><td>read <code>x-roller-advance</code> and <code>x-speed-number</code> as it reads <code>x-stitch-number</code></td></tr>
 <tr><td><code>src/frame/test/</code>, <code>package.json</code></td><td><em>new:</em> tests and a real test script</td></tr>
 </tbody>
 </table>
@@ -444,9 +443,9 @@ nav.toc ol { margin: .25rem 0; padding-left: 1.25rem; }
 
 <h2 id="open">11. Open questions</h2>
 <ul>
-<li><strong>Where the yarn link goes.</strong> In each carrier's colour picker, as designed, or in a separate "what's loaded" panel beside the check. We'll start in the picker and move it if it gets crowded.</li>
+<li><strong>Nesting swatches under yarns</strong> in the file tree needs a hook in knitoutjs's latticework, so it's left for later.</li>
 <li><strong>Photos.</strong> We need to confirm how patchwork holds images (an image or file datatype, or a blob in the doc) before the swatch editor gets a photo field. If that turns out to be awkward, photos are dropped from the first cut.</li>
-<li><strong>Stitch number to stitch size.</strong> The manual settles what the setting is (stitch size 0–15, per bed). What it doesn't say is how knitout's <code>x-stitch-number</code> becomes a stitch size in the knitout-to-kcode converter, or what default the converter uses. That needs reading in the vendored converter, and confirming with Agnes.</li>
+<li><strong>Stitch number to stitch size.</strong> The manual settles what the setting is (stitch size 0–15, per bed). The vendored converter writes knitout's <code>x-stitch-number</code> (<code>0</code>–<code>9</code>, <code>A</code>–<code>Z</code>) straight into each needle's stitch-size slot (STIF/STIR). It defaults to stitch <code>5</code>, transfer stitch <code>3</code>, roller 100 and speed 100. So a stitch number names an entry in the Kniterate's own stitch table, and what that entry is set to (0–15) is the machine's. The machine profile records it per entry, and it's worth confirming with Agnes what the studio machine's table holds.</li>
 <li><strong>The lambswool swatch</strong> is a <strong>2×2 rib</strong>, so the jersey code that was a candidate for it (needles 50 to 100, single bed) isn't how it was knit. Its needle count, rows, stitch number and whether it was plated are all to ask Agnes. Until then it's entered as <em>guessed</em>, and its relaxed measurements are still worth recording now, since they don't depend on any of that.</li>
 <li><strong>Rib constants.</strong> We need to confirm Knapton et al. 1968 (the wool rib paper) and take its 1×1 and 2×2 rib constants, per relaxation state, before rib gets the "from loop" tier. Until then rib is measured or guessed only.</li>
 <li><strong>Counting rib.</strong> Rib is recorded as needles per 10 cm with both beds counted. Industry often counts face wales only. We need to check which B expects, and show both if needed.</li>
