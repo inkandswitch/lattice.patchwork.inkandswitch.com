@@ -48,11 +48,13 @@
 		}
 	}
 
-	/* (white on blue) */
-	& .knit3d-play {
+	/* (its text by contrast with its fill: latticework.css's --button-ink.
+	   doubled up to outrank a shell's `button { color: inherit }`) */
+	& .knitout-button.knit3d-play {
+		--button-fill: var(--knitoutjs-accent);
 		min-width: 5em;
-		background: var(--knitoutjs-accent);
-		color: #fff;
+		background: var(--button-fill);
+		color: var(--button-ink, #fff);
 	}
 
 	& .knit3d-select {

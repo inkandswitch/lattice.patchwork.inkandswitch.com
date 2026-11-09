@@ -48,18 +48,21 @@
 		}
 	}
 
-	/* the one button that does something */
-	/* (white on blue) */
-	& .knitout-animation-play {
+	/* the one button that does something (its text by contrast with its
+	   fill: latticework.css's --button-ink. doubled up to outrank a shell's
+	   `button { color: inherit }`) */
+	& .knitout-button.knitout-animation-play {
+		--button-fill: var(--knitoutjs-accent);
 		min-width: 5em;
-		background: var(--knitoutjs-accent);
-		color: #fff;
+		background: var(--button-fill);
+		color: var(--button-ink, #fff);
 	}
 
 	/* seen from behind */
 	& .knitout-animation-flip[aria-pressed="true"] {
-		background: var(--knitoutjs-accent);
-		color: var(--knitoutjs-accent-ink);
+		--button-fill: var(--knitoutjs-accent);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--knitoutjs-accent-ink));
 	}
 
 	& .knitout-animation-speed {

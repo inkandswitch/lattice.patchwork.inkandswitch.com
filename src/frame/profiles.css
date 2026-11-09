@@ -152,8 +152,9 @@
 	}
 
 	& label:has(input:checked) {
-		background: var(--profile-accent);
-		color: var(--knitoutjs-accent-ink, #fff);
+		--button-fill: var(--profile-accent);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--knitoutjs-accent-ink, #fff));
 	}
 
 	& input {

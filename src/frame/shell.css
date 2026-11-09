@@ -87,8 +87,9 @@
 		padding: 2px 8px;
 		border: none;
 		border-radius: var(--studio-radius-round, 999px);
-		background: var(--studio-warning-fill, #c18401);
-		color: var(--studio-warning-line, black);
+		--button-fill: var(--studio-warning-fill, #c18401);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--studio-warning-line, black));
 		font-family: var(--lattice-path-family);
 		font-size: 11px;
 		cursor: pointer;
@@ -690,9 +691,10 @@
 		color: var(--lattice-muted);
 	}
 	& .lattice-button.lattice-button-danger {
-		border-color: var(--studio-danger, #e45649);
-		background: var(--studio-danger, #e45649);
-		color: var(--studio-danger-line, #fff);
+		--button-fill: var(--studio-danger, #e45649);
+		border-color: var(--button-fill);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--studio-danger-line, #fff));
 	}
 
 	& .lattice-colours {
@@ -817,13 +819,20 @@
 		flex: none;
 		padding: 3px 5px 2px;
 	}
+	/* drawn as the build button is: its text by contrast too (a span, so
+	   latticework's buttons-and-labels rule for it doesn't reach it) */
 	& .lattice-mini-build {
+		--button-fill: var(--studio-primary);
 		display: inline-block;
 		padding: 0 5px;
 		border-radius: 2px;
-		background: var(--studio-primary);
-		color: var(--studio-primary-line, white);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--studio-primary-line, white));
 		font-weight: 600;
+
+		@supports (color: contrast-color(red)) {
+			--button-ink: oklch(from color-mix(in oklch, contrast-color(var(--button-fill)) 80%, var(--button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
+		}
 	}
 	& .lattice-mini-code {
 		padding: 1px 0;
