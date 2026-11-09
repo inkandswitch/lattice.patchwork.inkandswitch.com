@@ -95,3 +95,18 @@ test("the yarns a swatch was knitted from, once each", () => {
 test("what to add to and take from the yarns' indexes", () => {
 	assert.deepEqual(indexChanges(["a", "b"], ["b", "c"]), {add: ["c"], remove: ["a"]})
 })
+
+test("a swatch, in a line", async () => {
+	const {swatchSummary} = await import("../profile-docs.js")
+	const fresh = newSwatch()
+	const swatch = {
+		...fresh,
+		knit: {...fresh.knit, structure: "rib-2x2", stitch: "5", needles: 48, rows: 100, feeds: [{carrier: "3", yarns: ["a", "b"], plated: true}]},
+		relaxed: {...fresh.relaxed, steamed: {entered: "mm", width: 98, height: 142}},
+	}
+	assert.equal(swatchSummary(swatch), "2×2 rib · st 5 · plated · 48 × 100 · steamed: 98 × 142 mm · guessed")
+	const unknown = {...swatch, knit: {...swatch.knit, needles: null, rows: null, feeds: [{carrier: "3", yarns: ["a"]}]}}
+	assert.equal(swatchSummary(unknown), "2×2 rib · st 5 · steamed: 98 × 142 mm · guessed")
+	const per10 = {...swatch, relaxed: {...fresh.relaxed, wet: {entered: "per10", wales: 29.5, courses: 74}}}
+	assert.equal(swatchSummary(per10), "2×2 rib · st 5 · plated · 48 × 100 · washed: 29.5 × 74 per 10 cm · guessed")
+})

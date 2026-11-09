@@ -156,3 +156,37 @@ export function swatchYarns(swatch) {
 export function indexChanges(before, after) {
 	return {add: after.filter(url => !before.includes(url)), remove: before.filter(url => !after.includes(url))}
 }
+
+// what each state and structure's called, where people read them
+export const STATE_NAMES = {dry: "off the machine", steamed: "steamed", wet: "washed", full: "washed hot & tumbled"}
+export const STRUCTURE_NAMES = {jersey: "jersey", "rib-1x1": "1×1 rib", "rib-2x2": "2×2 rib", other: "other"}
+
+const number = value => String(Math.round(Number(value) * 10) / 10)
+
+// a swatch in a line: its structure, stitch, how it was fed, its needles and
+// rows, the first of what it measures, and how sure anyone is of how it was
+// knit. "2×2 rib · st 5 · plated · 48 × 100 · steamed: 98 × 142 mm · guessed"
+export function swatchSummary(swatch) {
+	const knit = swatch?.knit ?? {}
+	const parts = []
+	parts.push(knit.structure === "other" && knit.structureNote ? String(knit.structureNote) : (STRUCTURE_NAMES[knit.structure] ?? "jersey"))
+	parts.push(`st ${knit.stitch ?? "5"}`)
+	const feed = knit.feeds?.[0]
+	if (feed?.yarns?.length > 1) parts.push(feed.plated ? "plated" : "held")
+	if (positive(knit.needles) && positive(knit.rows)) parts.push(`${knit.needles} × ${knit.rows}`)
+	const state = RELAX_STATES.find(name => swatch?.relaxed?.[name])
+	if (state) {
+		const entry = swatch.relaxed[state]
+		const measure =
+			entry.entered === "per10"
+				? positive(entry.wales) || positive(entry.courses)
+					? `${number(entry.wales ?? 0)} × ${number(entry.courses ?? 0)} per 10 cm`
+					: null
+				: positive(entry.width) || positive(entry.height)
+					? `${number(entry.width ?? 0)} × ${number(entry.height ?? 0)} mm`
+					: null
+		if (measure) parts.push(`${STATE_NAMES[state]}: ${measure}`)
+	}
+	parts.push(knit.sure || "guessed")
+	return parts.join(" · ")
+}
