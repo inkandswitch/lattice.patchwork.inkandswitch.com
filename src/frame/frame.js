@@ -156,17 +156,20 @@ function Frame(props) {
     }),
   );
 
-  // a share link (files.js's shareUrl): #folder=<a project's files>. you get
-  // your own project on them, and the link's taken out of the address
+  // a share link (files.js's shareUrl): #folder=<a project's files>&name=…
+  // you get your own project on them, called what theirs is, and the link's
+  // taken out of the address
   async function openShared() {
     const params = new URLSearchParams(location.hash.slice(1));
     const shared = params.get("folder");
     if (!shared || !homeHandle()) return;
+    const name = params.get("name") ?? "";
     params.delete("folder");
+    params.delete("name");
     const rest = params.toString();
     history.replaceState(history.state, "", `${location.pathname}${location.search}${rest ? `#${rest}` : ""}`);
     say("finding it…");
-    say(await addFromUrl(shared), true);
+    say(await addFromUrl(shared, { name }), true);
   }
   addEventListener("hashchange", openShared);
   onCleanup(() => removeEventListener("hashchange", openShared));
@@ -357,7 +360,8 @@ function Frame(props) {
   // in the root folder under its own title. a folder or a directory is a
   // project's files: you get your own project on it (the one you have, if
   // you've one). says what was wrong, or nothing
-  async function addFromUrl(text) {
+  // `name`, for a project made on someone's files: what they call it
+  async function addFromUrl(text, { name = "" } = {}) {
     const url = urlFromText(text);
     if (!url) return "that isn't an automerge url";
     if (projects().some((project) => project.url === url)) {
@@ -387,7 +391,7 @@ function Frame(props) {
         choose(mine);
         return null;
       }
-      const title = type === "folder" ? folderTitle(doc) : directoryTitle(doc);
+      const title = name.trim() || (type === "folder" ? folderTitle(doc) : directoryTitle(doc));
       const project = await createProject(repo, { type: "lattice:project", title, files: url, hive });
       addEntry({ name: title, type: "lattice:project", url: project.url });
       choose(project.url);
@@ -765,7 +769,7 @@ function Frame(props) {
       <button
         class="knitoutjs-menu-item"
         disabled=${() => !menuFiles()}
-        onClick=${() => copyFromMenu(shareUrl(menuFiles()))}
+        onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
       >
         ${icon("link")}
         copy share url

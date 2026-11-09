@@ -6,10 +6,12 @@ import { profileKind } from "./profile-docs.js";
 // all of core's, but fileExtension: lattice's own (below) is the one
 export * from "./knitoutjs/core/files.js";
 
-// a link to a project's files (its folder or directory) on this site: whoever
-// opens it gets a project of their own on them (frame.js's openShared)
-export function shareUrl(filesUrl) {
-  return `${location.origin}/#folder=${filesUrl}`;
+// a link to a project's files (its folder or directory) on this site, and
+// the name it's going by: whoever opens it gets a project of their own on
+// them, called that (frame.js's openShared)
+export function shareUrl(filesUrl, name) {
+  name = String(name ?? "").trim();
+  return `${location.origin}/#folder=${filesUrl}${name ? `&name=${encodeURIComponent(name)}` : ""}`;
 }
 
 // "js", "k", or whatever else the file says it is. a latticex terminal isn't
