@@ -4,14 +4,14 @@
 // from the .k that knit it; what it measures, each way it's been let relax;
 // its loop length; and what follows from those. the yarns it's knitted from
 // list it (their `swatches`): this keeps those lists right as its feeds
-// change
+// change. words are spliced in as they're typed
 import {checkKnitout} from "./knitcheck.js"
 import {readSettings} from "./settings.js"
 import {docText, textHash} from "./files.js"
 import {texOf} from "./counts.js"
 import {RELAX_STATES, STATE_NAMES, STRUCTURES, STRUCTURE_NAMES, indexChanges, profileKind, swatchDensity, swatchYarns} from "./profile-docs.js"
 import {knitFromCheck} from "./swatch-fill.js"
-import {choice, docChoice, editorRoot, field, note, numberInput, section, show, textInput, unit} from "./profile-form.js"
+import {button, choice, docChoice, editorRoot, field, note, numberInput, removeButton, section, segmented, show, textInput, unit} from "./profile-form.js"
 
 const CARRIERS = ["1", "2", "3", "4", "5", "6"]
 const SURE = [
@@ -20,6 +20,7 @@ const SURE = [
 	["guessed", "guessed"],
 ]
 const round = (value, places = 1) => Math.round(value * 10 ** places) / 10 ** places
+const EMPTY_STATE = {entered: "mm", width: null, height: null, wales: null, courses: null, grams: null, date: null, by: null}
 
 export default function SwatchTool(handle, element, context = {}) {
 	const repo = context.repo ?? element.repo
@@ -29,12 +30,12 @@ export default function SwatchTool(handle, element, context = {}) {
 	const knit = key => value => change(doc => (doc.knit[key] = value))
 	const offs = []
 
-	const title = textInput({title: "what this swatch's called", onValue: value => change(doc => (doc.title = value))})
-	title.className = "profile-title"
+	const title = textInput({handle, path: ["title"], title: "what this swatch's called", placeholder: "swatch"})
+	title.classList.add("profile-title")
 
 	// ── how it was knit
 
-	const how = section("how it was knit")
+	const how = section("knit")
 	const machine = docChoice({files, kind: "machine", none: "no machine", title: "the machine it was knitted on", onValue: knit("machine")})
 
 	// the yarns' lists of their swatches, kept as the feeds change
@@ -62,13 +63,10 @@ export default function SwatchTool(handle, element, context = {}) {
 			} catch {}
 		}
 	}
-	const feedRows = document.createElement("div")
-	feedRows.className = "profile-table"
-	const addFeed = document.createElement("button")
-	addFeed.type = "button"
-	addFeed.textContent = "add a carrier"
-	addFeed.addEventListener("click", () => setFeeds(doc => doc.knit.feeds.push({carrier: "1", yarns: [], plated: false})))
-	let shownFeeds = ""
+	const feedRows = document.createElement("span")
+	feedRows.className = "profile-rows"
+	const addFeed = button("+ carrier", "add a carrier it was knitted with", () => setFeeds(doc => doc.knit.feeds.push({carrier: "1", yarns: [], plated: false})), {quiet: true})
+	let shownFeeds = null
 	let feedInputs = []
 	function showFeeds(doc) {
 		const feeds = doc.knit.feeds ?? []
@@ -76,7 +74,7 @@ export default function SwatchTool(handle, element, context = {}) {
 		if (shape !== shownFeeds) {
 			shownFeeds = shape
 			feedInputs = feeds.map((feed, i) => {
-				const at = (fn) => setFeeds(target => fn(target.knit.feeds[i]))
+				const at = fn => setFeeds(target => fn(target.knit.feeds[i]))
 				const carrier = choice(CARRIERS.map(c => [c, `carrier ${c}`]), value => at(f => (f.carrier = value)), "the carrier it was knitted with")
 				const yarnAt = slot => value =>
 					at(f => {
@@ -85,65 +83,49 @@ export default function SwatchTool(handle, element, context = {}) {
 						else yarns.splice(slot, 1)
 						f.yarns = yarns.filter(Boolean)
 					})
-				const hole = docChoice({files, kind: "yarn", none: "no yarn", title: "the yarn through the carrier's knitting hole: on the face, plated", onValue: yarnAt(0)})
 				const two = feed.yarns?.length > 1
-				const slit = docChoice({files, kind: "yarn", none: two ? "no second yarn" : "add a second yarn", title: "the yarn through the plating slit: behind, plated", onValue: yarnAt(1)})
-				const plated = choice(
+				const hole = docChoice({files, kind: "yarn", none: "no yarn", title: "the yarn through the carrier's knitting hole: on the face, plated", onValue: yarnAt(0)})
+				const slit = docChoice({files, kind: "yarn", none: two ? "no second yarn" : "+ second yarn", title: "the yarn through the plating slit: behind, plated", onValue: yarnAt(1)})
+				const plated = segmented(
 					[
-						["plated", "plated"],
-						["held", "held together"],
+						["held", "held", "both through the knitting hole"],
+						["plated", "plated", "one through the knitting hole, one through the plating slit: one shows on the face, one behind"],
 					],
 					value => at(f => (f.plated = value === "plated")),
-					"plated: one through the knitting hole, one through the plating slit (one shows on the face, one behind). held: both through the hole",
+					"how the two yarns went through the carrier",
 				)
-				plated.hidden = !two
-				const forget = document.createElement("button")
-				forget.type = "button"
-				forget.textContent = "×"
-				forget.title = "take this carrier out"
-				forget.addEventListener("click", () => setFeeds(target => target.knit.feeds.splice(i, 1)))
-				const row = field(i ? "" : "fed", "which yarns went through which carrier", carrier, unit(two ? "hole" : ""), hole.element, unit(two ? "slit" : ""), slit.element, plated, forget)
+				plated.element.hidden = !two
+				const forget = removeButton("take this carrier out", () => setFeeds(target => target.knit.feeds.splice(i, 1)))
+				const row = document.createElement("span")
+				row.className = "profile-row"
+				row.append(carrier, hole.element, slit.element, plated.element, forget)
 				return {carrier, hole, slit, plated, row}
 			})
-			feedRows.replaceChildren(...feedInputs.map(({row}) => row))
+			feedRows.replaceChildren(...feedInputs.map(({row}) => row), addFeed)
 		}
 		feeds.forEach((feed, i) => {
 			const inputs = feedInputs[i]
 			show(inputs.carrier, feed.carrier)
 			inputs.hole.update(feed.yarns?.[0] ?? null)
 			inputs.slit.update(feed.yarns?.[1] ?? null)
-			show(inputs.plated, feed.plated ? "plated" : "held")
+			inputs.plated.show(feed.plated ? "plated" : "held")
 		})
 	}
 
 	const stitch = textInput({title: "knitout's x-stitch-number it was knitted at: 0–9 or A–Z (5, if the .k never said)", onValue: value => knit("stitch")(value.trim().toUpperCase() || "5")})
 	stitch.maxLength = 1
-	stitch.size = 2
+	stitch.classList.add("profile-short")
 	const setSize = bed => value => change(doc => ((doc.knit.stitchSize ??= {front: null, rear: null})[bed] = value))
 	const front = numberInput({step: "1", max: "15", allowNought: true, title: "the machine's stitch size on the front bed, 0–15", onValue: setSize("front")})
 	const rear = numberInput({step: "1", max: "15", allowNought: true, title: "the machine's stitch size on the rear bed, 0–15", onValue: setSize("rear")})
 	const roller = numberInput({step: "1", allowNought: true, title: "how far the rollers pulled it down: the kniterate's roller, 0–999 (100, if the .k never said)", onValue: knit("roller")})
 	const speed = numberInput({step: "1", title: "how fast the carriage went, mm/s (the kniterate's up to 800)", onValue: knit("speed")})
-	const needles = numberInput({step: "1", min: "1", title: "every needle in use, both beds together", onValue: knit("needles")})
+	const needles = numberInput({step: "1", min: "1", title: "every needle in use, both beds together. 80 by 80 rows makes a reliable tension swatch, bigger for rib, which pulls in (the kniterate's manual)", onValue: knit("needles")})
 	const rows = numberInput({step: "1", min: "1", title: "rows knitted, not counting waste yarn", onValue: knit("rows")})
 	const structure = choice(STRUCTURES.map(s => [s, STRUCTURE_NAMES[s]]), knit("structure"), "what's knitted: rib comes out much narrower than jersey")
-	const structureNote = textInput({title: "what it is", placeholder: "what it is", onValue: knit("structureNote")})
-	const sure = document.createElement("span")
-	sure.className = "profile-sure"
-	sure.title = "how sure anyone is of how it was knit"
-	const sureName = `sure-${Math.random().toString(36).slice(2)}`
-	const sureInputs = SURE.map(([value, label]) => {
-		const option = document.createElement("label")
-		const input = document.createElement("input")
-		input.type = "radio"
-		input.name = sureName
-		input.value = value
-		input.addEventListener("change", () => input.checked && knit("sure")(value))
-		option.append(input, label)
-		sure.append(option)
-		return input
-	})
-	const sureNote = textInput({title: "what's known of it, and from whom", placeholder: "e.g. agnes's file, not certain", onValue: knit("note")})
+	const structureNote = textInput({handle, path: ["knit", "structureNote"], title: "what it is", placeholder: "what it is"})
+	const sure = segmented(SURE, knit("sure"), "how sure anyone is of how it was knit")
+	const sureNote = textInput({handle, path: ["knit", "note"], title: "what's known of it, and from whom", placeholder: "from whom"})
 	const fits = note("", "profile-warning")
 	fits.hidden = true
 
@@ -169,82 +151,101 @@ export default function SwatchTool(handle, element, context = {}) {
 		try {
 			const kHandle = await repo.find(url)
 			if (textHash(docText(kHandle.doc())) === doc.knit.kHash) return
-			const again = document.createElement("button")
-			again.type = "button"
-			again.textContent = "fill again"
-			again.title = "if the .k was corrected, take how it's knitted now"
-			again.addEventListener("click", () => fillFrom(url))
-			kNotice.replaceChildren("the .k this was filled from has changed since: the swatch hasn't, so nothing's changed here ", again)
+			const again = button("fill again", "if the .k was corrected, take how it's knitted now", () => fillFrom(url))
+			kNotice.replaceChildren("its .k has changed since it was filled in ", again)
 			kNotice.hidden = false
 		} catch {}
 	}
 
 	how.append(
 		field("machine", "the machine it was knitted on", machine.element),
-		feedRows,
-		field("", "", addFeed),
+		field("carriers", "which yarns went through which carrier", feedRows),
 		field("stitch", stitch.title, stitch, unit("set to"), front, unit("front"), rear, unit("rear")),
-		field("roller", roller.title, roller, unit("speed"), speed, unit("mm/s")),
-		field("needles", needles.title, needles, unit("needles ×"), rows, unit("rows")),
-		note("a good size for a reliable tension swatch is 80 needles by 80 rows, bigger for rib, which pulls in (the kniterate's manual)"),
+		field("roller", roller.title, roller, unit("at"), speed, unit("mm/s")),
+		field("size", needles.title, needles, unit("needles ×"), rows, unit("rows")),
 		field("structure", structure.title, structure, structureNote),
-		field("how sure", sure.title, sure, sureNote),
+		field("how sure", sure.element.title, sure.element, sureNote),
 		fits,
 		field("fill from", kChoice.element.title, kChoice.element),
 		kNotice,
 	)
 
-	// ── what it measures, each way it's been let relax
+	// ── what it measures, each way it's been let relax: a row each
 
-	const measured = section("what it measures", "laid flat, without pulling or bunching it up")
+	const measured = section("measured", "laid flat, not pulled or bunched")
+	const grid = document.createElement("div")
+	grid.className = "profile-grid profile-measures"
+	grid.setAttribute("role", "table")
+	grid.setAttribute("aria-label", "what it measures")
+	const head = document.createElement("div")
+	head.className = "profile-grid-row profile-grid-heads"
+	head.setAttribute("role", "row")
+	const heads = ["", "as", "across", "up", "g", "when", "who"].map(text => {
+		const cell = document.createElement("span")
+		cell.setAttribute("role", "columnheader")
+		cell.textContent = text
+		return cell
+	})
+	head.append(...heads)
+	grid.append(head)
 	const stateInputs = {}
 	for (const state of RELAX_STATES) {
+		const ready = doc => (doc.relaxed[state] ??= {...EMPTY_STATE})
 		const set = key => value =>
 			change(doc => {
-				doc.relaxed[state] ??= {entered: "mm", width: null, height: null, wales: null, courses: null, grams: null, date: null, by: null}
+				ready(doc)
 				doc.relaxed[state][key] = value
 			})
-		const entered = choice(
+		const entered = segmented(
 			[
-				["mm", "mm"],
-				["per10", "per 10 cm"],
+				["mm", "mm", "its width and height, in mm"],
+				["per10", "/10cm", "stitches and rows in 10 cm"],
 			],
 			set("entered"),
-			"measured as its width and height in mm, or as stitches and rows in 10 cm",
+			"measured as",
 		)
-		const first = numberInput({step: "any", title: "", onValue: value => set(stateInputs[state].per10 ? "wales" : "width")(value)})
-		const second = numberInput({step: "any", title: "", onValue: value => set(stateInputs[state].per10 ? "courses" : "height")(value)})
-		const firstUnit = unit("")
-		const secondUnit = unit("")
+		const first = numberInput({step: "any", onValue: value => set(stateInputs[state].per10 ? "wales" : "width")(value)})
+		const second = numberInput({step: "any", onValue: value => set(stateInputs[state].per10 ? "courses" : "height")(value)})
 		const derived = document.createElement("span")
 		derived.className = "profile-derived"
 		const grams = numberInput({step: "any", title: "what it weighs, in grams", onValue: set("grams")})
 		const date = document.createElement("input")
 		date.type = "date"
+		date.className = "profile-date"
 		date.title = "when it was measured"
 		date.addEventListener("change", () => set("date")(date.value || null))
-		const by = textInput({title: "who measured it", placeholder: "who", onValue: set("by")})
-		by.size = 8
-		stateInputs[state] = {entered, first, second, firstUnit, secondUnit, derived, grams, date, by, per10: false}
-		measured.append(
-			field(STATE_NAMES[state], `measured ${STATE_NAMES[state]}`, entered, first, firstUnit, second, secondUnit, derived),
-			field("", "", grams, unit("g"), date, by),
-		)
+		const by = textInput({handle, path: ["relaxed", state, "by"], ready, title: "who measured it", placeholder: "who"})
+		const row = document.createElement("div")
+		row.className = "profile-grid-row"
+		row.setAttribute("role", "row")
+		const name = document.createElement("span")
+		name.className = "profile-field-name"
+		name.setAttribute("role", "rowheader")
+		name.textContent = STATE_NAMES[state]
+		row.append(name, entered.element, first, second, grams, date, by)
+		stateInputs[state] = {entered, first, second, derived, grams, date, by, per10: false}
+		grid.append(row, derived)
 	}
+	measured.append(grid)
 
 	// ── its loop length
 
-	const loopSection = section("loop length", "the yarn in one stitch: knit a row across 100 needles in another yarn, pull it out, measure it pulled just straight (10 g or so), ÷ 100")
+	const loopSection = section(
+		"loop length",
+		"the yarn in one stitch",
+		"knit a row across 100 needles in another yarn, pull it out, measure it pulled just straight (10 g or so), ÷ 100",
+	)
 	const setLoop = key => value => change(doc => ((doc.loop ??= {mm: null, date: null, by: null})[key] = value))
 	const loopMm = numberInput({step: "0.1", title: "mm of yarn in a stitch", onValue: setLoop("mm")})
-	const loopBy = textInput({title: "who measured it", placeholder: "who", onValue: setLoop("by")})
+	const loopBy = textInput({handle, path: ["loop", "by"], ready: doc => (doc.loop ??= {mm: null, date: null, by: null}), title: "who measured it", placeholder: "who"})
 	loopSection.append(field("loop", loopMm.title, loopMm, unit("mm a stitch"), loopBy))
 
-	// ── what follows from it
+	// ── what follows from it: the numbers it all comes to
 
 	const follows = section("what follows")
-	const followLines = document.createElement("div")
-	follows.append(followLines)
+	const readouts = document.createElement("div")
+	readouts.className = "profile-readouts"
+	follows.append(readouts)
 	let tex = null
 	async function findTex(doc) {
 		const yarns = Array.from(doc.knit.feeds?.[0]?.yarns ?? []).map(String)
@@ -256,8 +257,24 @@ export default function SwatchTool(handle, element, context = {}) {
 			tex = null
 		}
 	}
+	function readout(value, name, about, title) {
+		const card = document.createElement("div")
+		card.className = "profile-follow"
+		card.title = title
+		const number = document.createElement("span")
+		number.className = "profile-follow-value"
+		number.textContent = value
+		const label = document.createElement("span")
+		label.className = "profile-follow-name"
+		label.textContent = name
+		const more = document.createElement("span")
+		more.className = "profile-follow-about"
+		more.textContent = about
+		card.append(number, label, more)
+		return card
+	}
 	function showFollows(doc) {
-		const lines = []
+		const cards = []
 		const state = RELAX_STATES.find(name => swatchDensity(doc, name))
 		const density = state && swatchDensity(doc, state)
 		const loop = Number(doc.loop?.mm) > 0 ? Number(doc.loop.mm) : null
@@ -265,12 +282,12 @@ export default function SwatchTool(handle, element, context = {}) {
 		if (entry?.grams > 0) {
 			const width = entry.entered === "per10" ? (density.wales && doc.knit.needles ? (doc.knit.needles / density.wales) * 100 : null) : entry.width
 			const height = entry.entered === "per10" ? (density.courses && doc.knit.rows ? (doc.knit.rows / density.courses) * 100 : null) : entry.height
-			if (width > 0 && height > 0) lines.push(`${round(entry.grams / ((width / 1000) * (height / 1000)), 0)} g/m², ${STATE_NAMES[state]}`)
+			if (width > 0 && height > 0) cards.push(readout(round(entry.grams / ((width / 1000) * (height / 1000)), 0), "g/m²", STATE_NAMES[state], `what a square metre of it weighs, ${STATE_NAMES[state]}`))
 		}
-		if (loop && tex) lines.push(`tightness factor ${round(Math.sqrt(tex) / (loop / 10))} (plain knitting's usually about 14.7)`)
-		if (loop && density?.courses) lines.push(`kc ${round((loop * density.courses) / 100, 2)} (rows × loop: Munden's is 5.0 for wool, dry)`)
-		if (loop && density?.wales) lines.push(`kw ${round((loop * density.wales) / 100, 2)} (stitches × loop: Munden's is 3.8 for wool, dry)`)
-		followLines.replaceChildren(...(lines.length ? lines.map(line => note(line, "profile-derived")) : [note("measure it, and its loop length, to see what follows")]))
+		if (loop && tex) cards.push(readout(round(Math.sqrt(tex) / (loop / 10)), "tightness", "plain's about 14.7", "tightness factor: √tex ÷ loop length in cm"))
+		if (loop && density?.courses) cards.push(readout(round((loop * density.courses) / 100, 2), "kc", "Munden's wool, dry: 5.0", "rows × loop length"))
+		if (loop && density?.wales) cards.push(readout(round((loop * density.wales) / 100, 2), "kw", "Munden's wool, dry: 3.8", "stitches × loop length"))
+		readouts.replaceChildren(...(cards.length ? cards : [note("measure it, and its loop length, to see these")]))
 	}
 
 	async function checkFits(doc) {
@@ -285,13 +302,13 @@ export default function SwatchTool(handle, element, context = {}) {
 			const room = (machineDoc.needles ?? 0) * (machineDoc.beds ?? 1)
 			if (room && doc.knit.needles > room) problems.push(`its beds hold ${room} needles`)
 			if (problems.length) {
-				fits.textContent = `that won't knit on ${machineDoc.title || "that machine"}: ${problems.join(", and ")}`
+				fits.textContent = `won't knit on ${machineDoc.title || "that machine"}: ${problems.join(", and ")}`
 				fits.hidden = false
 			}
 		} catch {}
 	}
 
-	const notes = textInput({multiline: true, title: "anything else worth knowing about it", onValue: value => change(doc => (doc.notes = value))})
+	const notes = textInput({handle, path: ["notes"], multiline: true, title: "anything else worth knowing about it", placeholder: "anything else"})
 	const more = section("notes")
 	more.append(notes)
 	root.append(title, how, measured, loopSection, follows, more)
@@ -312,7 +329,7 @@ export default function SwatchTool(handle, element, context = {}) {
 		show(structure, doc.knit.structure)
 		structureNote.hidden = doc.knit.structure !== "other"
 		show(structureNote, doc.knit.structureNote)
-		for (const input of sureInputs) input.checked = input.value === (doc.knit.sure || "guessed")
+		sure.show(doc.knit.sure || "guessed")
 		show(sureNote, doc.knit.note)
 		kChoice.update(doc.knit.k ?? null)
 
@@ -322,11 +339,11 @@ export default function SwatchTool(handle, element, context = {}) {
 			const entry = doc.relaxed?.[state] ?? null
 			const per10 = entry?.entered === "per10"
 			inputs.per10 = per10
-			show(inputs.entered, per10 ? "per10" : "mm")
+			inputs.entered.show(per10 ? "per10" : "mm")
 			show(inputs.first, per10 ? entry?.wales : entry?.width)
 			show(inputs.second, per10 ? entry?.courses : entry?.height)
-			inputs.firstUnit.textContent = per10 ? (rib ? "needles ×" : "wales ×") : "mm wide ×"
-			inputs.secondUnit.textContent = per10 ? "courses / 10 cm" : "mm tall"
+			inputs.first.placeholder = per10 ? (rib ? "needles" : "wales") : "mm"
+			inputs.second.placeholder = per10 ? "courses" : "mm"
 			inputs.first.title = per10 ? (rib ? "needles across 10 cm, both beds counted" : "wales (stitches) across 10 cm") : "its width, in mm"
 			inputs.second.title = per10 ? "courses (rows) up 10 cm" : "its height, in mm"
 			show(inputs.grams, entry?.grams)
@@ -338,12 +355,13 @@ export default function SwatchTool(handle, element, context = {}) {
 			else if (per10) {
 				const w = density?.wales && doc.knit.needles ? round((doc.knit.needles / density.wales) * 100) : null
 				const h = density?.courses && doc.knit.rows ? round((doc.knit.rows / density.courses) * 100) : null
-				inputs.derived.textContent = w || h ? `= ${w ?? "?"} × ${h ?? "?"} mm` : "needles and rows turn per 10 cm into mm"
+				inputs.derived.textContent = w || h ? `= ${w ?? "?"} × ${h ?? "?"} mm` : ""
 			} else {
 				const w = density?.wales ? round(density.wales) : null
 				const h = density?.courses ? round(density.courses) : null
-				inputs.derived.textContent = w || h ? `= ${w ?? "?"} × ${h ?? "?"} per 10 cm` : "needles and rows turn mm into per 10 cm"
+				inputs.derived.textContent = w || h ? `= ${w ?? "?"} × ${h ?? "?"} a 10 cm` : ""
 			}
+			inputs.derived.hidden = !inputs.derived.textContent
 		}
 		show(loopMm, doc.loop?.mm)
 		show(loopBy, doc.loop?.by)

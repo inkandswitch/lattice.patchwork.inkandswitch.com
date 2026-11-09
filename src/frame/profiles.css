@@ -1,77 +1,227 @@
-/* the machine, yarn and swatch editors (profile-form.js): a form, in the
-   knitoutjs tools' colours where there are any (in lattice), and the page's
-   where there aren't (in patchwork's own view) */
+/* the machine, yarn and swatch editors (profile-form.js): a form, the way
+   lattice's settings are: names down a narrow column, headings in the
+   heading font, controls in the theme's own fill and lines. in the knitoutjs
+   tools' colours where there are any (in lattice), and the page's where
+   there aren't (in patchwork's own view). the one loud thing is what a
+   swatch's numbers come to */
 .profile-editor {
 	--profile-ink: var(--knitoutjs-ink, CanvasText);
-	--profile-muted: var(--knitoutjs-muted, color-mix(in oklab, CanvasText 55%, transparent));
+	--profile-muted: var(--lattice-muted, var(--studio-line-offset-50, color-mix(in oklab, var(--profile-ink) 62%, transparent)));
 	--profile-line: var(--knitoutjs-line-soft, color-mix(in oklab, CanvasText 15%, transparent));
+	--profile-rule: var(--studio-fill-offset-30, color-mix(in oklab, var(--profile-ink) 22%, transparent));
 	--profile-sheet: var(--knitoutjs-sheet, Canvas);
+	--profile-fill: var(--studio-fill, Canvas);
 	--profile-accent: var(--knitoutjs-accent, #ff2284);
+	--profile-focus: var(--studio-primary, #007aff);
 	--profile-danger: var(--knitoutjs-danger, #c0392b);
+	--profile-heading: var(--lattice-path-family, var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace)));
+	--profile-radius: var(--studio-radius-sm, 4px);
+	--profile-label: 96px;
 
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
 	overflow: auto;
-	padding: 12px 16px 32px;
+	padding: 16px 20px 40px;
 	background: var(--profile-sheet);
 	color: var(--profile-ink);
-	font: 13px/1.45 var(--knitoutjs-sans, system-ui, sans-serif);
+	font: 13px/1.45 var(--studio-family-ui, var(--knitoutjs-sans, system-ui, sans-serif));
+	container-type: inline-size;
 
-	& input,
-	& select,
-	& textarea {
+	& > * {
+		max-width: 36rem;
+	}
+
+	& :is(input, select, textarea, button) {
+		box-sizing: border-box;
 		font: inherit;
 		color: inherit;
 		accent-color: var(--profile-accent);
 	}
 
-	& input[type="number"] {
-		width: 5em;
+	& :is(input, select, textarea, button, .profile-segmented label):focus-visible,
+	& .profile-segmented label:has(input:focus-visible) {
+		outline: 2px solid var(--profile-focus);
+		outline-offset: 1px;
 	}
 
-	& textarea {
+	/* boxes: the theme's fill, a line round them */
+	& :is(.profile-text, .profile-number, .profile-date, .profile-select) {
+		min-width: 0;
+		padding: 3px 6px;
+		border: 1px solid var(--profile-rule);
+		border-radius: var(--profile-radius);
+		background: var(--profile-fill);
+	}
+
+	& .profile-text {
+		width: 14em;
+		max-width: 100%;
+	}
+	& textarea.profile-text {
 		width: 100%;
-		min-height: 4em;
+		min-height: 5em;
 		resize: vertical;
 	}
+	& .profile-text.profile-short {
+		width: 2.6em;
+		text-align: center;
+		text-transform: uppercase;
+	}
 
-	& button {
-		font: inherit;
+	/* numbers: lined up, and no spinners */
+	& .profile-number {
+		width: 4.5em;
+		font-variant-numeric: tabular-nums;
+		appearance: textfield;
+
+		&::-webkit-inner-spin-button,
+		&::-webkit-outer-spin-button {
+			appearance: none;
+			margin: 0;
+		}
+	}
+
+	& .profile-date {
+		width: 9.5em;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* menus: drawn as the settings' are */
+	& .profile-select {
+		appearance: base-select;
+		max-width: 15em;
+		padding-right: 4px;
+
+		&::picker(select) {
+			appearance: base-select;
+			max-height: 320px;
+			border: 1px solid var(--profile-rule);
+			border-radius: var(--profile-radius);
+			background: var(--profile-fill);
+			color: var(--profile-ink);
+			box-shadow: 2px 2px 0 var(--profile-rule);
+		}
+		&::picker-icon {
+			color: var(--profile-muted);
+		}
+		& option {
+			padding: 3px 8px;
+		}
+		& option:checked {
+			background: color-mix(in oklch, var(--profile-focus) 16%, transparent);
+		}
+		& option::checkmark {
+			display: none;
+		}
+	}
+
+	& .profile-button {
+		padding: 3px 10px;
+		border: 1px solid var(--profile-rule);
+		border-radius: var(--studio-radius, 6px);
+		background: var(--profile-fill);
+		cursor: pointer;
+		transition: transform 120ms ease-out;
+
+		&:active:not(:disabled) {
+			transform: scale(0.97);
+		}
+		&:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+	}
+	/* "+ another", at the end of a list: just words till it's pointed at */
+	& .profile-button-quiet {
+		justify-self: start;
+		border-color: transparent;
+		background: none;
+		color: var(--profile-muted);
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover:not(:disabled) {
+				border-color: var(--profile-rule);
+				color: var(--profile-ink);
+			}
+		}
+	}
+
+	/* the × that takes a row out: there, but quiet, till its row's pointed at */
+	& .profile-remove {
+		display: inline-grid;
+		place-items: center;
+		width: 20px;
+		height: 20px;
+		padding: 0;
+		border: 1px solid transparent;
+		border-radius: 50%;
+		background: none;
+		color: var(--profile-muted);
+		cursor: pointer;
+		transition: transform 120ms ease-out;
+
+		@media (hover: hover) and (pointer: fine) {
+			opacity: 0;
+			:is(.profile-row, .profile-grid-row):is(:hover, :focus-within) > & {
+				opacity: 1;
+			}
+			&:hover {
+				border-color: var(--profile-danger);
+				color: var(--profile-danger);
+			}
+		}
+		&:focus-visible {
+			opacity: 1;
+		}
+		&:active {
+			transform: scale(0.9);
+		}
 	}
 }
 
-.profile-title {
-	width: 100%;
-	margin: 0 0 8px;
-	border: 0;
-	border-bottom: 1px solid var(--profile-line);
+/* its name: the heading, in the heading font, edited where it is */
+.profile-editor .profile-text.profile-title {
+	display: block;
+	width: calc(100% + 14px);
+	margin: 0 0 12px -7px;
+	padding: 3px 6px;
+	border-color: transparent;
 	background: transparent;
-	font-size: 18px !important;
-	font-weight: 600;
+	font: 600 20px/1.3 var(--profile-heading);
+
+	&:hover {
+		border-color: var(--profile-rule);
+	}
+	&:focus {
+		border-color: var(--profile-rule);
+		background: var(--profile-fill);
+	}
 }
 
 .profile-section {
 	display: grid;
-	gap: 6px;
+	gap: 8px;
 	margin: 0;
-	padding: 12px 0;
+	padding: 14px 0 20px;
 	border-top: 1px solid var(--profile-line);
 
 	& h3 {
-		margin: 0;
-		font-size: 12px;
-		font-weight: 600;
-		text-transform: lowercase;
-		letter-spacing: 0.02em;
+		margin: 0 0 2px;
+		color: var(--profile-muted);
+		font: 600 12px var(--profile-heading);
+	}
+	& h3 + .profile-hint {
+		margin-top: -6px;
 	}
 }
 
 .profile-field {
 	display: grid;
-	grid-template-columns: minmax(6em, 10em) minmax(0, 1fr);
-	gap: 8px;
+	grid-template-columns: var(--profile-label) minmax(0, 1fr);
+	gap: 10px;
 	align-items: baseline;
+	min-height: 26px;
 }
 
 .profile-field-name {
@@ -86,6 +236,19 @@
 	min-width: 0;
 }
 
+/* a list of rows in a field (fibres, carriers), and its "+ another" */
+.profile-rows {
+	display: grid;
+	gap: 4px;
+	width: 100%;
+}
+.profile-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px 6px;
+	align-items: center;
+}
+
 .profile-unit,
 .profile-hint,
 .profile-derived {
@@ -97,26 +260,196 @@
 	margin: 0;
 }
 
-.profile-derived {
+.profile-derived,
+.profile-readout {
 	font-variant-numeric: tabular-nums;
+}
+
+/* a number worked out, or that's its name */
+.profile-readout {
+	font: 600 12.5px var(--profile-heading);
 }
 
 .profile-warning {
 	margin: 0;
+	padding: 4px 8px;
+	border-left: 2px solid var(--profile-danger);
 	color: var(--profile-danger);
 	font-size: 12px;
+
+	& .profile-button {
+		margin-left: 6px;
+		color: var(--profile-ink);
+	}
 }
 
 .profile-doc-choice {
 	display: inline-flex;
 	gap: 4px;
 	min-width: 0;
+}
 
-	& select {
-		max-width: 16em;
+/* a round well of colour, as the settings' are. none, and it's a dashed ring */
+.profile-colour {
+	display: inline-flex;
+
+	& input {
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: 1px solid var(--profile-rule);
+		border-radius: 50%;
+		background: none;
+		cursor: pointer;
+		overflow: hidden;
+	}
+	& input::-webkit-color-swatch-wrapper {
+		padding: 0;
+	}
+	& input::-webkit-color-swatch {
+		border: none;
+		border-radius: 50%;
+	}
+	&[data-none] input {
+		border-style: dashed;
+		border-color: var(--profile-muted);
+	}
+	&[data-none] input::-webkit-color-swatch {
+		opacity: 0;
 	}
 }
 
+/* a row of choices, one pressed */
+.profile-segmented {
+	display: inline-flex;
+	border: 1px solid var(--profile-rule);
+	border-radius: var(--profile-radius);
+	overflow: hidden;
+
+	&[hidden] {
+		display: none;
+	}
+	& label {
+		padding: 2px 8px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	& label + label {
+		border-left: 1px solid var(--profile-rule);
+	}
+	& label:has(input:checked) {
+		--button-fill: var(--profile-accent);
+		background: var(--button-fill);
+		color: var(--button-ink, var(--knitoutjs-accent-ink, #fff));
+	}
+	& input {
+		position: absolute;
+		opacity: 0;
+		pointer-events: none;
+	}
+}
+
+/* a table: heads once, then a row each */
+.profile-grid {
+	display: grid;
+	gap: 4px 6px;
+	align-items: center;
+
+	&[hidden] {
+		display: none;
+	}
+	& .profile-grid-row,
+	& .profile-grid-body {
+		display: contents;
+	}
+	& .profile-grid-heads > * {
+		color: var(--profile-muted);
+		font: 600 11px var(--profile-heading);
+	}
+	& .profile-number,
+	& .profile-text {
+		width: 100%;
+	}
+}
+
+.profile-stitches {
+	grid-template-columns: 3em 4.5em 4.5em minmax(0, 1fr) 20px;
+}
+
+.profile-add-stitch.profile-text {
+	width: 5.5em;
+}
+
+/* what it measures: the state, mm or per 10 cm, the two numbers, and when
+   and by whom. what those come to sits under its two numbers */
+.profile-measures {
+	grid-template-columns: var(--profile-label) max-content 4.5em 4.5em 4em 9.5em minmax(4em, 1fr);
+
+	& .profile-segmented {
+		justify-self: start;
+	}
+	& .profile-derived {
+		grid-column: 3 / span 4;
+		margin-top: -2px;
+	}
+	& .profile-date {
+		width: 100%;
+	}
+}
+/* narrow, what it weighs, when and who go on a line of their own, under */
+@container (width < 36rem) {
+	.profile-measures {
+		grid-template-columns: var(--profile-label) max-content 4.5em 4.5em minmax(3.5em, 1fr);
+
+		& .profile-grid-heads > :nth-child(n + 5) {
+			display: none;
+		}
+		& input:nth-of-type(3) {
+			grid-column: 2;
+		}
+		& .profile-date {
+			grid-column: span 2;
+		}
+		& .profile-derived {
+			grid-column: 2 / -1;
+		}
+	}
+}
+
+/* what a swatch's numbers come to: big, in the heading font, the one thing
+   here that's loud */
+.profile-readouts {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+	gap: 8px;
+
+	& > .profile-hint {
+		grid-column: 1 / -1;
+	}
+}
+.profile-follow {
+	display: grid;
+	align-content: start;
+	padding: 10px 12px 9px;
+	border: 1px solid var(--profile-rule);
+	border-radius: var(--studio-radius, 6px);
+	background: var(--profile-fill);
+}
+.profile-follow-value {
+	font: 600 26px/1.1 var(--profile-heading);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: -0.01em;
+}
+.profile-follow-name {
+	margin-top: 4px;
+	font: 600 12px var(--profile-heading);
+}
+.profile-follow-about {
+	color: var(--profile-muted);
+	font-size: 11.5px;
+}
+
+/* the swatches a yarn's knitted into: each its name, and what it was */
 .profile-list {
 	display: grid;
 	gap: 2px;
@@ -124,42 +457,30 @@
 	padding: 0;
 	list-style: none;
 
-	& button.profile-link {
-		padding: 2px 0;
-		border: 0;
+	& .profile-link {
+		display: grid;
+		width: 100%;
+		margin-left: -6px;
+		padding: 3px 6px;
+		border: 1px solid transparent;
+		border-radius: var(--profile-radius);
 		background: none;
-		color: var(--profile-accent);
 		text-align: left;
 		cursor: pointer;
+
+		@media (hover: hover) and (pointer: fine) {
+			&:hover {
+				border-color: var(--profile-rule);
+				background: var(--profile-fill);
+			}
+		}
 	}
-}
-
-.profile-table {
-	display: grid;
-	gap: 4px;
-}
-
-.profile-sure {
-	display: inline-flex;
-	gap: 0;
-	border: 1px solid var(--profile-line);
-	border-radius: 4px;
-	overflow: hidden;
-
-	& label {
-		padding: 1px 8px;
-		cursor: pointer;
+	& .profile-link-name {
+		color: var(--profile-accent);
+		font-weight: 600;
 	}
-
-	& label:has(input:checked) {
-		--button-fill: var(--profile-accent);
-		background: var(--button-fill);
-		color: var(--button-ink, var(--knitoutjs-accent-ink, #fff));
-	}
-
-	& input {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
+	& .profile-link-summary {
+		color: var(--profile-muted);
+		font-size: 12px;
 	}
 }
