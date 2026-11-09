@@ -1,9 +1,11 @@
 // lattice's project tool: latticework on a project, with lattice's tools. the
 // frame shows the same in its middle
+import { createRoot } from "solid-js";
 import { mountProject } from "./knitoutjs/core/project-view.js";
 import { PROJECT_TOOLS } from "./knitoutjs/core/project.js";
 import { TOOLS, toolsFor, fileExtension } from "./files.js";
 import { newMachine, newSwatch, newYarn } from "./profile-docs.js";
+import { useToolStorage } from "./storage.js";
 
 // what lattice's latticework has, over knitoutjs's: its tools; a machine, a
 // yarn and a swatch in the + menu; and a terminal there while alt is held.
@@ -49,11 +51,20 @@ export function latticeOptions(baseRepo, repo = baseRepo) {
 export default function LatticeProjectTool(handle, element) {
   const repo = element.repo;
   const baseRepo = repo.baseRepo ?? repo;
-  return mountProject(element, {
-    project: handle,
-    repo,
-    baseRepo,
-    hive: element.hive,
-    ...latticeOptions(baseRepo, repo),
+  return createRoot((dispose) => {
+    // your pointer, an arrow or a mouse, as you chose it in lattice's settings
+    const [mine] = useToolStorage(element, "lattice", { repo: baseRepo });
+    const unmount = mountProject(element, {
+      project: handle,
+      repo,
+      baseRepo,
+      hive: element.hive,
+      pointer: () => (mine()?.pointer === "mouse" ? "mouse" : "arrow"),
+      ...latticeOptions(baseRepo, repo),
+    });
+    return () => {
+      unmount();
+      dispose();
+    };
   });
 }

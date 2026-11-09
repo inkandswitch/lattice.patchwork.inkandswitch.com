@@ -501,6 +501,8 @@ function Frame(props) {
         onShowing: setShowing,
         onFocused: (file) => setFocusedFile(file ? { ...file } : null),
         onOpen: (open) => (openInProject = open),
+        // an arrow or a mouse, over the panes, for everyone else
+        pointer: pointer.kind,
         ...latticeOptions(baseRepo, projectRepo),
       });
       const unmountInspector = render(() => {
