@@ -1,4 +1,4 @@
-import {knitoutToKcode} from "../../packages/knitoutjs/core/vendor/knitout-to-kcode.js"
+import {knitoutToKcode} from "../knitoutjs/core/vendor/knitout-to-kcode.js"
 
 // turns knitout into kcode off the page's thread. the converter talks a lot on
 // the console: its warnings come back with the kcode, the rest is dropped

@@ -14,7 +14,7 @@ import { isValidAutomergeUrl, parseAutomergeUrl } from "@automerge/automerge-rep
 import { getRegistry } from "@inkandswitch/patchwork-plugins";
 import { useDocument } from "./vendor/solid-automerge.js";
 import { useToolStorage } from "./storage.js";
-import { createDoc } from "../../packages/wm/patchwork/docs.js";
+import { createDoc } from "../wm/patchwork/docs.js";
 
 export const THEME_TYPE = "lattice:theme";
 const PREFERENCES = "theme-preferences";

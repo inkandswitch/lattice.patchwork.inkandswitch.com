@@ -5,11 +5,11 @@
 // shape, and merging one back would bring the old shape back with it.
 // knitoutjs's are knitoutjs's (packages/knitoutjs/app/migrate.js)
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { typeOf } from "../../packages/wm/doc/project.js";
-import * as Layout from "../../packages/wm/doc/layout.js";
-import { folderTitle } from "../../packages/wm/folder.js";
-import { createDoc, findSoon } from "../../packages/wm/patchwork/docs.js";
-import { seedActive } from "../../packages/wm/active.js";
+import { typeOf } from "../wm/doc/project.js";
+import * as Layout from "../wm/doc/layout.js";
+import { folderTitle } from "../wm/folder.js";
+import { createDoc, findSoon } from "../wm/patchwork/docs.js";
+import { seedActive } from "../wm/active.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));

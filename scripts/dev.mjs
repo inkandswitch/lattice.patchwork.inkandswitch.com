@@ -7,12 +7,13 @@ import {stripVTControlCharacters} from "node:util"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const children = []
 const processGroups = process.platform !== "win32"
-// --tunnel: a cloudflare quick tunnel to this server, so the deployed
-// lattice (yours, or mimi's) can use this server's packages: ?dev=<tunnel>
+// a cloudflare quick tunnel to this server, so the deployed lattice (yours,
+// or mimi's) can use this server's packages: ?dev=<tunnel>. on unless
+// --no-tunnel (or LATTICE_TUNNEL=0)
 const tunnel =
-	process.argv.includes("--tunnel") || process.env.LATTICE_TUNNEL === "1"
+	!process.argv.includes("--no-tunnel") && process.env.LATTICE_TUNNEL !== "0"
 const SITE = "https://lattice.patchwork.inkandswitch.com"
-const footerLines = tunnel ? 9 : 7
+const footerLines = tunnel ? 10 : 7
 const footer = process.stdout.isTTY && process.stdout.rows > footerLines
 let stopping = false
 let footerVisible = false
@@ -21,8 +22,35 @@ let readyTimer
 let devURL = "starting…"
 let corePackages = ""
 let basePackages = ""
-let tunnelURL = tunnel ? "starting…" : ""
-let devLink = tunnel ? "once the tunnel's up" : ""
+let tunnelURL = tunnel ? "starting tunnel" : ""
+let devLink = ""
+
+// a spinner after "starting tunnel" until cloudflared says where it is
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+let spinning = null
+let spin = 0
+function startSpinner() {
+	if (!footer) return console.log("starting tunnel…")
+	spinning = setInterval(() => {
+		spin = (spin + 1) % SPINNER.length
+		showFooter()
+	}, 90)
+}
+function stopSpinner() {
+	clearInterval(spinning)
+	spinning = null
+}
+const WAITING = "✿ a link to send her, once the tunnel's up"
+const tunnelText = () => (spinning ? `${tunnelURL} ${SPINNER[spin]}` : tunnelURL)
+
+// bold, and each letter its own colour
+const RAINBOW = [197, 208, 220, 82, 45, 63, 171]
+const rainbow = text =>
+	[...text]
+		.map((letter, index) => `\x1b[1;38;5;${RAINBOW[index % RAINBOW.length]}m${letter}`)
+		.join("") + "\x1b[0m"
+// a link the terminal can open (and copy whole, if it's cut short here)
+const link = (url, shown = url) => `\x1b]8;;${url}\x1b\\\x1b[1;4;38;5;213m${shown}\x1b[0m\x1b]8;;\x1b\\`
 
 function fit(value, width) {
 	if (value.length <= width) return value
@@ -55,8 +83,8 @@ function showFooter() {
 				devURL.length + 17,
 				corePackages.length + 17,
 				basePackages.length + 17,
-				tunnelURL.length + 17,
-				devLink.length + 17
+				tunnelText().length + 17,
+				devLink ? devLink.length + 7 : WAITING.length + 5
 			)
 		)
 	)
@@ -70,8 +98,11 @@ function showFooter() {
 		`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m pkg-base: \x1b[36m${fit(basePackages, valueWidth)}\x1b[0m`,
 		...(tunnel
 			? [
-					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m tunnel:   \x1b[36m${fit(tunnelURL, valueWidth)}\x1b[0m`,
-					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m dev:      \x1b[36m${fit(devLink, valueWidth)}\x1b[0m`,
+					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m tunnel:   \x1b[36m${fit(tunnelText(), valueWidth)}\x1b[0m`,
+					devLink
+						? `\x1b[2m│\x1b[0m  ${rainbow("✿ send her this link:")}`
+						: `\x1b[2m│\x1b[0m  \x1b[2m${WAITING}\x1b[0m`,
+					devLink ? `\x1b[2m│\x1b[0m    ${link(devLink, fit(devLink, width - 7))}` : `\x1b[2m│\x1b[0m`,
 				]
 			: []),
 		`\x1b[2m│\x1b[0m`,
@@ -204,16 +235,18 @@ function startTunnel(url) {
 		output = `${output}${chunk}`.slice(-4096)
 		const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
 		if (!match || match[0] === tunnelURL) return
+		stopSpinner()
 		tunnelURL = match[0]
 		devLink = `${SITE}/?dev=${tunnelURL}`
 		console.log(
-			`\n  tunnel: ${tunnelURL}\n  lattice with these packages: ${devLink}\n  (anyone with these can use this dev server)\n`
+			`\n  tunnel: ${tunnelURL}\n\n  ${rainbow("✿ send her this link:")}\n  ${link(devLink)}\n\n  \x1b[2m(anyone with it can use this dev server)\x1b[0m\n`
 		)
 		showFooter()
 	}
 	child.stdout.on("data", read)
 	child.stderr.on("data", read)
 	child.on("error", error => {
+		stopSpinner()
 		tunnelURL =
 			error.code === "ENOENT"
 				? "needs cloudflared: brew install cloudflared"
@@ -223,6 +256,7 @@ function startTunnel(url) {
 		showFooter()
 	})
 	child.on("exit", code => {
+		stopSpinner()
 		if (stopping || tunnelURL.startsWith("needs")) return
 		tunnelURL = `closed (cloudflared exited ${code})`
 		devLink = ""
@@ -233,6 +267,7 @@ function startTunnel(url) {
 function stop() {
 	if (stopping) return
 	stopping = true
+	stopSpinner()
 	process.stdout.off("resize", showFooter)
 	hideFooter()
 	for (const child of children) {
@@ -294,7 +329,10 @@ site.stdout?.on("data", chunk => {
 	siteOutput = `${siteOutput}${stripVTControlCharacters(chunk.toString())}`
 	const match = siteOutput.match(/Local:\s+(https?:\/\/\S+)/)
 	if (match) {
-		if (tunnel && devURL === "starting…") startTunnel(match[1])
+		if (tunnel && devURL === "starting…") {
+			startSpinner()
+			startTunnel(match[1])
+		}
 		devURL = match[1]
 		setStatus("ready")
 		siteOutput = ""

@@ -1,5 +1,6 @@
 {
-	"name": "@patchwork/prototype-knitoutjs-panes",
+	"name": "@patchwork/lattice-knitoutjs",
+	"title": "Lattice KnitoutJS",
 	"version": "0.0.2",
 	"license": "AGPL-3.0-or-later",
 	"type": "module",

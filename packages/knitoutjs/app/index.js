@@ -43,7 +43,7 @@ export const plugins = [
   },
   {
     type: "patchwork:tool",
-    id: "prototype-knitoutjs-panes-visualizer",
+    id: "lattice:knitoutjs-visualizer",
     name: "Prototype Knitout Visualizer",
     icon: "Grid3x3",
     supportedDatatypes: ["file"],

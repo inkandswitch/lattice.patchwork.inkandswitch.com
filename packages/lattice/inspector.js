@@ -1,7 +1,7 @@
 import { createSignal, For } from "solid-js";
 import html from "solid-js/html";
-import { remember, remembered } from "../../packages/wm/ui/sidebars.js";
-import { icon } from "../../packages/wm/ui/icons.js";
+import { remember, remembered } from "../wm/ui/sidebars.js";
+import { icon } from "../wm/ui/icons.js";
 
 const DRAG_TYPE = "application/x-lattice-inspector";
 const ORDER_KEY = "lattice:inspector:order";

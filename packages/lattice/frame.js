@@ -7,19 +7,19 @@ import { shareUrl } from "./files.js";
 import { PROJECT_TYPES, latticeOptions } from "./project.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
-import { projectTitle, typeOf } from "../../packages/wm/doc/project.js";
-import { createProject, mountProject, mountUpdate, partsFrom } from "../../packages/wm/project-view.js";
+import { projectTitle, typeOf } from "../wm/doc/project.js";
+import { createProject, mountProject, mountUpdate, partsFrom } from "../wm/project-view.js";
 import { isOldLatticeFolder, updateLatticeFolder, updatedTo } from "./migrate.js";
-import { OLD_KNITOUTJS_TYPES, isOldKnitoutjs, updateKnitoutjs } from "../../packages/knitoutjs/app/migrate.js";
-import { createDoc, findSoon, urlFromText } from "../../packages/wm/patchwork/docs.js";
-import { seedActive } from "../../packages/wm/active.js";
+import { OLD_KNITOUTJS_TYPES, isOldKnitoutjs, updateKnitoutjs } from "../knitoutjs/app/migrate.js";
+import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
+import { seedActive } from "../wm/active.js";
 import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
-import { folderTitle } from "../../packages/wm/folder.js";
-import { directoryTitle } from "../../packages/wm/directory.js";
-import { Resizer, remember, remembered, sidebarState } from "../../packages/wm/ui/sidebars.js";
-import { icon } from "../../packages/wm/ui/icons.js";
-import { tooltips } from "../../packages/wm/ui/tooltip.js";
-import { roughFilters } from "../../packages/knitoutjs/look.js";
+import { folderTitle } from "../wm/folder.js";
+import { directoryTitle } from "../wm/directory.js";
+import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.js";
+import { icon } from "../wm/ui/icons.js";
+import { tooltips } from "../wm/ui/tooltip.js";
+import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
@@ -28,7 +28,7 @@ import { useToolStorage } from "./storage.js";
 
 // wm's, too, for its menus, before any project has brought it; knitout.js's
 // look, which lattice wears; and the fonts lattice brings
-const STYLESHEETS = ["./fonts/fonts.css", "../../packages/wm/wm.css", "../../packages/knitoutjs/look.css", "./shell.css"].map(
+const STYLESHEETS = ["./fonts/fonts.css", "../wm/wm.css", "../knitoutjs/look.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 

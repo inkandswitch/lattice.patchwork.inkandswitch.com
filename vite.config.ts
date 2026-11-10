@@ -7,7 +7,7 @@ import {frame} from "./vite/frame.ts"
 const root = dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-	// `pnpm dev --tunnel` reaches this server through a cloudflare quick
+	// `pnpm dev` (unless --no-tunnel) reaches this server through a cloudflare quick
 	// tunnel, which vite's host check would otherwise turn away. cloudflared
 	// dials localhost over ipv4, and vite might otherwise listen on ::1 alone
 	server:
@@ -16,7 +16,7 @@ export default defineConfig({
 			: undefined,
 	plugins: [
 		environment(),
-		frame({from: "src/frame", to: "/packages/lattice"}),
+		frame(),
 		patchwork({
 			title: "Patchwork",
 			description: "local-first collaborative malleable software environment",

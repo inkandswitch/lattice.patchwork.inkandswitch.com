@@ -24,7 +24,7 @@ export const plugins = [
     name: "Lattice Project",
     icon: "Shirt",
     async load() {
-      const { projectDatatype } = await import("../../packages/wm/doc/project.js");
+      const { projectDatatype } = await import("../wm/doc/project.js");
       return projectDatatype();
     },
   },

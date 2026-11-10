@@ -7,7 +7,7 @@ const CONTENT_TYPES: Record<string, string> = {
 	".css": "text/css",
 	".js": "text/javascript",
 	".json": "application/json",
-	// the fonts it brings (src/frame/fonts)
+	// the fonts lattice's frame brings (packages/lattice/fonts)
 	".woff2": "font/woff2",
 }
 
@@ -16,30 +16,29 @@ const CONTENT_TYPES: Record<string, string> = {
 const CHANGES_WAIT = 25_000
 
 /**
- * Mounts the lattice frame checkout in `from` at `to`, and each of `packages`
- * (the repo's packages/*, which it imports) at its own `/packages/<name>`:
- * served in dev, copied into the site at build. The frame is at
- * /packages/lattice, so `../../packages/<name>/…` from src/frame is the same
- * file on disk and on the site. Only what the module loader asks for goes
- * out — a checkout's own .git, .pushwork store, node_modules and tests stay
- * behind — and an edit to any of them reloads the dev page.
+ * Mounts each of `packages` (the repo's packages/*: lattice's frame, and what
+ * it imports) at its own `/packages/<name>`: served in dev, copied into the
+ * site at build. So `../<name>/…` from one package is the same file on disk
+ * and on the site. Only what the module loader asks for goes out — a
+ * package's own .pushwork store, node_modules and tests stay behind — and an
+ * edit to any of them reloads the dev page.
  *
  * Another site can use this dev server's packages, all of them (?dev=, see
  * src/main.ts), so everything it serves says any origin may have it. That
- * site has no vite client to be told to reload, so it asks: `<to>/__changes?since=<version>` answers with
- * the frame's version as soon as that's not `since` (a long poll, which
- * tunnels pass, where they don't always pass a stream).
+ * site has no vite client to be told to reload, so it asks the frame:
+ * `/packages/<frame>/__changes?since=<version>` answers with the packages'
+ * version as soon as that's not `since` (a long poll, which tunnels pass,
+ * where they don't always pass a stream).
  */
 export function frame({
-	from,
-	to,
+	frame = "lattice",
 	packages = "packages",
 }: {
-	from: string
-	to: string
+	frame?: string
 	packages?: string
-}): Plugin {
-	// [url, directory], the frame's first
+} = {}): Plugin {
+	const to = `/packages/${frame}`
+	// [url, directory]
 	let mounts: [string, string][] = []
 	let outDir: string
 	let serve = false
@@ -65,7 +64,7 @@ export function frame({
 		name: "lattice-frame",
 		configResolved(config) {
 			const directory = resolve(config.root, packages)
-			mounts = [[to, resolve(config.root, from)]]
+			mounts = []
 			for (const name of existsSync(directory) ? readdirSync(directory) : []) {
 				if (name.startsWith(".")) continue
 				if (!statSync(join(directory, name)).isDirectory()) continue

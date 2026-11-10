@@ -1,11 +1,11 @@
 // lattice's project tool: wm's workspace on a project, with lattice's tools.
 // the frame shows the same in its middle
 import { createRoot } from "solid-js";
-import { mountProject } from "../../packages/wm/project-view.js";
-import { datatypeItem } from "../../packages/wm/patchwork/docs.js";
-import { knitout } from "../../packages/knitoutjs/wm.js";
-import { wearLook } from "../../packages/knitoutjs/look.js";
-import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../../packages/knitoutjs/app/migrate.js";
+import { mountProject } from "../wm/project-view.js";
+import { datatypeItem } from "../wm/patchwork/docs.js";
+import { knitout } from "../knitoutjs/wm.js";
+import { wearLook } from "../knitoutjs/look.js";
+import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../knitoutjs/app/migrate.js";
 import { tools } from "./files.js";
 import { newMachine, newSwatch, newYarn } from "./profile-docs.js";
 import { useToolStorage } from "./storage.js";

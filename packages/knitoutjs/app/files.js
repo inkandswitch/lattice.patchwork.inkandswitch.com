@@ -14,7 +14,7 @@ export const TOOLS = {
     // where it sits in a tab's tool menu
     position: 2,
     extensions: ["k"],
-    patchworkId: "prototype-knitoutjs-panes-visualizer",
+    patchworkId: "lattice:knitoutjs-visualizer",
     load: () => import("../core/visualizer.js"),
   },
   editor: {
