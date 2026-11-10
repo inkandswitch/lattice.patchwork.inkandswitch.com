@@ -1,4 +1,4 @@
-// tooltips: anything with a title, in latticework or lattice, shows it in one
+// tooltips: anything with a title, in wm or the app around it, shows it in one
 // of these rather than the browser's own. the title stays where the words
 // live (and what screen readers read): it's lifted off while the pointer's
 // over it, so the browser's doesn't show too, and put back after

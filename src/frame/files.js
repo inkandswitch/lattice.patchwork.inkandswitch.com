@@ -24,8 +24,7 @@ export function fileExtension(doc) {
   return fileExtensionOf(doc);
 }
 
-// the first tool that fits a file is the one it opens in. anything that
-// isn't a .js or .k shows in a patchwork view
+// the first tool that fits a file is the one it opens in
 export const TOOLS = {
   visualizer: {
     id: "visualizer",
@@ -106,18 +105,16 @@ export const TOOLS = {
     patchworkId: "lattice:swatch",
     load: () => import("./swatch.js"),
   },
-  patchwork: {
-    id: "patchwork",
-    name: "patchwork",
-    title: "show this doc with patchwork's own tool for it",
-    extensions: ["*"],
-    load: () => import("../../packages/wm/patchwork-pane.js"),
-  },
 };
 
 export function toolsFor(extension) {
-  const tools = Object.values(TOOLS).filter((tool) =>
-    tool.extensions.includes(extension),
-  );
-  return tools.length ? tools : [TOOLS.patchwork];
+  return Object.values(TOOLS).filter((tool) => tool.extensions.includes(extension));
 }
+
+// for wm: a doc's tools are its kind's. one none of them fits shows with
+// patchwork's own tool for it (wm's)
+export const tools = {
+  list: Object.values(TOOLS),
+  for: (doc) => toolsFor(fileExtension(doc)),
+  extension: fileExtension,
+};

@@ -1,63 +1,19 @@
-// updating projects from before: one way, and the type changes, so the old
-// tools (which only open the old types) won't open them after. each is done
-// on the doc itself, through the repo under any draft overlay, never on a
-// draft's copy of it. and the drafts go: they're forks of the old shape, and
-// merging one back would bring the old shape back with it
+// updating lattice's projects from before: one way, and the type changes,
+// so the old tools (which only open the old types) won't open them after.
+// each is done on the doc itself, through the repo under any draft overlay,
+// never on a draft's copy of it. and the drafts go: they're forks of the old
+// shape, and merging one back would bring the old shape back with it.
+// knitoutjs's are knitoutjs's (packages/knitoutjs/app/migrate.js)
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { OLD_KNITOUTJS_TYPES, projectTitle, typeOf } from "../../wm/doc/project.js";
-import * as Layout from "../../wm/doc/layout.js";
-import { folderFiles, folderTitle } from "../../wm/folder.js";
-import { createDoc, findSoon } from "../../wm/patchwork/docs.js";
-import { seedActive } from "../../wm/active.js";
+import { typeOf } from "../../packages/wm/doc/project.js";
+import * as Layout from "../../packages/wm/doc/layout.js";
+import { folderTitle } from "../../packages/wm/folder.js";
+import { createDoc, findSoon } from "../../packages/wm/patchwork/docs.js";
+import { seedActive } from "../../packages/wm/active.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
 const copy = (value) => (value && typeof value === "object" ? JSON.parse(JSON.stringify(value)) : null);
-
-export const isOldKnitoutjs = (doc) => OLD_KNITOUTJS_TYPES.includes(typeOf(doc));
-
-/**
- * what a project has, made from the shape before projects: a folder of
- * `urls`, and the nodes of `tree`. returns {files: the folder's url, nodes,
- * active}. `active` is which tab each group of the tree showed: hand it to
- * seedActive with the project's url, so whoever updated it keeps theirs
- */
-export async function partsFrom({ title, urls = [], tree = null }, repo, hive) {
-  const folder = await createDoc(repo, { "@patchwork": { type: "folder" }, title, docs: [] }, hive);
-  await folderFiles(folder, repo).add(urls.map(string).filter(isUrl));
-  return { files: folder.url, ...Layout.fromTree(copy(tree)) };
-}
-
-/**
- * a knitoutjs project from before becomes a knitoutjs-project, in place: its
- * files go in a new folder, its tree becomes its nodes. `handle` is the doc's
- * own, from `repo`. says whether it was this that did it (someone else may
- * have, meanwhile)
- */
-export async function updateKnitoutjs(handle, repo, hive) {
-  const doc = handle.doc();
-  const from = typeOf(doc);
-  if (!OLD_KNITOUTJS_TYPES.includes(from)) return false;
-  const title = projectTitle(doc);
-  const { files, nodes, active } = await partsFrom(
-    { title, urls: Array.isArray(doc.files) ? doc.files : [], tree: doc.layout },
-    repo,
-    hive,
-  );
-  let done = false;
-  handle.change((doc) => {
-    if (typeOf(doc) !== from) return;
-    doc["@patchwork"].type = "knitoutjs-project";
-    delete doc["@patchwork"].mainDraftUrl;
-    doc.title = title;
-    doc.files = files;
-    delete doc.layout;
-    doc.nodes = nodes;
-    done = true;
-  });
-  if (done) seedActive(handle.url, active);
-  return done;
-}
 
 // a lattice project from before is a folder of its files, with its layout on
 // a lattice:workspace doc it links as `workspace` (or, before workspaces, on

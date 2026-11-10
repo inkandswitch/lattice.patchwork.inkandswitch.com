@@ -1,12 +1,12 @@
-// a project, shown: latticework on its nodes and files. one from before
+// a project, shown: wm's workspace on its nodes and files. one from before
 // shows only a button to update it
 import { createSignal, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { mountWorkspace } from "./workspace.js";
-import { PROJECT_TYPES, projectTitle, typeOf } from "./doc/project.js";
-import { isOldKnitoutjs, updateKnitoutjs } from "../knitoutjs/core/migrate.js";
+import { projectTitle, typeOf } from "./doc/project.js";
+import * as Layout from "./doc/layout.js";
 import { folderFiles } from "./folder.js";
 import { directoryFiles } from "./directory.js";
 import { createDoc } from "./patchwork/docs.js";
@@ -15,9 +15,23 @@ const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
 const string = (value) => (value == null ? "" : String(value));
 const isUrl = (value) => isValidAutomergeUrl(string(value));
+const copy = (value) => (value && typeof value === "object" ? JSON.parse(JSON.stringify(value)) : null);
 
+// a project, whichever app's: it links its files
 export function isProject(doc) {
-  return PROJECT_TYPES.includes(typeOf(doc)) && isUrl(doc.files);
+  return isUrl(doc?.files);
+}
+
+/**
+ * what a project has, made from the shape before projects: a folder of
+ * `urls`, and the nodes of `tree`. returns {files: the folder's url, nodes,
+ * active}. `active` is which tab each group of the tree showed: hand it to
+ * seedActive with the project's url, so whoever updated it keeps theirs
+ */
+export async function partsFrom({ title, urls = [], tree = null }, repo, hive) {
+  const folder = await createDoc(repo, { "@patchwork": { type: "folder" }, title, docs: [] }, hive);
+  await folderFiles(folder, repo).add(urls.map(string).filter(isUrl));
+  return { files: folder.url, ...Layout.fromTree(copy(tree)) };
 }
 
 /**
@@ -67,7 +81,7 @@ export function mountUpdate(element, update) {
     try {
       await update();
     } catch (error) {
-      console.error("[latticework] couldn't update", error);
+      console.error("[wm] couldn't update", error);
       setProblem(string(error?.message ?? error) || "couldn't update it");
     }
     setBusy(false);
@@ -116,7 +130,7 @@ function mountProblem(element, text) {
 }
 
 /**
- * a project in `element`: latticework on its nodes and files, or, for one
+ * a project in `element`: the workspace on its nodes and files, or, for one
  * from before, a button to update it. it follows the project doc, so when
  * the update's done (here or anywhere) the panes show. returns a way to
  * unmount.
@@ -124,16 +138,19 @@ function mountProblem(element, text) {
  *   project   the project doc's handle, from `repo`
  *   baseRepo  the repo under any draft overlay: what updating is done
  *             through, so it's the doc itself that changes
+ *   old       projects from before, if the app has any: is(doc) says one
+ *             is, and update(handle, baseRepo, hive) makes it a project,
+ *             on the doc itself (`handle` is from baseRepo)
  *
- * and the rest of latticework's options (see latticework.js): repo, hive,
- * tools, self, sidebar, menu, onShowing, onOpen
+ * and the rest of the workspace's options (see workspace.js): repo, hive,
+ * tools, extensions, self, sidebar, onShowing, onFocused, onOpen, pointer
  */
-export function mountProject(element, { project, repo, baseRepo = repo, hive, ...options }) {
+export function mountProject(element, { project, repo, baseRepo = repo, hive, old, ...options }) {
   let shown = null;
   let dead = false;
 
   // what's showing depends on the doc's type and its files
-  const keyOf = (doc) => (isOldKnitoutjs(doc) ? "old" : isProject(doc) ? string(doc.files) : "none");
+  const keyOf = (doc) => (old?.is(doc) ? "old" : isProject(doc) ? string(doc.files) : "none");
 
   function show() {
     const doc = project.doc();
@@ -151,7 +168,7 @@ export function mountProject(element, { project, repo, baseRepo = repo, hive, ..
     if (key === "old") {
       now.unmount = mountUpdate(box, async () => {
         const handle = await baseRepo.find(project.url);
-        await updateKnitoutjs(handle, baseRepo, hive);
+        await old.update(handle, baseRepo, hive);
       });
       return;
     }
@@ -182,7 +199,7 @@ export function mountProject(element, { project, repo, baseRepo = repo, hive, ..
       },
       (error) => {
         if (now.dead || dead) return;
-        console.error("[latticework] couldn't find the project's files", error);
+        console.error("[wm] couldn't find the project's files", error);
         off = mountProblem(box, "couldn't find its files");
       },
     );

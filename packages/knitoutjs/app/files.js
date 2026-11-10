@@ -1,9 +1,11 @@
-// the files this frame shows, and which tools open them. what we know about
+// the files this app shows, and which tools open them. what we know about
 // the files themselves is in core (shared with lattice)
-export * from "./core/files.js";
+import { fileExtension } from "../core/files.js";
+
+export * from "../core/files.js";
 
 // the first tool that fits a file is the one it opens in. anything that
-// isn't a .js or .k shows in a patchwork view
+// isn't a .js or .k shows with patchwork's own tool for it (wm's)
 export const TOOLS = {
   visualizer: {
     id: "visualizer",
@@ -13,7 +15,7 @@ export const TOOLS = {
     position: 2,
     extensions: ["k"],
     patchworkId: "prototype-knitoutjs-panes-visualizer",
-    load: () => import("./core/visualizer.js"),
+    load: () => import("../core/visualizer.js"),
   },
   editor: {
     id: "editor",
@@ -21,20 +23,16 @@ export const TOOLS = {
     title: "see the file's text (and change it, if it isn't generated)",
     position: 1,
     extensions: ["js", "k"],
-    load: () => import("./core/editor.js"),
-  },
-  patchwork: {
-    id: "patchwork",
-    name: "patchwork",
-    title: "show this doc with patchwork's own tool for it",
-    extensions: ["*"],
-    load: () => import("../wm/patchwork-pane.js"),
+    load: () => import("../core/editor.js"),
   },
 };
 
 export function toolsFor(extension) {
-  const tools = Object.values(TOOLS).filter((tool) =>
-    tool.extensions.includes(extension),
-  );
-  return tools.length ? tools : [TOOLS.patchwork];
+  return Object.values(TOOLS).filter((tool) => tool.extensions.includes(extension));
 }
+
+// for wm
+export const tools = {
+  list: Object.values(TOOLS),
+  for: (doc) => toolsFor(fileExtension(doc)),
+};

@@ -47,7 +47,7 @@ export const plugins = [
     supportedDatatypes: ["file"],
     async load() {
       const { default: KnitoutVisualizerTool } = await import(
-        "./core/visualizer.js"
+        "../core/visualizer.js"
       );
       return KnitoutVisualizerTool;
     },

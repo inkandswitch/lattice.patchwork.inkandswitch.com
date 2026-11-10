@@ -1,6 +1,23 @@
 // what we know about the files a knitout project shows. which tools open
 // them is up to the frame showing them (its own files.js)
 
+const link = (value) => (value == null || value === "" ? null : String(value));
+
+// a doc's knitout links, as plain strings: the .k a .js writes into
+// (target), the .js that last wrote a .k (source) and the code it wrote it
+// from (sourceHash), when it did (builtAt), and the .k a .k is an editable
+// copy of (copyOf). read them here, not off the doc, so they compare with
+// === however they're stored (text now, ImmutableString later)
+export function knitoutOf(doc) {
+  return {
+    target: link(doc?.knitoutTarget),
+    source: link(doc?.knitoutSource),
+    sourceHash: link(doc?.knitoutSourceHash),
+    copyOf: link(doc?.knitoutCopyOf),
+    builtAt: typeof doc?.knitoutBuiltAt === "number" ? doc.knitoutBuiltAt : null,
+  };
+}
+
 export function docText(doc) {
   const content = doc?.content;
   if (typeof content === "string") return content;
@@ -46,38 +63,6 @@ export function fileExtension(doc) {
   if (doc?.extension) return doc.extension.replace(/^\./, "").toLowerCase();
   const match = doc?.name?.match(/\.([^.]+)$/);
   return match ? match[1].toLowerCase() : "";
-}
-
-// a doc's name, with its extension (a UnixFileEntry's `extension`, or what
-// the app says it is) after it, if the name hasn't one of its own. so
-// everything shows as a file: pattern.k, kniterate.machine
-export function withExtension(name, extension) {
-  name = String(name ?? "");
-  extension = String(extension ?? "").replace(/^\./, "");
-  if (!name || !extension || /\.[^.\s/]+$/.test(name)) return name;
-  return `${name}.${extension}`;
-}
-
-// each doc gets a colour of its own, so every pane showing it wears the same
-// one. the colours are tokens in latticework.css
-export const DOC_COLOURS = [
-  "cherry",
-  "blue",
-  "stem",
-  "lilac",
-  "peach",
-  "butter",
-];
-
-export function docColour(url) {
-  let hash = 0;
-  for (const char of url ?? "") hash = (hash * 31 + char.charCodeAt(0)) | 0;
-  return DOC_COLOURS[Math.abs(hash) % DOC_COLOURS.length];
-}
-
-// automerge:4NMNnkMhL8jXrdJ9jamS58PAVdXu → 4NMNnk…
-export function shortUrl(url) {
-  return url ? url.replace(/^automerge:/, "").slice(0, 6) + "…" : "";
 }
 
 export function newFileDoc(name, content = "") {

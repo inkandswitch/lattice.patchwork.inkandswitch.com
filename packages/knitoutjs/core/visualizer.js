@@ -1,5 +1,5 @@
 import {convertKnitout} from "./vendor/knitout-to-kcode.js"
-import {docText, moduleWorker, saveFile} from "./files.js"
+import {docText, knitoutOf, moduleWorker, saveFile} from "./files.js"
 import {parseSource, highlighter} from "./stitch-source.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "./yarns.js"
 import {withIcon} from "./icons.js"
@@ -220,7 +220,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	function sourcesOf(source) {
 		const at = parseSource(source)
 		if (!at) return []
-		const jsUrl = handle.doc()?.knitoutSource
+		const jsUrl = knitoutOf(handle.doc()).source
 		const lines = []
 		if (at.jsLine != null && jsUrl) lines.push({url: jsUrl, line: at.jsLine})
 		if (at.kLine != null) lines.push({url: handle.url, line: at.kLine})
@@ -310,7 +310,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	function onHighlightLines(event) {
 		const {url, start, end} = event.detail ?? {}
 		const local = url === handle.url
-		const fromJs = url != null && url === handle.doc()?.knitoutSource
+		const fromJs = url != null && url === knitoutOf(handle.doc()).source
 		lines =
 			start == null || (!local && !fromJs)
 				? null

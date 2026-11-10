@@ -1,5 +1,5 @@
 // wm: a project's panes, and its files down the side. what each app's
-// project tool shows, and what lattice's frame has in its middle
+// project tool shows (lattice's frame has one in its middle)
 import { createSignal, createMemo, createEffect, on, onCleanup, For, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { render } from "solid-js/web";
@@ -11,13 +11,11 @@ import {
   getRegistry,
   getSupportedToolsForType,
 } from "@inkandswitch/patchwork-plugins";
-import { docColour, docText, shortUrl, newFileDoc, textHash, withExtension } from "../knitoutjs/core/files.js";
+import { docColour, fileExtension, shortUrl, newFileDoc, withExtension } from "./doc/files.js";
 import * as Layout from "./doc/layout.js";
-import { urlFromText, loadDatatype, createDocOfDatatype, whenFound } from "./patchwork/docs.js";
-import defaultSource from "../knitoutjs/core/default-source.js";
+import { urlFromText, loadDatatype, whenFound } from "./patchwork/docs.js";
 import { Resizer, sidebarState } from "./ui/sidebars.js";
 import { icon } from "./ui/icons.js";
-import { builds, setBuild } from "../knitoutjs/core/builds.js";
 import { readActive, writeActive, activeChannel } from "./active.js";
 import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
@@ -26,7 +24,7 @@ import { tooltips } from "./ui/tooltip.js";
 
 const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
-// "just now", "4 min ago": how long since a .k was built
+// "just now", "4 min ago": how long since something was done
 function ago(time, now) {
   const seconds = (now - time) / 1000;
   if (seconds < 45) return "just now";
@@ -48,6 +46,15 @@ function editedAt(doc) {
     return null;
   }
 }
+
+// what shows a doc no tool of the app's fits: patchwork's own tool for its
+// datatype
+const PATCHWORK = {
+  id: "patchwork",
+  name: "patchwork",
+  title: "show this doc with patchwork's own tool for it",
+  load: () => import("./patchwork-pane.js"),
+};
 
 const MIN_CELL = 80;
 const EDGE = 0.22;
@@ -164,18 +171,23 @@ function cellStyle(node, direction) {
  *   repo       finds and makes docs. through a draft overlay, if there is
  *              one, so what's done here goes into whichever draft is out
  *   baseRepo   for tools that mustn't be forked into a draft (a terminal:
- *              latticex is on the original). repo, if not given
+ *              a terminal shares on the original). repo, if not given
  *   hive       the site's keyhive, if it has one, for new docs
- *   tools      the app's {TOOLS, toolsFor, fileExtension}: which tools show
- *              which files
+ *   tools      the app's tools: {list, for(doc), extension(doc)?}. `list`
+ *              is all of them ({id, name, title, position, load, drafts?,
+ *              patchworkId?, was?}: `was` is any ids it had before, which
+ *              panes saved then still say); `for` is the ones that show a
+ *              doc, the first first; `extension` is what a doc's called as a
+ *              file, if not what its name says. a doc none of them shows
+ *              shows with patchwork's own tool for it
+ *   extensions what the app adds to the panes: [{name, watch, links,
+ *              status, touched, menu, presence}], each part optional. see
+ *              EXTENSIONS below
  *   self       tool ids never offered in a pane (the app's own project and
  *              frame tools: not inside a pane of themselves)
  *   sidebar    the files sidebar's state (sidebars.js), when something else
- *              opens and shuts it (lattice's top bar). without one, it keeps
+ *              opens and shuts it (an app's top bar). without one, it keeps
  *              its own, with a strip down the side to open it again
- *   menu       more for the + menu: [{icon, label, detail, alt, create}].
- *              `alt` ones show while alt is held; create(groupId) makes a
- *              doc and returns its url, which opens
  *   onShowing  hears the docs the panes are showing ({url, name}, one per
  *              pane), for inspectors
  *   onFocused  hears the one you're in ({url, name}, or null): what's
@@ -185,6 +197,34 @@ function cellStyle(node, direction) {
  *   pointer    what your pointer looks like to everyone else: a function
  *              giving "arrow" or "mouse" (read in an effect, so it can be a
  *              signal). an arrow, without one
+ *
+ * EXTENSIONS. each is plain data and functions; it imports nothing of wm's,
+ * and gets `api` (below) instead
+ *   name                 its own, for what it keeps: its facts on a doc's
+ *                        info (info.ext[name]), its presence keys
+ *   watch(doc)           plain facts about a doc, kept up to date as
+ *                        api.docInfo(url).ext[name]
+ *   links(url, api)      the docs this one is linked to: [{url, label?,
+ *                        title?, live}]. a live link lights up with it; one
+ *                        with a label is a chip in its pane's bar too
+ *   status(url, api)     a line at the end of its pane's bar, or null:
+ *                        {state, text?, stuck?, action?: {label, icon,
+ *                        title, run(from)}}. stuck marks the pane out
+ *   touched(url, api)    when it was last done something to, if not edited:
+ *                        {verb, at, flash?}: "built 3 min ago" in the files.
+ *                        flash tints its panes when at changes
+ *   menu(api)            more for the + menu: [{icon, label, detail?, alt?,
+ *                        primary?, create(api, groupId)}]. alt ones show
+ *                        while alt is held; the primary one is on the empty
+ *                        card too (primary is its label there). create
+ *                        returns a url (or {url, tool}) to open, or nothing
+ *   presence             {[key]: {mine(api), read(value)}}: what of yours
+ *                        goes to everyone else, and theirs read back, as
+ *                        person.ext[name][key]
+ *
+ * api: {repo, createFile(name, fields), reveal(url, from, edge, tool),
+ * openRow([[{url, tool}]]), files(), people(), docInfo(url), ago(time)}.
+ * `from` is what an action's run is handed: the pane it's in
  */
 export function mountWorkspace(
   element,
@@ -195,10 +235,10 @@ export function mountWorkspace(
     repo,
     baseRepo = repo,
     hive,
-    tools: { TOOLS, toolsFor, fileExtension },
+    tools,
+    extensions = [],
     self = [],
     sidebar,
-    menu: extraItems = [],
     onShowing,
     onFocused,
     onOpen,
@@ -281,21 +321,29 @@ export function mountWorkspace(
     }, LIVE_EVERY);
   }
 
+  // the extensions' presence keys, each under its extension's name
+  const presenceKeys = extensions.flatMap((extension) =>
+    Object.entries(extension.presence ?? {}).map(([key, { mine, read }]) => ({
+      name: extension.name,
+      key,
+      channel: `${extension.name}:${key}`,
+      mine,
+      read,
+    })),
+  );
+
   if (roomHandle) {
-    room = joinRoom(roomHandle, baseRepo, (list) => {
+    const reads = Object.fromEntries(presenceKeys.map(({ channel, read }) => [channel, read]));
+    room = joinRoom(roomHandle, baseRepo, reads, (list) => {
       theirs.clear();
       for (const person of list) theirs.set(person.peer, person);
       setPeople(
         reconcile(
-          list.map(({ peer, name, colour, avatar, pointer, look, builds }) => ({
-            peer,
-            name,
-            colour,
-            avatar,
-            pointer,
-            look,
-            builds,
-          })),
+          list.map(({ peer, name, colour, avatar, pointer, look, shared }) => {
+            const ext = {};
+            for (const { name, key, channel } of presenceKeys) (ext[name] ??= {})[key] = shared[channel];
+            return { peer, name, colour, avatar, pointer, look, ext };
+          }),
           { key: "peer" },
         ),
       );
@@ -306,8 +354,8 @@ export function mountWorkspace(
     });
   }
 
-  // ── what's going on in each pane: lattice answers patchwork:view-state
-  //    for what's in one (view-state.js), and its scroll is lattice's to
+  // ── what's going on in each pane: wm answers patchwork:view-state for
+  //    what's in one (view-state.js), and its scroll is wm's to
   //    watch. yours goes to the room as it changes; following someone, it's
   //    theirs each pane shows, till you scroll or click or type in one
   const noViews = { follow() {}, docOf: () => null, forget() {}, stop() {} };
@@ -514,7 +562,18 @@ export function mountWorkspace(
 
   const addFiles = (urls) => files.add(urls);
 
-  // name, extension and links of any doc we show, kept up to date
+  // the app's tools: by id (or one they had before), and which show a doc
+  const toolById = (id) =>
+    id === PATCHWORK.id ? PATCHWORK : tools.list.find((tool) => tool.id === id || tool.was?.includes(id));
+  function toolsOf(doc) {
+    const fit = tools.for(doc);
+    return fit.length ? fit : [PATCHWORK];
+  }
+  const extensionOf = (doc) => (tools.extension ?? fileExtension)(doc);
+
+  // name, extension and tools of any doc we show, and what each extension
+  // makes of it, kept up to date. `changes` counts its changes, for when it
+  // was edited (editedAtOf), which is only worked out when it's asked for
   const infos = new Map();
   function docInfo(url) {
     if (!url) return {};
@@ -523,17 +582,12 @@ export function mountWorkspace(
       const [info, setInfo] = createStore({
         name: shortUrl(url),
         extension: "",
-        target: null,
-        source: null,
-        editable: false,
-        copyOf: null,
         type: null,
-        builtAt: null,
-        editedAt: null,
-        sourceHash: null,
-        textHash: null,
+        tools: [],
+        ext: {},
+        changes: 0,
       });
-      entry = { info, off: null };
+      entry = { info, off: null, handle: null };
       infos.set(url, entry);
       // someone else's new doc may not be here yet: it's looked for until
       // it is, and only said to be missing once it's been a while
@@ -546,28 +600,24 @@ export function mountWorkspace(
           const datatype = await loadDatatype(docHandle.doc()?.["@patchwork"]?.type);
           const update = () => {
             const doc = docHandle.doc();
-            const extension = fileExtension(doc);
+            const extension = extensionOf(doc);
             const named = doc?.name || doc?.title || datatype?.module.getTitle?.(doc);
             setInfo({
               // with its extension, if its name hasn't one
               name: named ? withExtension(named, extension) : shortUrl(url),
               extension,
-              target: doc?.knitoutTarget ?? null,
-              source: doc?.knitoutSource ?? null,
-              editable: typeof doc?.content === "string",
-              copyOf: doc?.knitoutCopyOf ?? null,
               type: doc?.["@patchwork"]?.type ?? null,
-              // a .k: when it was built, and from what code
-              builtAt: doc?.knitoutBuiltAt ?? null,
-              // anything else: when it was last changed (a built .k's newest
-              // change is its whole knitout, which isn't worth unpacking)
-              editedAt: doc?.knitoutBuiltAt ? null : editedAt(doc),
-              sourceHash: doc?.knitoutSourceHash ?? null,
-              // a .js: its code now, to tell the .k it writes is out of date
-              textHash: fileExtension(doc) === "js" ? textHash(docText(doc)) : null,
+              tools: toolsOf(doc).map((tool) => tool.id),
+              changes: info.changes + 1,
             });
+            for (const extension of extensions) {
+              if (!extension.watch) continue;
+              const facts = extension.watch(doc) ?? null;
+              setInfo("ext", extension.name, facts && typeof facts === "object" ? reconcile(facts) : facts);
+            }
           };
           if (entry.gone) return;
+          entry.handle = docHandle;
           update();
           docHandle.on("change", update);
           entry.off = () => docHandle.off("change", update);
@@ -576,6 +626,14 @@ export function mountWorkspace(
       );
     }
     return entry.info;
+  }
+
+  // when a doc was last changed, by anyone (automerge stamps each change)
+  function editedAtOf(url) {
+    const info = docInfo(url);
+    if (!info.changes) return null;
+    const doc = infos.get(url)?.handle?.doc();
+    return doc ? editedAt(doc) : null;
   }
 
   const projectFiles = createMemo(() =>
@@ -600,13 +658,13 @@ export function mountWorkspace(
 
   const [hovered, setHovered] = createSignal(null);
 
-  // linked = a .js and the .k it writes into now (a .k also remembers which
-  // .js wrote it last, but that's history, so it doesn't light up), and a .k
-  // and its editable copy
+  // a doc's links, from each extension: [{url, label?, title?, live}]
+  const linksOf = (url) => extensions.flatMap((extension) => extension.links?.(url, api) ?? []);
+
+  // linked = either has a live link to the other
   function linked(a, b) {
-    const one = docInfo(a);
-    const two = docInfo(b);
-    return one.target === b || two.target === a || one.copyOf === b || two.copyOf === a;
+    const to = (from, url) => linksOf(from).some((link) => link.live && link.url === url);
+    return to(a, b) || to(b, a);
   }
 
   function glow(url) {
@@ -636,74 +694,20 @@ export function mountWorkspace(
   });
   const inManyPanes = (url) => (paneCounts().get(url) ?? 0) > 1;
 
-  // ── builds: a generated .k says how up to date it is. a "now" that ticks,
-  //    for how long ago it was built
+  // ── what the extensions say of a doc: a line in its pane's bar, and when
+  //    it was last done something to. a "now" that ticks, for how long ago
   const [clock, setClock] = createSignal(Date.now());
   const ticker = setInterval(() => setClock(Date.now()), 15_000);
 
-  // build a .js into its .k again: by its editor, if it's open in one, so
-  // its build bar shows it too
-  async function rebuild(jsUrl, kUrl) {
-    const builder = builds[jsUrl]?.builder;
-    if (builder) return builder.now();
-    const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("../knitoutjs/core/run.js"),
-      repo.find(jsUrl),
-      repo.find(kUrl),
-    ]);
-    setBuild(jsUrl, { state: "running", line: undefined, message: undefined });
-    const { error } = await runInto(jsHandle, kHandle, repo);
-    setBuild(
-      jsUrl,
-      error
-        ? { state: "error", line: error.line ?? undefined, message: String(error.message ?? error) }
-        : { state: "ok" },
-    );
-  }
-
-  // how a .js's build is going: yours, or someone else's in the room if
-  // theirs is newer. what's only yours (its builder, autobuild, whether it
-  // failed last) stays yours
-  function buildOf(jsUrl) {
-    const mine = builds[jsUrl] ?? {};
-    let latest = mine.state ? mine : null;
-    for (const person of people) {
-      const build = person.builds?.[jsUrl];
-      if (build && !(latest?.at >= build.at)) latest = build;
+  const firstOf = (part, url) => {
+    for (const extension of extensions) {
+      const said = extension[part]?.(url, api);
+      if (said) return said;
     }
-    if (!latest || latest === mine) return mine;
-    return { ...mine, state: latest.state, line: latest.line, message: latest.message };
-  }
-
-  // how a generated .k is doing: built, building, out of date, or its .js
-  // failed. null once its .js writes somewhere else
-  function buildState(kUrl) {
-    const info = docInfo(kUrl);
-    const source = info.source ? docInfo(info.source) : null;
-    if (source?.target !== kUrl) return null;
-    const build = buildOf(info.source);
-    if (build.state === "running") return "running";
-    if (build.state === "error") return "error";
-    const outOfDate = !!info.sourceHash && !!source.textHash && info.sourceHash !== source.textHash;
-    // with autobuild on, it's about to build anyway
-    if (outOfDate) return build.auto && build.builder ? "running" : "stale";
-    return "built";
-  }
-
-  // a generated .k that isn't keeping up with its .js: it failed, or it's out
-  // of date, or it's building again after failing
-  function stuck(kUrl) {
-    const state = buildState(kUrl);
-    if (state === "error" || state === "stale") return true;
-    return state === "running" && !!builds[docInfo(kUrl).source]?.failed;
-  }
-
-  // a build that failed: show the .js, at the line it failed on
-  async function showError(jsUrl, fromPanelId) {
-    await reveal(jsUrl, fromPanelId, "left", "editor");
-    const line = buildOf(jsUrl).line;
-    if (line != null) builds[jsUrl]?.builder?.goToLine(line);
-  }
+    return null;
+  };
+  const statusOf = (url) => firstOf("status", url);
+  const touchedOf = (url) => firstOf("touched", url);
 
   // ── tools: each panel's tool lives in its own element, which moves with
   //    the panel when the layout changes rather than starting over
@@ -717,7 +721,7 @@ export function mountWorkspace(
       showTab(showing.group.id, showing.panel.id);
     } else {
       const doc = (await repo.find(url)).doc();
-      const tool = toolId ?? toolsFor(fileExtension(doc))[0].id;
+      const tool = toolId ?? toolsOf(doc)[0].id;
       addFiles([url]);
       const [id] = updateLayout((nodes) =>
         Layout.openPanels(nodes, fromPanelId, edge, [Layout.newPanel(url, tool)]),
@@ -725,18 +729,6 @@ export function mountWorkspace(
       activate(id);
     }
     flashDoc(url);
-  }
-
-  // a generated .k is read only (it's stored whole, which keeps big ones
-  // fast); this makes a plain-text copy beside it to edit by hand
-  async function editableCopy(panel) {
-    const doc = (await repo.find(panel.url)).doc();
-    const stem = (doc?.name ?? "pattern.k").replace(/\.k$/, "");
-    const copy = await createFile(`${stem}-copy.k`, {
-      content: docText(doc),
-      knitoutCopyOf: panel.url,
-    });
-    reveal(copy, panel.id, "right", "editor");
   }
 
   function panelOf(toolElement) {
@@ -749,12 +741,12 @@ export function mountWorkspace(
     open: (url, toolElement, edge, toolId) => reveal(url, panelOf(toolElement), edge, toolId),
     openIfClosed: (url, toolElement, edge, toolId) =>
       findShowing(url) || reveal(url, panelOf(toolElement), edge, toolId),
-    editableCopy: (url, toolElement) => editableCopy({ id: panelOf(toolElement), url }),
     get events() {
       return root;
     },
     project: { files: projectFiles, createFile },
     hover: setHovered,
+    docColour,
   };
 
   const hosts = new Map();
@@ -781,7 +773,7 @@ export function mountWorkspace(
   // (which it preloads next time), so only one patchwork has: a patchwork
   // tool's, or the `patchworkId` of one of ours, if it has one
   function announce(type, host) {
-    const toolId = host.patchworkTool ?? TOOLS[host.tool]?.patchworkId;
+    const toolId = host.patchworkTool ?? toolById(host.tool)?.patchworkId;
     element.dispatchEvent(
       new CustomEvent(type, {
         detail: toolId ? { url: host.url, toolId } : { url: host.url },
@@ -792,12 +784,12 @@ export function mountWorkspace(
   }
 
   async function mountTool(host) {
-    const tool = TOOLS[host.tool] ?? TOOLS.patchwork;
+    const tool = toolById(host.tool) ?? PATCHWORK;
     // its pane's in the page once its slot has it, just after this
     await null;
     if (host.dead) return;
     // the tool finds docs from its pane, as one in a <patchwork-view> does
-    // from that, so what lattice answers for a pane (view-state.js) is
+    // from that, so what wm answers for a pane (view-state.js) is
     // answered for it, and the rest is answered further up as it was
     host.repo = tool.drafts === false ? baseRepo : paneRepo(baseRepo, host.el);
     try {
@@ -886,7 +878,7 @@ export function mountWorkspace(
     for (const url of urls) {
       try {
         const doc = (await repo.find(url)).doc();
-        const tools = toolsFor(fileExtension(doc));
+        const tools = toolsOf(doc);
         panels.push(Layout.newPanel(url, (tools.find((tool) => tool.id === toolId) ?? tools[0]).id));
       } catch {
         refused.push(shortUrl(url));
@@ -902,52 +894,50 @@ export function mountWorkspace(
     }
   }
 
-  // a .js and the .k it writes, side by side on a row of their own
-  async function newPattern() {
-    const k = await createFile("pattern.k");
-    const js = await createFile("pattern.knitout.js", {
-      content: defaultSource,
-      knitoutTarget: k,
-    });
+  // one of the + menu's makes something, and what it makes opens here
+  async function create(groupId, item) {
+    let made;
+    try {
+      made = await item.create(api, groupId);
+    } catch (error) {
+      notify(groupId, String(error?.message ?? error));
+      return;
+    }
+    if (!made) return;
+    const { url, tool } = typeof made === "string" ? { url: made } : made;
+    openDocs([url], groupId, "center", tool);
+  }
+
+  // groups, side by side on a row of their own: [[{url, tool}]]
+  function openRow(groups) {
+    const urls = groups.flat().map((panel) => panel.url);
+    addFiles([...new Set(urls)]);
     updateLayout((nodes) =>
       Layout.addRow(
         nodes,
-        Layout.newSplit("row", [
-          Layout.newGroup([Layout.newPanel(js, "editor")]),
-          Layout.newGroup([Layout.newPanel(k, "visualizer")]),
-        ]),
+        Layout.newSplit(
+          "row",
+          groups.map((panels) => Layout.newGroup(panels.map((panel) => Layout.newPanel(panel.url, panel.tool)))),
+        ),
       ),
     );
-    const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-      import("../knitoutjs/core/run.js"),
-      repo.find(js),
-      repo.find(k),
-    ]);
-    runInto(jsHandle, kHandle, repo);
   }
 
-  // a new file opens as text, ready to write in (a .k too, which would
-  // otherwise open in whatever draws it)
-  async function newFile(groupId, name) {
-    openDocs([await createFile(name)], groupId, "center", TOOLS.editor ? "editor" : undefined);
-  }
+  // what an extension's handed
+  const api = {
+    repo,
+    createFile,
+    reveal,
+    openRow,
+    files: projectFiles,
+    people: () => people,
+    docInfo,
+    ago: (time) => ago(time, clock()),
+  };
 
-  // a doc of one of patchwork's own datatypes, as its sidebar makes them
-  async function newDoc(groupId, type) {
-    const datatype = await loadDatatype(type);
-    if (!datatype) {
-      notify(groupId, `there's no ${type} here`);
-      return;
-    }
-    const handle = await createDocOfDatatype(datatype, repo, undefined, hive);
-    openDocs([handle.url], groupId);
-  }
-
-  // one of the app's own: it makes the doc, and it opens here
-  async function newExtra(groupId, item) {
-    const url = await item.create(groupId);
-    if (url) openDocs([url], groupId);
-  }
+  // what the extensions add to the + menu
+  const menuItems = extensions.flatMap((extension) => extension.menu?.(api) ?? []);
+  const primaryItem = menuItems.find((item) => item.primary);
 
   const [menuFor, setMenuFor] = createSignal(null);
   // the menu has more in it while alt is held
@@ -1000,8 +990,10 @@ export function mountWorkspace(
   // [{tool, patchworkTool?, name, title}]
   function toolChoices(url) {
     const info = docInfo(url);
-    return toolsFor(info.extension)
-      .sort((a, b) => a.position - b.position)
+    return info.tools
+      .map(toolById)
+      .filter(Boolean)
+      .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .flatMap((tool) => {
         const theirs = tool.id === "patchwork" ? patchworkToolsFor(info.type) : [];
         if (!theirs.length) return [{ tool: tool.id, name: tool.name, title: tool.title }];
@@ -1026,7 +1018,7 @@ export function mountWorkspace(
   }
 
   function toolName(panel) {
-    return shownWith(panel)?.name ?? TOOLS[panel.tool]?.name ?? panel.tool;
+    return shownWith(panel)?.name ?? toolById(panel.tool)?.name ?? panel.tool;
   }
 
   // a tab's tool menu: what it's shown with, and what else it could be
@@ -1080,7 +1072,7 @@ export function mountWorkspace(
   }
 
   // the pane under the pointer while something's dragged over, and where in
-  // it: {groupId, zone, lineTop}. the panes only show this; latticework works
+  // it: {groupId, zone, lineTop}. the panes only show this; wm works
   // it out, at its root, so nothing inside a pane (an editor, a canvas) can
   // take the drop first
   const [dropTarget, setDropTarget] = createSignal(null);
@@ -1512,6 +1504,8 @@ export function mountWorkspace(
     });
 
     const target = () => (dropTarget()?.groupId === group.id ? dropTarget() : null);
+    // what dropping onto the tool says it does ("import here")
+    const dropLabel = () => hosts.get(active()?.id)?.el.dropInto?.label;
     const zone = () => target()?.zone ?? null;
     const codeLine = () => target()?.lineTop ?? null;
 
@@ -1563,7 +1557,7 @@ export function mountWorkspace(
             <div class="knitoutjs-drop-hint" data-zone=${zone}></div>
             <${Show} when=${() => zone() === "code"}>
               <div class="knitoutjs-drop-line" style=${() => ({ top: `${codeLine()}px` })}>
-                <span>import here</span>
+                <${Show} when=${dropLabel}><span>${dropLabel}</span><//>
               </div>
             <//>
           </div>
@@ -1605,13 +1599,16 @@ export function mountWorkspace(
     const info = docInfo(panel.url);
     let flash;
 
-    // a new build of the doc it shows (from here or anyone else) tints it for
-    // a moment, so you can see what changed it
+    // something an extension says was done to the doc it shows, here or by
+    // anyone else, tints it for a moment, so you can see it
     createEffect(
       on(
-        () => info.builtAt,
-        (builtAt, before) => {
-          if (before == null || builtAt === before) return;
+        () => {
+          const touched = touchedOf(panel.url);
+          return touched?.flash ? touched.at : null;
+        },
+        (at, before) => {
+          if (before == null || at == null || at === before) return;
           flash?.animate([{ opacity: 0.35 }, { opacity: 0 }], {
             duration: 700,
             easing: "ease-out",
@@ -1627,7 +1624,7 @@ export function mountWorkspace(
       data-colour=${() => docColour(panel.url)}
       data-glow=${() => glow(panel.url)}
       data-shared=${() => (inManyPanes(panel.url) ? "" : undefined)}
-      data-stuck=${() => (stuck(panel.url) ? "" : undefined)}
+      data-stuck=${() => (statusOf(panel.url)?.stuck ? "" : undefined)}
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}
     >
@@ -1727,12 +1724,15 @@ export function mountWorkspace(
     </div>`;
   }
 
-  // the line under the tabs: which doc this is, where it came from, and (for
-  // a generated .k) how up to date it is
+  // the line under the tabs: which doc this is, what it's linked to, and
+  // what the extensions say of it
   function Bar(props) {
     const panel = props.panel;
-    const info = docInfo(panel.url);
     const [copied, setCopied] = createSignal(false);
+    // a chip each for its labelled links, made again only when they change
+    const chips = createMemo(() => linksOf(panel.url).filter((link) => link.label), [], {
+      equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    });
 
     function copy() {
       navigator.clipboard?.writeText(panel.url);
@@ -1752,83 +1752,45 @@ export function mountWorkspace(
         <span class="knitoutjs-swatch"></span>
         ${() => (copied() ? [icon("check"), " copied"] : shortUrl(panel.url))}
       </button>
-      ${() =>
-        info.copyOf &&
-        html`<button
+      <${For} each=${chips}>
+        ${(link) => html`<button
           class="knitoutjs-link"
-          title="open the .k this is a copy of"
-          onClick=${() => reveal(info.copyOf, panel.id, "left")}
-          data-colour=${docColour(info.copyOf)}
-          onPointerEnter=${() => setHovered(info.copyOf)}
+          title=${link.title ?? ""}
+          onClick=${() => reveal(link.url, panel.id, "left")}
+          data-colour=${docColour(link.url)}
+          data-stale=${link.live ? undefined : ""}
+          onPointerEnter=${() => setHovered(link.url)}
           onPointerLeave=${unhover}
         >
-          copy of
+          ${link.label}
           <span class="knitoutjs-swatch"></span>
-          <span class="knitoutjs-link-name">${() => docInfo(info.copyOf).name}</span>
+          <span class="knitoutjs-link-name">${() => docInfo(link.url).name}</span>
         </button>`}
-      ${() =>
-        info.source &&
-        html`<button
-          class="knitoutjs-link"
-          title="open the .js that wrote this"
-          onClick=${() => reveal(info.source, panel.id, "left")}
-          data-colour=${docColour(info.source)}
-          data-stale=${() => (docInfo(info.source).target === panel.url ? undefined : "")}
-          onPointerEnter=${() => setHovered(info.source)}
-          onPointerLeave=${unhover}
-        >
-          ${() => (docInfo(info.source).target === panel.url ? "written by" : "last written by")}
-          <span class="knitoutjs-swatch"></span>
-          <span class="knitoutjs-link-name">${() => docInfo(info.source).name}</span>
-        </button>`}
+      <//>
       <span class="knitoutjs-spacer"></span>
-      <${BuildStatus} panel=${panel} />
+      <${Status} panel=${panel} />
     </div>`;
   }
 
-  // a generated .k's line: built just now, out of date, or its .js failed,
-  // only while its .js still writes into it. a .js's says when it failed
-  function BuildStatus(props) {
+  // what an extension says of the doc: a line, and something to do about it
+  function Status(props) {
     const panel = props.panel;
-    const info = docInfo(panel.url);
-    const jsUrl = () => info.source ?? panel.url;
-    const build = () => buildOf(jsUrl());
-
-    function state() {
-      if (!info.source) return build().state === "error" ? "error" : null;
-      return buildState(panel.url);
-    }
-
-    return html`<${Show} when=${state}>
-      <span class="knitoutjs-build-status" data-state=${state}>
+    const status = () => statusOf(panel.url);
+    return html`<${Show} when=${status}>
+      <span class="knitoutjs-build-status" data-state=${() => status()?.state}>
+        ${() => status()?.text ?? ""}
         ${() => {
-          switch (state()) {
-            case "running":
-              return "building…";
-            case "error":
-              return html`<button
-                class="knitoutjs-error-line"
-                title=${() => `${build().message ?? ""}\n${info.source ? "show the .js, at that line" : "go to that line"}`}
-                onClick=${() => showError(jsUrl(), panel.id)}
-              >
-                ${icon("warning")}
-                ${() => (build().line != null ? `error on line ${build().line}` : "error")}
-              </button>`;
-            case "stale":
-              // an array: html`` drops text before an element at the top
-              return [
-                "out of date —",
-                html`<button
-                  class="knitoutjs-rebuild"
-                  title="build it again from its .js"
-                  onClick=${() => rebuild(info.source, panel.url)}
-                >
-                  ${icon("rebuild")} rebuild
-                </button>`,
-              ];
-            default:
-              return () => (info.builtAt ? `generated ${ago(info.builtAt, clock())}` : "generated");
-          }
+          const action = status()?.action;
+          return (
+            action &&
+            html`<button
+              class="knitoutjs-status-action"
+              title=${action.title ?? ""}
+              onClick=${() => action.run(panel.id)}
+            >
+              ${action.icon ? icon(action.icon) : ""} ${action.label}
+            </button>`
+          );
         }}
       </span>
     <//>`;
@@ -1838,11 +1800,12 @@ export function mountWorkspace(
     return html`<div class="knitoutjs-empty">
       <div class="knitoutjs-empty-card">
         <h2 class="knitoutjs-rough">nothing's open</h2>
-        <p>drag a .js, a .k, or anything else in from the files, or</p>
+        <p>drag anything in from the files, or</p>
         <div class="knitoutjs-empty-actions">
-          <button class="knitoutjs-button" onClick=${() => newPattern()}>
-            ${icon("plus")} new pattern
-          </button>
+          ${primaryItem &&
+          html`<button class="knitoutjs-button" onClick=${() => create(null, primaryItem)}>
+            ${icon(primaryItem.icon)} ${primaryItem.primary === true ? primaryItem.label : primaryItem.primary}
+          </button>`}
           <button class="knitoutjs-button" onClick=${(event) => openMenu(event, null)}>
             ${icon("folder")} open…
           </button>
@@ -1870,14 +1833,12 @@ export function mountWorkspace(
       ref=${(el) => (menu = el)}
       onToggle=${(event) => event.newState === "closed" && setMenuFor(null)}
     >
-      <div class="knitoutjs-menu-heading">new</div>
-      ${item("plus", "pattern", "a .js and the .k it writes", fromMenu(() => newPattern()))}
-      ${item("file", ".js file", "", fromMenu((groupId) => newFile(groupId, "untitled.knitout.js")))}
-      ${item("file", ".k file", "", fromMenu((groupId) => newFile(groupId, "untitled.k")))}
-      ${item("text", "markdown", "", fromMenu((groupId) => newDoc(groupId, "markdown")))}
-      ${extraItems.map(
-        (extra) => html`<${Show} when=${() => !extra.alt || altHeld()}>
-          ${item(extra.icon, extra.label, extra.detail ?? "", fromMenu((groupId) => newExtra(groupId, extra)))}
+      <${Show} when=${menuItems.length}>
+        <div class="knitoutjs-menu-heading">new</div>
+      <//>
+      ${menuItems.map(
+        (made) => html`<${Show} when=${() => !made.alt || altHeld()}>
+          ${item(made.icon, made.label, made.detail ?? "", fromMenu((groupId) => create(groupId, made)))}
         <//>`,
       )}
       <div class="knitoutjs-menu-heading">in this project</div>
@@ -2035,22 +1996,28 @@ export function mountWorkspace(
     removingTimer = setTimeout(() => setRemoving(null), 3000);
   }
 
+  // when a doc was last done something to: what an extension says (built,
+  // say), or else when it was edited. {verb, at}, or null
+  function lastDone(url) {
+    const touched = touchedOf(url);
+    if (touched) return touched;
+    const at = editedAtOf(url);
+    return at ? { verb: "edited", at } : null;
+  }
+
   // "built 3 min ago", "edited just now"
   function lastTouched(url) {
-    const info = docInfo(url);
-    if (info.builtAt) return `built ${ago(info.builtAt, clock())}`;
-    if (info.editedAt) return `edited ${ago(info.editedAt, clock())}`;
-    return "";
+    const done = lastDone(url);
+    return done ? `${done.verb} ${ago(done.at, clock())}` : "";
   }
 
   // the same, to the minute, for its tooltip
   function touchedWhen(url) {
-    const info = docInfo(url);
-    const at = info.builtAt ?? info.editedAt;
-    if (!at) return "";
-    const when = ago(at, clock());
-    const exactly = new Date(at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    return `${info.builtAt ? "built" : "edited"} ${when.startsWith("on ") ? exactly : `${when} · ${exactly}`}`;
+    const done = lastDone(url);
+    if (!done) return "";
+    const when = ago(done.at, clock());
+    const exactly = new Date(done.at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    return `${done.verb} ${when.startsWith("on ") ? exactly : `${when} · ${exactly}`}`;
   }
 
   // the project's files, down the side of its panes
@@ -2194,20 +2161,17 @@ export function mountWorkspace(
     createEffect(() => onShowing?.(showing()));
     createEffect(() => onFocused?.(focused()));
     createEffect(() => room?.share("look", look?.() === "mouse" ? "mouse" : "arrow"));
-    // how your builds of this project's .js are going, for everyone else
-    let sharedBuilds = "";
-    createEffect(() => {
-      if (!room) return;
-      const mine = {};
-      for (const url of fileUrls()) {
-        const { state, line, message, at } = builds[url] ?? {};
-        if (["running", "ok", "error"].includes(state)) mine[url] = { state, line, message, at };
-      }
-      const json = JSON.stringify(mine);
-      if (json === sharedBuilds) return;
-      sharedBuilds = json;
-      room.share("builds", JSON.parse(json));
-    });
+    // what the extensions share of yours, for everyone else, as it changes
+    for (const { channel, mine } of presenceKeys) {
+      let sent = "";
+      createEffect(() => {
+        if (!room) return;
+        const json = JSON.stringify(mine(api) ?? null);
+        if (json === sent) return;
+        sent = json;
+        room.share(channel, JSON.parse(json));
+      });
+    }
     return html`<link
         rel="stylesheet"
         href=${STYLESHEET}

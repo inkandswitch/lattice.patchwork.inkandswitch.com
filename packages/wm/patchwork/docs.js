@@ -114,3 +114,21 @@ export function whenFound(repo, url, onFound, onMissing) {
   look();
   return stop;
 }
+
+/**
+ * a + menu item (for an extension's menu) that makes a new doc of one of
+ * patchwork's datatypes, as its sidebar makes them: {type, icon, label,
+ * detail?}. `hive` is the site's keyhive, if it has one
+ */
+export function datatypeItem({ type, icon, label, detail = "" }, hive) {
+  return {
+    icon,
+    label,
+    detail,
+    async create(api) {
+      const datatype = await loadDatatype(type);
+      if (!datatype) throw new Error(`there's no ${type} here`);
+      return (await createDocOfDatatype(datatype, api.repo, undefined, hive)).url;
+    },
+  };
+}

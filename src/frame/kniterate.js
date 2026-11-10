@@ -1,5 +1,5 @@
 import {checkPanel, located} from "./checks.js"
-import {docText, moduleWorker, saveFile} from "./files.js"
+import {docText, knitoutOf, moduleWorker, saveFile} from "./files.js"
 import {YARNS_CHANGED, yarnColours, yarnPicker} from "../../packages/knitoutjs/core/yarns.js"
 import {withIcon} from "../../packages/wm/ui/icons.js"
 import {stylesheet} from "../../packages/wm/ui/stylesheet.js"
@@ -752,7 +752,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	// .js that wrote this is known), then this .k's
 	function located(pass) {
 		if (!pass) return null
-		const jsUrl = handle.doc()?.knitoutSource
+		const jsUrl = knitoutOf(handle.doc()).source
 		const at = []
 		if (pass.jsLines.length && jsUrl) at.push({url: jsUrl, line: pass.jsLines[0]})
 		if (pass.kLines.length) at.push({url: handle.url, line: pass.kLines[0]})
@@ -775,7 +775,7 @@ export default function KniterateTool(handle, element, context = {}) {
 		if (!pass.empty) parts.push(`stitch ${pass.stitch}`)
 		parts.push(`speed ${pass.speed}`, `roller ${pass.roller}`)
 		if (pass.rack) parts.push(`rack ${pass.rack}`)
-		if (pass.jsLines.length && handle.doc()?.knitoutSource) parts.push(`from line ${pass.jsLines[0]} of the .js`)
+		if (pass.jsLines.length && knitoutOf(handle.doc()).source) parts.push(`from line ${pass.jsLines[0]} of the .js`)
 		else if (pass.kLines.length) parts.push(`line ${pass.kLines[0]} of the .k`)
 		parts.push(...pass.comments)
 		return parts.join(" · ")
@@ -798,7 +798,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	function onHighlightLines(event) {
 		const {url, start, end} = event.detail ?? {}
 		const local = url === handle.url
-		const fromJs = url != null && url === handle.doc()?.knitoutSource
+		const fromJs = url != null && url === knitoutOf(handle.doc()).source
 		highlighted = start == null || (!local && !fromJs) ? null : {local, start, end: end ?? start}
 		requestDraw()
 	}

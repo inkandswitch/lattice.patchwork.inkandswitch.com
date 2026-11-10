@@ -2,7 +2,7 @@
 // docs, as patchwork's folder tool makes them. and a project's files, kept
 // in one
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { shortUrl } from "../knitoutjs/core/files.js";
+import { shortUrl } from "./doc/files.js";
 import { describeDoc } from "./patchwork/docs.js";
 
 // a string in a doc can be a plain string or an ImmutableString (pushwork
@@ -32,7 +32,7 @@ export function folderLink(url, doc, title) {
 }
 
 /**
- * a project's files, kept in a folder: what latticework reads and changes
+ * a project's files, kept in a folder: what the workspace reads and changes
  * them through.
  *
  *   urls()           the files' urls, in order

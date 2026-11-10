@@ -1,9 +1,9 @@
 // a knitoutjs project: a pattern to start, its .js and the .k it writes, side
 // by side. nothing here imports a package (see core/project.js)
-import defaultJavaScriptContent from "./core/default-source.js";
+import defaultJavaScriptContent from "../core/default-source.js";
 import { newFileDoc } from "./files.js";
-import { newPanel, newGroup, newSplit } from "../wm/doc/layout.js";
-import { newProjectParts, projectTitle } from "../wm/doc/project.js";
+import { newPanel, newGroup, newSplit } from "../../wm/doc/layout.js";
+import { newProjectParts, projectTitle } from "../../wm/doc/project.js";
 
 export const KnitoutJSDatatype = {
   // patchwork calls this inside handle.change without waiting for it, so
@@ -33,7 +33,7 @@ export const KnitoutJSDatatype = {
     );
 
     // fill the .k, so the visualizer has stitches the first time you look
-    import("./core/run.js").then(({ runInto }) => runInto(js, k, repo));
+    import("../core/run.js").then(({ runInto }) => runInto(js, k, repo));
   },
 
   getTitle(doc) {

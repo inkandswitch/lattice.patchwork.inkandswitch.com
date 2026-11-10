@@ -1,4 +1,4 @@
-import {moduleWorker} from "./files.js"
+import {knitoutOf, moduleWorker} from "./files.js"
 import {icon} from "../../packages/wm/ui/icons.js"
 import {holdRows, machineLimits} from "./knitcheck.js"
 import {watchProfiles} from "./profiles.js"
@@ -92,7 +92,7 @@ export function opOf(problem, ops) {
 // first, then the .k
 export function located(handle, op) {
 	if (!op) return null
-	const jsUrl = handle.doc()?.knitoutSource
+	const jsUrl = knitoutOf(handle.doc()).source
 	const at = []
 	if (op.jsLine != null && jsUrl) at.push({url: jsUrl, line: op.jsLine})
 	at.push({url: handle.url, line: op.kLine})

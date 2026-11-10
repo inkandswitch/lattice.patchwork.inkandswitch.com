@@ -4,24 +4,13 @@ import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { nestProviders, frameProviders, projectProviders } from "./providers.js";
 import { shareUrl } from "./files.js";
-import { latticeOptions } from "./project.js";
+import { PROJECT_TYPES, latticeOptions } from "./project.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
-import {
-  PROJECT_TYPES,
-  OLD_KNITOUTJS_TYPES,
-  projectTitle,
-  typeOf,
-} from "../../packages/wm/doc/project.js";
-import { createProject, mountProject, mountUpdate } from "../../packages/wm/project-view.js";
-import {
-  isOldKnitoutjs,
-  isOldLatticeFolder,
-  partsFrom,
-  updateKnitoutjs,
-  updateLatticeFolder,
-  updatedTo,
-} from "../../packages/knitoutjs/core/migrate.js";
+import { projectTitle, typeOf } from "../../packages/wm/doc/project.js";
+import { createProject, mountProject, mountUpdate, partsFrom } from "../../packages/wm/project-view.js";
+import { isOldLatticeFolder, updateLatticeFolder, updatedTo } from "./migrate.js";
+import { OLD_KNITOUTJS_TYPES, isOldKnitoutjs, updateKnitoutjs } from "../../packages/knitoutjs/app/migrate.js";
 import { createDoc, findSoon, urlFromText } from "../../packages/wm/patchwork/docs.js";
 import { seedActive } from "../../packages/wm/active.js";
 import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
@@ -507,7 +496,7 @@ function Frame(props) {
         onOpen: (open) => (openInProject = open),
         // an arrow or a mouse, over the panes, for everyone else
         pointer: pointer.kind,
-        ...latticeOptions(baseRepo, projectRepo),
+        ...latticeOptions(baseRepo, hive),
       });
       const unmountInspector = render(() => {
         createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));

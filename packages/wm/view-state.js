@@ -1,19 +1,19 @@
 // what's going on in each pane past the doc it shows: what's selected, how
-// far in it's zoomed, where a playhead is. lattice answers
+// far in it's zoomed, where a playhead is. wm answers
 // patchwork:view-state for anything in one of its panes with a url, and
 // that's a doc like any other to whoever asked: they find it with their repo
 // and read it, change it, and hear its changes. it's in the realm's scratch
-// repo, so it's never saved or synced: lattice answers repo:handle-descriptor
+// repo, so it's never saved or synced: wm answers repo:handle-descriptor
 // for it, so a view of it reads and writes the scratch doc. while you follow
 // someone it's a copy of theirs instead, kept up to date, till you stop; a
 // tool hears a change either way (scopeReplaced), and reads it again.
 // what's in yours goes to everyone else in the room as it changes (see
-// latticework.js), and theirs come back the same way
+// workspace.js), and theirs come back the same way
 import * as providers from "@inkandswitch/patchwork-providers";
 import { parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 
 // a pane is a view, as a <patchwork-view> is: what a tool in one asks for
-// starts at the pane, so lattice hears it before anything further up does
+// starts at the pane, so wm hears it before anything further up does
 export const PANE_TAG = "lattice-pane";
 providers.registerPatchworkViewTag(PANE_TAG);
 

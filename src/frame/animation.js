@@ -1,5 +1,5 @@
 import {checkPanel, located, opOf} from "./checks.js"
-import {docText} from "./files.js"
+import {docText, knitoutOf} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
@@ -935,7 +935,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	function describe(op) {
 		if (!op) return ""
-		const jsUrl = handle.doc()?.knitoutSource
+		const jsUrl = knitoutOf(handle.doc()).source
 		const from =
 			op.jsLine != null && jsUrl ? `from line ${op.jsLine} of the .js` : null
 		return [`line ${op.kLine}`, op.text, from].filter(Boolean).join(" · ")
@@ -1041,7 +1041,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const {url, start, end = start} = event.detail ?? {}
 		if (start == null) return
 		const local = url === handle.url
-		const fromJs = url != null && url === handle.doc()?.knitoutSource
+		const fromJs = url != null && url === knitoutOf(handle.doc()).source
 		if (!local && !fromJs) return
 		const hit = op => {
 			const line = local ? op.kLine : op.jsLine

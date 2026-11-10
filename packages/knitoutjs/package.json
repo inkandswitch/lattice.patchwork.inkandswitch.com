@@ -3,7 +3,7 @@
 	"version": "0.0.2",
 	"license": "AGPL-3.0-or-later",
 	"type": "module",
-	"main": "./index.js",
+	"main": "./app/index.js",
 	"scripts": {
 		"push": "pushwork sync",
 		"register": "pw-modules add \"$MODULE_SETTINGS_DOC_URL\" \"$(pushwork url)\"",

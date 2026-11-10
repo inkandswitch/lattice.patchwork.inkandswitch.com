@@ -1,7 +1,7 @@
 // a pointer: an arrow in someone's colour (their contact's, the one people
 // see them in), or a mouse, if they picked their colour holding alt. it's
-// what's in lattice's settings' colours, your mouse's own there, and
-// everyone else's over the panes (latticework's presence)
+// everyone else's over the panes (wm's presence), and an app can show
+// yours with it too (lattice's settings do)
 
 // patchwork's presence colours (the account package's palette)
 export const COLOURS = [

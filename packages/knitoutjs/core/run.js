@@ -1,7 +1,7 @@
 import { ImmutableString } from "@automerge/automerge";
 import { MessagePortTransport } from "@automerge/automerge-subduction/slim";
 import { parser } from "./vendor/lezer-javascript.js";
-import { docText, moduleWorker, textHash } from "./files.js";
+import { docText, knitoutOf, moduleWorker, textHash } from "./files.js";
 
 // patterns run in a worker (run-worker.js), so the page never waits on them.
 // every loop gets a turn counter, so a loop that never ends stops with the
@@ -314,7 +314,7 @@ export async function runInto(jsHandle, kHandle, repo, { signal } = {}) {
     doc.knitoutSourceHash = textHash(code);
     doc.knitoutBuiltAt = Date.now();
   });
-  if (jsHandle.doc()?.knitoutTarget !== kHandle.url) {
+  if (knitoutOf(jsHandle.doc()).target !== kHandle.url) {
     jsHandle.change((doc) => {
       doc.knitoutTarget = kHandle.url;
     });

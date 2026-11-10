@@ -4,7 +4,7 @@ import html from "solid-js/html";
 import { Prec, Transaction } from "@codemirror/state";
 import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, knitoutEditorIntegration, showError } from "./cm-knitout.js";
-import { docColour, docText, fileExtension } from "./files.js";
+import { docText, fileExtension, knitoutOf } from "./files.js";
 import { runInto } from "./run.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
@@ -38,19 +38,19 @@ function identifierFor(name) {
  * context:
  * - repo
  * - events: where visualizer events arrive and selection highlights go
- * - project: { files() → [{url, name, extension}], createFile(name) → url }
+ * - project: { files() → [{url, name, extension}], createFile(name, fields?) → url }
  * - hover(url | null): light up the panes showing a doc
  * - open(url, element, edge, toolId?): show a doc beside this one (or bring
  *   it forward); with a tool to open it with, else the file's first
  * - openIfClosed(url, element, edge): show a doc beside this one, unless it's
  *   showing somewhere already
- * - editableCopy(url, element): copy a generated .k as text you can edit
+ * - docColour(url): the colour a doc wears in every pane showing it
  *
  * a .js file gets a build bar: it writes its knitout into a .k file. docs
  * dropped onto its code become imports (the frame asks `element.dropInto`)
  */
 export default function KnitoutEditorTool(handle, element, context) {
-  const { repo, events, project, hover, open, openIfClosed, editableCopy } = context;
+  const { repo, events, project, hover, open, openIfClosed, docColour } = context;
   const isJs = fileExtension(handle.doc()) === "js";
 
   let view = null;
@@ -107,7 +107,7 @@ export default function KnitoutEditorTool(handle, element, context) {
   // person's choice). how it's going is shared with the frame (builds.js), for
   // the panes showing the .k
   function createRunner() {
-    const [target, setTarget] = createSignal(handle.doc()?.knitoutTarget);
+    const [target, setTarget] = createSignal(knitoutOf(handle.doc()).target);
     const autorunKey = `knitoutjs:autorun:${handle.url}`;
     const [auto, setAutoSignal] = createSignal(readAutorun());
 
@@ -137,7 +137,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     let current;
 
     const onChange = () => {
-      setTarget(handle.doc()?.knitoutTarget);
+      setTarget(knitoutOf(handle.doc()).target);
       // an error is about the code as it was; once that changes, it's gone
       if (status().state === "error" && status().line != null) {
         setStatus({ state: "idle" });
@@ -360,6 +360,18 @@ export default function KnitoutEditorTool(handle, element, context) {
     </div>`;
   }
 
+  // a generated .k is read only (it's stored whole, which keeps big ones
+  // fast); this makes a plain-text copy beside it to edit by hand
+  async function editableCopy() {
+    const doc = handle.doc();
+    const stem = (doc?.name ?? "pattern.k").replace(/\.k$/, "");
+    const copy = await project.createFile(`${stem}-copy.k`, {
+      content: docText(doc),
+      knitoutCopyOf: handle.url,
+    });
+    open(copy, element, "right", "editor");
+  }
+
   // a .k that a .js wrote is stored whole, so it's read only here
   function ReadOnlyNote() {
     const [doc, setDoc] = createSignal(handle.doc());
@@ -367,7 +379,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     handle.on("change", onChange);
     onCleanup(() => handle.off("change", onChange));
     const writer = () =>
-      project.files().find((file) => file.url === doc()?.knitoutSource)?.name;
+      project.files().find((file) => file.url === knitoutOf(doc()).source)?.name;
     return html`
       <${Show}
         when=${() => !isJs && doc() && typeof doc().content !== "string"}
@@ -381,7 +393,7 @@ export default function KnitoutEditorTool(handle, element, context) {
           <button
             class="knitoutjs-button"
             title="make a copy of this .k as text you can change by hand"
-            onClick=${() => editableCopy(handle.url, element)}
+            onClick=${editableCopy}
           >
                 ${icon("pencil")} make an editable copy
               </button>
@@ -435,7 +447,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     view.focus();
   }
 
-  if (isJs) element.dropInto = { lineAt, drop };
+  if (isJs) element.dropInto = { label: "import here", lineAt, drop };
 
   return () => {
     delete element.dropInto;

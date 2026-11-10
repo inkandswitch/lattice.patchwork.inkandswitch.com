@@ -5,16 +5,9 @@
 //
 // nothing imported here imports a package, so a datatype can use it wherever
 // patchwork loads one
+// each app has its own type for one (knitoutjs-project, lattice:project),
+// and each opens the others'
 import * as Layout from "./layout.js";
-
-// knitoutjs's and lattice's: the same shape, with each app's own id
-export const PROJECT_TYPES = ["knitoutjs-project", "lattice:project"];
-
-// knitoutjs's projects from before: {title, files: [urls], layout: tree}
-export const OLD_KNITOUTJS_TYPES = ["prototype-knitoutjs-panes", "knitoutjs-panes"];
-
-// the tools that show a whole project: never offered in a pane of one
-export const PROJECT_TOOLS = ["knitoutjs-project", "lattice:project", "lattice", ...OLD_KNITOUTJS_TYPES];
 
 const string = (value) => (value == null ? "" : String(value));
 

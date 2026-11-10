@@ -96,38 +96,23 @@ function viewsFrom(value) {
   }
   return views;
 }
-const STATES = new Set(["running", "ok", "error"]);
-// how their builds are going: by the .js's url, {state, line, message, at}
-function buildsFrom(value) {
-  if (!isObject(value)) return {};
-  const builds = {};
-  for (const [url, build] of Object.entries(value)) {
-    if (!isValidAutomergeUrl(url) || !isObject(build) || !STATES.has(build.state)) continue;
-    if (typeof build.at !== "number") continue;
-    builds[url] = {
-      state: build.state,
-      line: Number.isInteger(build.line) ? build.line : undefined,
-      message: build.message == null ? undefined : string(build.message),
-      at: build.at,
-    };
-  }
-  return builds;
-}
 const VIEW = "view:";
 
 /**
  * join the room on `handle`: the project's files, from the repo under any
  * draft overlay. `onPeople` hears everyone else whenever that changes:
  * [{peer, name, colour, avatar, nodes, active, pointer, look, views,
- * builds}], one each (their tab that did something last). colour is their
+ * shared}], one each (their tab that did something last). colour is their
  * pointer's: their contact's, or else one for them from the palette. `repo`
- * finds who you are (your account's contact). returns {share(channel,
- * value), view(id, value), stop()}: share sends "nodes", "active", "pointer"
- * ({url, tool, x, y}, or null), "look" ("arrow" or "mouse") or "builds"
- * ({[url]: {state, line, message, at}}); view sends a pane's view ({url,
- * tool, doc, scroll}, or null once it's gone)
+ * finds who you are (your account's contact). `reads` is any more channels
+ * there are, each with a way to check what's sent on it ({[channel]:
+ * read(value)}): what they've sent is shared[channel], read. returns
+ * {share(channel, value), view(id, value), stop()}: share sends "nodes",
+ * "active", "pointer" ({url, tool, x, y}, or null), "look" ("arrow" or
+ * "mouse") or one of `reads`; view sends a pane's view ({url, tool, doc,
+ * scroll}, or null once it's gone)
  */
-export function joinRoom(handle, repo, onPeople) {
+export function joinRoom(handle, repo, reads, onPeople) {
   const presence = new Presence({ handle });
   const state = {
     contact: "",
@@ -138,7 +123,6 @@ export function joinRoom(handle, repo, onPeople) {
     active: {},
     pointer: null,
     look: "arrow",
-    builds: {},
   };
   let dead = false;
 
@@ -161,7 +145,7 @@ export function joinRoom(handle, repo, onPeople) {
       pointer: pointerFrom(value.pointer),
       look: value.look === "mouse" ? "mouse" : "arrow",
       views: viewsFrom(value),
-      builds: buildsFrom(value.builds),
+      shared: Object.fromEntries(Object.entries(reads).map(([channel, read]) => [channel, read(value[channel])])),
     }));
   }
   // anyone heard of only partly (no contact yet: everyone sends one, if only
