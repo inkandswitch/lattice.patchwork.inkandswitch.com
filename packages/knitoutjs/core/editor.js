@@ -73,8 +73,15 @@ export default function KnitoutEditorTool(handle, element, context) {
   function onExtensions(event) {
     const { handle: fileHandle, extensions } = event.detail;
     if (fileHandle?.url !== handle.url) return;
+    const named = String(fileHandle.doc()?.name ?? "").trim();
     extensions.push(
       holdView,
+      // what a screen reader calls it, and how to get out of it: tab
+      // indents in here, so escape then tab is the way on
+      EditorView.contentAttributes.of({
+        "aria-label": named ? `${named}, code` : "code",
+        "aria-description": "escape, then tab, to leave the editor",
+      }),
       knitoutEditorIntegration({
         events,
         url: handle.url,

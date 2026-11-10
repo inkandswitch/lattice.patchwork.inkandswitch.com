@@ -15,6 +15,7 @@ import { docColour, fileExtension, shortUrl, newFileDoc, withExtension } from ".
 import * as Layout from "./doc/layout.js";
 import { urlFromText, loadDatatype, whenFound } from "./patchwork/docs.js";
 import { Resizer, sidebarState } from "./ui/sidebars.js";
+import { menuKeys } from "./ui/menus.js";
 import { icon } from "./ui/icons.js";
 import { readActive, writeActive, activeChannel } from "./active.js";
 import { joinRoom, faceImage } from "./presence.js";
@@ -961,6 +962,8 @@ export function mountWorkspace(
     }
   }
   document.addEventListener("pointerdown", onPressWhileOpen, true);
+  // its menus by keyboard (ui/menus.js)
+  const menusOff = menuKeys();
   function pressedToClose(popover, opener) {
     const close = pressedOpener === opener;
     pressedOpener = null;
@@ -1046,10 +1049,34 @@ export function mountWorkspace(
   let toolMenu;
   const [toolMenuFor, setToolMenuFor] = createSignal(null);
 
+  // a file's new name, from its tab or the files: a name without an
+  // extension keeps the one it had
+  async function renameFile(url, name) {
+    name = String(name ?? "").trim();
+    if (!name || name === docInfo(url).name) return;
+    (await repo.find(url)).change((doc) => {
+      doc.name = name;
+      doc.extension = fileExtension({ name }) || doc.extension || "";
+    });
+  }
+
+  // a tab's own focus, by its panel's id, once it's been drawn (showing it
+  // or closing its neighbour redraws the bar)
+  function focusTab(panelId) {
+    queueMicrotask(() =>
+      element.querySelector(`.lattice-wm-tab[data-panel="${panelId}"] > [role="tab"]`)?.focus(),
+    );
+  }
+
   function openToolMenu(event, panel, groupId) {
     if (pressedToClose(toolMenu, event.currentTarget)) return;
+    openToolMenuAt(event.currentTarget, panel, groupId);
+  }
+
+  // `under` is what it hangs from: the tab's tool button
+  function openToolMenuAt(under, panel, groupId) {
     setToolMenuFor({ panel, groupId });
-    const rect = event.currentTarget.getBoundingClientRect();
+    const rect = under.getBoundingClientRect();
     toolMenu.style.top = `${rect.bottom + 4}px`;
     toolMenu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 220))}px`;
     toolMenu.showPopover();
@@ -1484,7 +1511,7 @@ export function mountWorkspace(
         el.addEventListener("pointerdown", () => raise(node), true);
       }}
       onPointerDown=${(event) => {
-        if (event.target.classList?.contains("lattice-wm-tabs")) startFloat(event, node, "move");
+        if (event.target.matches?.(".lattice-wm-tabs, .lattice-wm-tablist")) startFloat(event, node, "move");
       }}
     >
       <${Node} node=${node} />
@@ -1513,8 +1540,10 @@ export function mountWorkspace(
       const rect = body.getBoundingClientRect();
       // over code that docs can be imported into, most of it is for that
       const into = placing ? null : hosts.get(active()?.id)?.el.dropInto;
-      const zone = onTabs ? "center" : zoneAt(event, rect, into ? CODE_EDGE : undefined);
-      if (zone === "center" && into && !onTabs) {
+      // over the tabs, it joins them (at the end), which the tab bar shows
+      if (onTabs) return { zone: "center", lineTop: null, onTabs: true };
+      const zone = zoneAt(event, rect, into ? CODE_EDGE : undefined);
+      if (zone === "center" && into) {
         const line = into.lineAt(event.clientX, event.clientY);
         if (line) return { zone: "code", lineTop: line.top - rect.top };
       }
@@ -1528,7 +1557,9 @@ export function mountWorkspace(
     const target = () => (dropTarget()?.groupId === group.id ? dropTarget() : null);
     // what dropping onto the tool says it does ("import here")
     const dropLabel = () => hosts.get(active()?.id)?.el.dropInto?.label;
-    const zone = () => target()?.zone ?? null;
+    const onTabs = () => !!target()?.onTabs;
+    // the pane's own hint, unless it's going in among the tabs
+    const zone = () => (onTabs() ? null : (target()?.zone ?? null));
     const codeLine = () => target()?.lineTop ?? null;
 
     return html`<section
@@ -1551,9 +1582,14 @@ export function mountWorkspace(
       }}
       onPointerLeave=${offPanes}
     >
-      <header class="lattice-wm-tabs" role="tablist" ref=${(el) => (tabs = el)}>
-        <${For} each=${() => group.panels}>
-          ${(panel) => html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`}
+      <header class="lattice-wm-tabs" data-drop=${() => (onTabs() ? "" : undefined)} ref=${(el) => (tabs = el)}>
+        <div class="lattice-wm-tablist" role="tablist" aria-label="tabs">
+          <${For} each=${() => group.panels}>
+            ${(panel) => html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`}
+          <//>
+        </div>
+        <${Show} when=${onTabs}>
+          <div class="lattice-wm-tab-slot" aria-hidden="true"></div>
         <//>
         <button
           class="lattice-wm-add"
@@ -1660,15 +1696,9 @@ export function mountWorkspace(
     const info = docInfo(panel.url);
     const [renaming, setRenaming] = createSignal(false);
 
-    async function rename(name) {
+    function rename(name) {
       setRenaming(false);
-      name = name.trim();
-      if (!name || name === info.name) return;
-      // a name without an extension keeps the one it had
-      (await repo.find(panel.url)).change((doc) => {
-        doc.name = name;
-        doc.extension = fileExtension({ name }) || doc.extension || "";
-      });
+      renameFile(panel.url, name);
     }
 
     function onKeyDown(event) {
@@ -1676,11 +1706,50 @@ export function mountWorkspace(
       if (event.key === "Escape") setRenaming(false);
     }
 
+    let toolButton;
+    // the tab, by keyboard: the arrows (and home and end) go along the tabs,
+    // showing each; alt+down or the menu key is the tool menu; delete closes
+    // it; f2 renames it
+    function onTabKeyDown(event) {
+      if (event.target !== event.currentTarget) return;
+      const panels = group.panels;
+      const at = panels.indexOf(panel);
+      const goTo = (index) => {
+        event.preventDefault();
+        const next = panels[(index + panels.length) % panels.length];
+        if (!next) return;
+        showTab(group.id, next.id);
+        focusTab(next.id);
+      };
+      if (event.key === "ArrowRight") goTo(at + 1);
+      else if (event.key === "ArrowLeft") goTo(at - 1);
+      else if (event.key === "Home") goTo(0);
+      else if (event.key === "End") goTo(panels.length - 1);
+      else if ((event.key === "ArrowDown" && event.altKey) || event.key === "ContextMenu") {
+        event.preventDefault();
+        showTab(group.id, panel.id);
+        openToolMenuAt(toolButton, panel, group.id);
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        const neighbour = panels[at + 1] ?? panels[at - 1];
+        updateLayout((nodes) => Layout.remove(nodes, panel.id));
+        if (neighbour) focusTab(neighbour.id);
+        // its pane's gone with it: the next pane's tab, so you're not lost
+        else queueMicrotask(() => element.querySelector('[role="tab"][aria-selected="true"]')?.focus());
+      } else if (event.key === "F2") {
+        event.preventDefault();
+        setRenaming(true);
+      } else if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        showTab(group.id, panel.id);
+      }
+    }
+
     return html`<div
       class="lattice-wm-tab"
-      role="tab"
       draggable="true"
-      aria-selected=${() => String(props.active)}
+      data-panel=${panel.id}
+      data-selected=${() => (props.active ? "" : undefined)}
       data-colour=${() => docColour(panel.url)}
       data-glow=${() => glow(panel.url)}
       data-shared=${() => (inManyPanes(panel.url) ? "" : undefined)}
@@ -1693,13 +1762,22 @@ export function mountWorkspace(
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}
     >
-      <span class="lattice-wm-tab-title">
+      <span
+        class="lattice-wm-tab-title"
+        role="tab"
+        tabindex=${() => (props.active ? "0" : "-1")}
+        aria-selected=${() => String(!!props.active)}
+        aria-label=${() => `${info.name}, ${toolName(panel)}`}
+        aria-keyshortcuts="ArrowLeft ArrowRight Home End Alt+ArrowDown Delete F2"
+        onKeyDown=${onTabKeyDown}
+      >
         <span class="lattice-wm-swatch"></span>
         ${() =>
           renaming()
             ? html`<input
                 class="lattice-wm-rename"
                 value=${info.name}
+                aria-label="name"
                 ref=${(el) => queueMicrotask(() => (el.focus(), el.select()))}
                 onKeyDown=${onKeyDown}
                 onBlur=${(event) => rename(event.currentTarget.value)}
@@ -1716,6 +1794,9 @@ export function mountWorkspace(
       <button
         class="lattice-wm-tab-tool"
         aria-haspopup="menu"
+        tabindex="-1"
+        aria-hidden="true"
+        ref=${(el) => (toolButton = el)}
         title="what it's shown with: change it here, or open it with something else in a new tab"
         onClick=${(event) => {
           event.stopPropagation();
@@ -1731,7 +1812,8 @@ export function mountWorkspace(
       <button
         class="lattice-wm-close"
         title="close"
-        aria-label="close"
+        tabindex="-1"
+        aria-hidden="true"
         onClick=${(event) => {
           event.stopPropagation();
           updateLayout((nodes) => Layout.remove(nodes, panel.id));
@@ -1891,6 +1973,30 @@ export function mountWorkspace(
       updateLayout((nodes) => Layout.setTool(nodes, panel.id, tool.tool, tool.patchworkTool));
     }
 
+    // what dragging a tab does, for the keyboard (and anyone): onto its own
+    // pane's edge (`groupId` null), or in among another pane's tabs
+    function moveTo(groupId, zone) {
+      const { panel, groupId: from } = toolMenuFor();
+      toolMenu.hidePopover();
+      updateLayout((nodes) => Layout.movePanel(nodes, panel.id, groupId ?? from, zone));
+      activate(panel.id);
+      focusTab(panel.id);
+    }
+    const allPanes = () => [...groupsIn(layout.root), ...layout.floats.flatMap((float) => [...groupsIn(float)])];
+    // the other panes, each by what it's showing
+    const otherPanes = createMemo(() => {
+      const from = toolMenuFor()?.groupId;
+      if (!from) return [];
+      return allPanes()
+        .filter((group) => group.id !== from && group.panels.length)
+        .map((group) => ({ id: group.id, shows: activeIn(group) }));
+    });
+    // a pane's only tab can't be split off from it
+    const canSplit = () => {
+      const from = toolMenuFor()?.groupId;
+      return (allPanes().find((group) => group.id === from)?.panels.length ?? 0) > 1;
+    };
+
     function openInNewTab(tool) {
       const { panel, groupId } = toolMenuFor();
       toolMenu.hidePopover();
@@ -1944,6 +2050,28 @@ export function mountWorkspace(
         </div>`}
       <//>
       <div class="lattice-wm-menu-rule" role="separator"></div>
+      <${Show} when=${() => canSplit() || otherPanes().length}>
+        <div class="lattice-wm-menu-heading">move it</div>
+      <//>
+      <${Show} when=${canSplit}>
+        <button class="lattice-wm-menu-item" role="menuitem" onClick=${() => moveTo(null, "right")}>
+          split right
+        </button>
+        <button class="lattice-wm-menu-item" role="menuitem" onClick=${() => moveTo(null, "bottom")}>
+          split down
+        </button>
+      <//>
+      <${For} each=${otherPanes}>
+        ${(other) => html`<button
+          class="lattice-wm-menu-item lattice-wm-menu-file"
+          role="menuitem"
+          data-colour=${() => docColour(other.shows.url)}
+          onClick=${() => moveTo(other.id, "center")}
+        >
+          <span class="lattice-wm-swatch"></span>
+          ${() => `in with ${docInfo(other.shows.url).name}`}
+        </button>`}
+      <//>
       <button
         class="lattice-wm-menu-item"
         role="menuitem"
@@ -2027,6 +2155,17 @@ export function mountWorkspace(
 
   // the project's files, down the side of its panes
   function Files() {
+    // the file whose name is being changed, in the files: double click it,
+    // or f2 on it
+    const [renamingFile, setRenamingFile] = createSignal(null);
+    function finishRename(url, name) {
+      if (renamingFile() !== url) return;
+      setRenamingFile(null);
+      if (name != null) renameFile(url, name);
+      queueMicrotask(() =>
+        element.querySelector(`.lattice-wm-file[data-url="${url}"] .lattice-wm-file-open`)?.focus({ preventScroll: true }),
+      );
+    }
     return html`<nav
       class="lattice-wm-files"
       aria-label="files"
@@ -2052,6 +2191,7 @@ export function mountWorkspace(
         >
           ${(file) => html`<div
             class="lattice-wm-file"
+            data-url=${file.url}
             data-colour=${docColour(file.url)}
             data-showing=${() => (findShowing(file.url) ? "" : undefined)}
             data-removing=${() => (removing() === file.url ? "" : undefined)}
@@ -2066,23 +2206,44 @@ export function mountWorkspace(
             onPointerEnter=${() => setHovered(file.url)}
             onPointerLeave=${unhover}
           >
-            <button
-              class="lattice-wm-file-open"
-              title=${() =>
-                [file.name, touchedWhen(file.url), "click to open it, or drag it onto a pane"]
-                  .filter(Boolean)
-                  .join("\n")}
-              onClick=${() => open(file.url)}
-              onKeyDown=${(event) => {
-                if (event.key === "Delete" || event.key === "Backspace") askToRemove(file.url);
-              }}
-            >
-              <span class="lattice-wm-swatch"></span>
-              <span class="lattice-wm-file-name">${() => file.name}</span>
-              <span class="lattice-wm-file-when" title=${() => touchedWhen(file.url)}>
-                <span>${() => lastTouched(file.url)}</span>
-              </span>
-            </button>
+            ${() =>
+              renamingFile() === file.url
+                ? html`<div class="lattice-wm-file-open" data-renaming="">
+                    <span class="lattice-wm-swatch"></span>
+                    <input
+                      class="lattice-wm-rename lattice-wm-file-rename"
+                      value=${file.name}
+                      aria-label=${`a new name for ${file.name}`}
+                      ref=${(el) => queueMicrotask(() => (el.focus(), el.select()))}
+                      onKeyDown=${(event) => {
+                        if (event.key === "Enter") finishRename(file.url, event.currentTarget.value);
+                        if (event.key === "Escape") finishRename(file.url, null);
+                      }}
+                      onBlur=${(event) => finishRename(file.url, event.currentTarget.value)}
+                    />
+                  </div>`
+                : html`<button
+                    class="lattice-wm-file-open"
+                    title=${() =>
+                      [file.name, touchedWhen(file.url), "click to open it, or drag it onto a pane · double click to rename"]
+                        .filter(Boolean)
+                        .join("\n")}
+                    onClick=${() => open(file.url)}
+                    onDblClick=${() => setRenamingFile(file.url)}
+                    onKeyDown=${(event) => {
+                      if (event.key === "Delete" || event.key === "Backspace") askToRemove(file.url);
+                      if (event.key === "F2") {
+                        event.preventDefault();
+                        setRenamingFile(file.url);
+                      }
+                    }}
+                  >
+                    <span class="lattice-wm-swatch"></span>
+                    <span class="lattice-wm-file-name">${() => file.name}</span>
+                    <span class="lattice-wm-file-when" title=${() => touchedWhen(file.url)}>
+                      <span>${() => lastTouched(file.url)}</span>
+                    </span>
+                  </button>`}
             <button
                 class="lattice-wm-file-remove"
                 aria-label=${() => `remove ${file.name} from ${projectName()}`}
@@ -2236,6 +2397,7 @@ export function mountWorkspace(
     document.removeEventListener("drop", stopDragging);
     document.removeEventListener("keydown", onAltKey);
     document.removeEventListener("pointerdown", onPressWhileOpen, true);
+    menusOff();
     document.removeEventListener("keyup", onAltKey);
     clearTimeout(noticeTimer);
     clearTimeout(removingTimer);

@@ -111,7 +111,14 @@ function workerRenderer(canvas, {onHover, onGoto, onFail}) {
 			send("keydown", {code: event.code})
 		},
 		keyup: event => send("keyup", {code: event.code}),
-		mouseover: () => canvas.focus(),
+		// its keys work under the pointer, so it takes the focus on hover, but
+		// only when nothing has it: a keyboard user's stays where they put it.
+		// a press always takes it
+		mouseover: () => {
+			const now = document.activeElement
+			if (!now || now === document.body) canvas.focus({preventScroll: true})
+		},
+		pointerdown: () => canvas.focus({preventScroll: true}),
 	}
 	canvas.tabIndex = 0
 	for (const [type, listener] of Object.entries(listeners)) {

@@ -891,7 +891,12 @@ export default function KniterateTool(handle, element, context = {}) {
 		keydown: onKey,
 		keyup: onKey,
 		blur: onBlur,
-		mouseover: () => canvas.focus({preventScroll: true}),
+		// its keys work under the pointer, so it takes the focus on hover, but
+		// only when nothing has it: a keyboard user's stays where they put it
+		mouseover: () => {
+			const now = document.activeElement
+			if (!now || now === document.body) canvas.focus({preventScroll: true})
+		},
 	}
 	for (const [type, listener] of Object.entries(canvasListeners)) {
 		canvas.addEventListener(type, listener, {passive: false})

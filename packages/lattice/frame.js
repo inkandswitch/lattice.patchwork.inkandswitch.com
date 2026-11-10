@@ -19,6 +19,7 @@ import { directoryTitle } from "../wm/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.js";
 import { icon } from "../wm/ui/icons.js";
 import { tooltips } from "../wm/ui/tooltip.js";
+import { menuKeys } from "../wm/ui/menus.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
@@ -104,6 +105,8 @@ export default function LatticeFrameTool(handle, element) {
   element.append(...links);
   roughFilters();
   tooltips(".lattice-shell");
+  // the frame's menus by keyboard, as wm's are
+  const menusOff = menuKeys();
 
   // the frame is the account doc's tool, so its providers are the account's
   const providers = nestProviders(element, frameProviders(handle.url));
@@ -123,6 +126,7 @@ export default function LatticeFrameTool(handle, element) {
     dead = true;
     dispose?.();
     providers.remove();
+    menusOff();
     for (const link of links) link.remove();
   };
 }
