@@ -29,10 +29,11 @@ export function remember(key, value) {
 
 /**
  * a sidebar's open and width, remembered as `<key>:open` and `<key>:width`
- * (`was`: the key they were remembered under before)
+ * (`was`: the key they were remembered under before; `open`: whether it starts
+ * open, before anyone's opened or closed it)
  */
-export function sidebarState(key, width, was) {
-  const [open, setOpenSignal] = createSignal(remembered(`${key}:open`, true, was && `${was}:open`));
+export function sidebarState(key, width, { was, open: startOpen = true } = {}) {
+  const [open, setOpenSignal] = createSignal(remembered(`${key}:open`, startOpen, was && `${was}:open`));
   const [size, setSizeSignal] = createSignal(remembered(`${key}:width`, width, was && `${was}:width`));
   return {
     open,

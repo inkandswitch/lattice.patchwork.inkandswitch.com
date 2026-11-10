@@ -60,7 +60,7 @@ export function latticeOptions(baseRepo, hive) {
     tools,
     extensions: [knitout, lattice(baseRepo, hive)],
     self: PROJECT_TOOLS,
-    old: { is: isOldKnitoutjs, update: updateKnitoutjs },
+    old: { is: isOldKnitoutjs, update: updateKnitoutjs, auto: true },
   };
 }
 

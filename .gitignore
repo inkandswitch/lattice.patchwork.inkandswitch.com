@@ -9,3 +9,4 @@ playright-report/
 .netlify
 test-results/
 *.swp
+docs/

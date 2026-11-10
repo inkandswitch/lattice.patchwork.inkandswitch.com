@@ -33,7 +33,7 @@ const STYLESHEETS = ["./fonts/fonts.css", "../../packages/wm/wm.css", "../../pac
 );
 
 // where this frame came from, when it isn't the site it's running in: a
-// dev server's, given as ?lattice-frame= (see src/main.ts)
+// dev server's, given as ?dev= (see src/main.ts)
 const FRAME_ORIGIN = new URL(import.meta.url).origin;
 const DEV_FRAME = FRAME_ORIGIN === location.origin ? null : FRAME_ORIGIN;
 
@@ -408,7 +408,7 @@ function Frame(props) {
   // and each opens and closes on its own
   const folders = sidebarState("lattice:folders", 200);
   const files = sidebarState("lattice:files", 200);
-  const inspector = sidebarState("lattice:inspector", 300);
+  const inspector = sidebarState("lattice:inspector", 300, { open: false });
 
   // ── the open project ───────────────────────────────────────────────────
 
@@ -443,7 +443,7 @@ function Frame(props) {
           await updateKnitoutjs(project, baseRepo, hive);
           changeEntry(entry.url, { type: typeOf(project.doc()) });
         }
-      });
+      }, { auto: true });
     })();
 
     return () => {
@@ -504,7 +504,7 @@ function Frame(props) {
         createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));
         return html`<${Resizer} sidebar=${inspector} side="left" /><${Inspector}
           sections=${[
-            { id: "drafts", name: "drafts", render: () => html`<${Drafts} />` },
+            { id: "versions", was: "drafts", name: "versions", render: () => html`<${Versions} />` },
             {
               id: "comments",
               name: "comments",
@@ -531,13 +531,14 @@ function Frame(props) {
     };
   }
 
-  // the drafts package's own panel. made in the page (solid puts it there in
-  // the same task), so it's under the project's providers as it mounts
-  function Drafts() {
-    const drafts = document.createElement("patchwork-view");
-    drafts.className = "lattice-inspector-panel";
-    drafts.setAttribute("component", "drafts");
-    return drafts;
+  // the versions package's own panel (packages/versions). made in the page
+  // (solid puts it there in the same task), so it's under the project's
+  // providers as it mounts
+  function Versions() {
+    const versions = document.createElement("patchwork-view");
+    versions.className = "lattice-inspector-panel";
+    versions.setAttribute("component", "versions");
+    return versions;
   }
 
   // ── the pieces ─────────────────────────────────────────────────────────
@@ -565,14 +566,14 @@ function Frame(props) {
       ${DEV_FRAME &&
       html`<button
         class="lattice-dev-frame"
-        title=${`this frame is ${DEV_FRAME}'s, not this site's (?lattice-frame=). click to go back to the site's own`}
+        title=${`these packages are ${DEV_FRAME}'s, not this site's (?dev=). click to go back to the site's own`}
         onClick=${() => {
           const url = new URL(location.href);
-          url.searchParams.delete("lattice-frame");
+          url.searchParams.delete("dev");
           location.href = url.href;
         }}
       >
-        dev frame · ${new URL(DEV_FRAME).host}
+        dev · ${new URL(DEV_FRAME).host}
       </button>`}
       <${Toggle} sidebar=${inspector} name="inspector" at=${10.5} />
     </header>`;

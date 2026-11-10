@@ -8,7 +8,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const children = []
 const processGroups = process.platform !== "win32"
 // --tunnel: a cloudflare quick tunnel to this server, so the deployed
-// lattice (yours, or mimi's) can use this frame: ?lattice-frame=<tunnel>
+// lattice (yours, or mimi's) can use this server's packages: ?dev=<tunnel>
 const tunnel =
 	process.argv.includes("--tunnel") || process.env.LATTICE_TUNNEL === "1"
 const SITE = "https://lattice.patchwork.inkandswitch.com"
@@ -22,7 +22,7 @@ let devURL = "starting…"
 let corePackages = ""
 let basePackages = ""
 let tunnelURL = tunnel ? "starting…" : ""
-let frameLink = tunnel ? "once the tunnel's up" : ""
+let devLink = tunnel ? "once the tunnel's up" : ""
 
 function fit(value, width) {
 	if (value.length <= width) return value
@@ -56,7 +56,7 @@ function showFooter() {
 				corePackages.length + 17,
 				basePackages.length + 17,
 				tunnelURL.length + 17,
-				frameLink.length + 17
+				devLink.length + 17
 			)
 		)
 	)
@@ -71,7 +71,7 @@ function showFooter() {
 		...(tunnel
 			? [
 					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m tunnel:   \x1b[36m${fit(tunnelURL, valueWidth)}\x1b[0m`,
-					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m frame:    \x1b[36m${fit(frameLink, valueWidth)}\x1b[0m`,
+					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m dev:      \x1b[36m${fit(devLink, valueWidth)}\x1b[0m`,
 				]
 			: []),
 		`\x1b[2m│\x1b[0m`,
@@ -205,9 +205,9 @@ function startTunnel(url) {
 		const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
 		if (!match || match[0] === tunnelURL) return
 		tunnelURL = match[0]
-		frameLink = `${SITE}/?lattice-frame=${tunnelURL}`
+		devLink = `${SITE}/?dev=${tunnelURL}`
 		console.log(
-			`\n  tunnel: ${tunnelURL}\n  lattice with this frame: ${frameLink}\n  (anyone with these can use this dev server)\n`
+			`\n  tunnel: ${tunnelURL}\n  lattice with these packages: ${devLink}\n  (anyone with these can use this dev server)\n`
 		)
 		showFooter()
 	}
@@ -218,14 +218,14 @@ function startTunnel(url) {
 			error.code === "ENOENT"
 				? "needs cloudflared: brew install cloudflared"
 				: `couldn't start: ${error.message}`
-		frameLink = ""
+		devLink = ""
 		console.error(`tunnel: ${tunnelURL}`)
 		showFooter()
 	})
 	child.on("exit", code => {
 		if (stopping || tunnelURL.startsWith("needs")) return
 		tunnelURL = `closed (cloudflared exited ${code})`
-		frameLink = ""
+		devLink = ""
 		showFooter()
 	})
 }
@@ -285,6 +285,9 @@ if (base) {
 
 if (core) run("core", "pnpm", ["watch"], core, watchEnv)
 if (base) run("base", "pnpm", ["watch"], base, watchEnv)
+// packages/versions is built (its dist is what's served), so it's rebuilt as
+// it changes
+run("versions", "pnpm", ["--filter", "@lattice/versions", "dev"], root, watchEnv)
 const site = run("site", "pnpm", ["exec", "vite"], root, watchEnv)
 let siteOutput = ""
 site.stdout?.on("data", chunk => {

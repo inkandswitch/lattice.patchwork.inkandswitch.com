@@ -24,8 +24,9 @@ const CHANGES_WAIT = 25_000
  * out — a checkout's own .git, .pushwork store, node_modules and tests stay
  * behind — and an edit to any of them reloads the dev page.
  *
- * Another site using this frame (?lattice-frame=) has no vite client to be
- * told to reload, so it asks: `<to>/__changes?since=<version>` answers with
+ * Another site can use this dev server's packages, all of them (?dev=, see
+ * src/main.ts), so everything it serves says any origin may have it. That
+ * site has no vite client to be told to reload, so it asks: `<to>/__changes?since=<version>` answers with
  * the frame's version as soon as that's not `since` (a long poll, which
  * tunnels pass, where they don't always pass a stream).
  */
@@ -74,6 +75,12 @@ export function frame({
 			serve = config.command === "serve"
 		},
 		configureServer(server) {
+			// before vite's own and the other plugins', so it's on every answer:
+			// patchwork's static packages included
+			server.middlewares.use((_request, response, next) => {
+				response.setHeader("Access-Control-Allow-Origin", "*")
+				next()
+			})
 			server.watcher.on("change", path => {
 				if (!mounts.some(([, directory]) => included(directory, path, true))) return
 				version++
@@ -108,8 +115,6 @@ export function frame({
 					try {
 						const body = await readFile(path)
 						response.setHeader("Cache-Control", "no-cache")
-						// so another site can use this frame (?lattice-frame=)
-						response.setHeader("Access-Control-Allow-Origin", "*")
 						response.setHeader("Content-Type", CONTENT_TYPES[extname(path)])
 						response.end(body)
 					} catch {

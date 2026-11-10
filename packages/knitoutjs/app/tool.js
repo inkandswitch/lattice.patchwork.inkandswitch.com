@@ -23,7 +23,7 @@ export default function KnitoutProjectTool(handle, element) {
     hive,
     tools,
     extensions: [knitout, { name: "knitoutjs", menu: () => [datatypeItem({ type: "markdown", icon: "text", label: "markdown" }, hive)] }],
-    old: { is: isOldKnitoutjs, update: updateKnitoutjs },
+    old: { is: isOldKnitoutjs, update: updateKnitoutjs, auto: true },
     self: PROJECT_TOOLS,
   });
 }

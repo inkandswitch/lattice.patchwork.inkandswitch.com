@@ -2,8 +2,8 @@
 // has no import map, so a bare import anywhere below this file stops the
 // whole package registering. what each plugin needs, its load() imports
 
-// knitoutjs's projects from before. the tool shows only a button to update
-// one to a knitoutjs-project
+// knitoutjs's projects from before. the tool updates one to a
+// knitoutjs-project as it opens it
 const OLD_TYPES = ["prototype-knitoutjs-panes", "knitoutjs-panes"];
 
 export const plugins = [
@@ -17,9 +17,11 @@ export const plugins = [
       return KnitoutJSDatatype;
     },
   },
-  {
+  // each of those, so they're named before they're opened: the standalone
+  // Knitout JS registered knitoutjs-panes, and it's not loaded beside this
+  ...OLD_TYPES.map((id) => ({
     type: "patchwork:datatype",
-    id: "prototype-knitoutjs-panes",
+    id,
     name: "Knitout JS (from before)",
     icon: "Shirt",
     unlisted: true,
@@ -27,7 +29,7 @@ export const plugins = [
       const { OldKnitoutJSDatatype } = await import("./datatype.js");
       return OldKnitoutJSDatatype;
     },
-  },
+  })),
   {
     type: "patchwork:tool",
     id: "knitoutjs-project",

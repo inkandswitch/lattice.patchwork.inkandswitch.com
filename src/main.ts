@@ -6,47 +6,49 @@ import setup, {
 
 const DEFAULT_PACKAGE_LIST = "/modules.json"
 
-const packageListURL = (
-	new URLSearchParams(location.search).get("system-package-list") ||
-	localStorage.getItem("systemPackageListURL") ||
-	import.meta.env.PATCHWORK_SYSTEM_PACKAGE_LIST_URL ||
-	import.meta.env.VITE_DEFAULT_MODULES ||
-	DEFAULT_PACKAGE_LIST
-)
-	.split(",")
-	.map(source => source.trim())
-	.filter(Boolean)
-
-// lattice's frame is a package list of its own, so a dev server's can stand
-// in for the site's: ?lattice-frame=https://some-tunnel.example (or a path to
-// its /packages/lattice/). only while it's in the url: without it, it's the
-// site's own. the site's own is used too whenever the given one doesn't answer
+// lattice's frame is a package list of its own, beside the site's
 const OWN_FRAME = "/packages/lattice/"
 
-async function latticeFrame() {
-	// it used to be remembered here; forget what was
-	localStorage.removeItem("latticeFrameURL")
-	const wanted = new URLSearchParams(location.search).get("lattice-frame")
-	const own = new URL("modules.json", new URL(OWN_FRAME, location.href)).href
-	if (!wanted) return own
+// a dev server can stand in for the site's packages, every one of them and
+// the frame: ?dev=https://some-tunnel.example. only while it's in the url,
+// and the site's own are used whenever it doesn't answer
+async function devPackages(): Promise<string[] | null> {
+	const wanted = new URLSearchParams(location.search).get("dev")
+	if (!wanted) return null
 	const base = new URL(wanted, location.href)
-	if (base.pathname === "/") base.pathname = OWN_FRAME
 	if (!base.pathname.endsWith("/")) base.pathname += "/"
-	const manifest = new URL("modules.json", base).href
+	const lists = [
+		new URL("modules.json", base).href,
+		new URL(`.${OWN_FRAME}modules.json`, base).href,
+	]
 	try {
-		const response = await fetch(manifest, {
-			cache: "no-store",
-			signal: AbortSignal.timeout(4000),
-		})
-		if (response.ok) return manifest
+		const answers = await Promise.all(
+			lists.map(list => fetch(list, {cache: "no-store", signal: AbortSignal.timeout(4000)})),
+		)
+		if (answers.every(answer => answer.ok)) return lists
 	} catch {}
-	console.warn(`lattice: the frame at ${base} didn't answer, so this is the site's own`)
-	return own
+	console.warn(`lattice: the dev server at ${base} didn't answer, so these are the site's own packages`)
+	return null
 }
+
+// what used to say which frame: forget it
+localStorage.removeItem("latticeFrameURL")
 
 showLoadingAnimation()
 
-packageListURL.push(await latticeFrame())
+const packageListURL = (await devPackages()) ?? [
+	...(
+		new URLSearchParams(location.search).get("system-package-list") ||
+		localStorage.getItem("systemPackageListURL") ||
+		import.meta.env.PATCHWORK_SYSTEM_PACKAGE_LIST_URL ||
+		import.meta.env.VITE_DEFAULT_MODULES ||
+		DEFAULT_PACKAGE_LIST
+	)
+		.split(",")
+		.map((source: string) => source.trim())
+		.filter(Boolean),
+	new URL("modules.json", new URL(OWN_FRAME, location.href)).href,
+]
 
 window.patchwork = await setup({
 	packageListURL,

@@ -1,0 +1,917 @@
+@layer package {
+:root,
+:host,
+[theme] {
+  --dgr-fg: var(--studio-line, black);
+  --dgr-muted-fg: var(--studio-line-offset-50, #6b7280);
+  --dgr-faint-fg: var(--studio-line-offset-40, #9ca3af);
+  --dgr-bg: var(--studio-fill, white);
+  --dgr-border: var(--studio-fill-offset-20, #e5e7eb);
+  --dgr-hover-bg: var(--studio-fill-offset-10, #f9fafb);
+  --dgr-selected-bg: var(--studio-fill-offset-20, #eef2ff);
+  --dgr-font: var(--studio-family-sans, system-ui, sans-serif);
+  --dgr-mono: var(--studio-family-code, ui-monospace, monospace);
+  --dgr-primary: var(--studio-primary-fill, var(--studio-primary, #3b82f6));
+  /* The accent used as ink on the ambient background (accent-coloured text,
+     not a filled surface); contrast-tuned separately from the fill. */
+  --dgr-primary-text: var(--studio-primary-text, #2563eb);
+  /* Danger as ink (the menu's delete item). */
+  --dgr-danger-text: var(--studio-danger-text, var(--studio-danger, #dc2626));
+  /* Diff edit-size colors, from the theme's diff palette. */
+  --dgr-added: var(--studio-added, #16a34a);
+  --dgr-deleted: var(--studio-deleted, #dc2626);
+  /* The milestone ink (flags and gutter dots): a dark pink, asked for by
+     name rather than taken from the theme; mixed a little toward the line
+     colour so it deepens on light themes and lifts on dark ones. */
+  --dgr-milestone: color-mix(in oklch, #d81b60 85%, var(--studio-line, black));
+  --dgr-radius: var(--studio-radius-md, 0.5rem);
+  --dgr-radius-sm: var(--studio-radius-sm, 0.25rem);
+  --dgr-shadow-sm: var(--studio-shadow-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05));
+  --dgr-shadow-md: var(
+    --studio-shadow-md,
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1)
+  );
+}
+}
+
+.dgr-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  gap: 0.5rem;
+  font-family: var(--dgr-font);
+  color: var(--dgr-fg);
+}
+
+.dgr-empty {
+  font-size: 0.75rem;
+  color: var(--dgr-faint-fg);
+}
+
+/* Build stamp pinned below the list so deployed versions are identifiable. */
+.dgr-version {
+  margin-top: auto;
+  font-size: 0.65rem;
+  color: var(--dgr-faint-fg);
+  text-align: right;
+}
+
+/* The list takes the panel's remaining height, so a selected card can be
+   capped relative to it; `min-height: 0` lets it shrink and scroll instead
+   of pushing the version stamp off the panel. */
+.dgr-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.dgr-card {
+  background: var(--dgr-bg);
+  border: 1px solid var(--dgr-border);
+  border-radius: var(--dgr-radius);
+  box-shadow: var(--dgr-shadow-sm);
+  overflow: hidden;
+  transition:
+    border-color var(--studio-transition, 0.15s ease),
+    box-shadow var(--studio-transition, 0.15s ease);
+}
+
+/* Selection reads as a soft accent-tinted border, no extra ring — the open
+   changes list already sets the selected card apart. */
+/* The selected card hugs its history — its bottom edge sits right under the
+   last row — but never takes more than three quarters of the list: a longer
+   history scrolls inside the card, and the other cards keep their room. */
+.dgr-card[data-selected] {
+  border-color: color-mix(in oklch, var(--dgr-primary) 35%, var(--dgr-border));
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 75%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* While the menu's "Merge into …" item is hovered, the target card (the
+   draft's parent) lights up so you can see where the changes will land. */
+.dgr-card[data-merge-target] {
+  border-color: var(--dgr-primary);
+  box-shadow:
+    0 0 0 1px var(--dgr-primary),
+    var(--dgr-shadow-sm);
+}
+
+.dgr-card-header {
+  /* The header is a div (a rename input can't nest in a button), which,
+     unlike a button, doesn't default to border-box — without this the
+     padding pushes it past the card edge. */
+  box-sizing: border-box;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  padding: 0.5rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  /* Round the top corners itself: the card's overflow clipping is lifted
+     while the menu is open, so the hover background can't rely on it. */
+  border-radius: calc(var(--dgr-radius) - 1px) calc(var(--dgr-radius) - 1px) 0 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  transition: background var(--studio-transition, 0.15s ease);
+}
+
+.dgr-card-header:hover {
+  background: var(--dgr-hover-bg);
+}
+
+.dgr-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.dgr-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Inline rename editor, swapped in for .dgr-name on double-click. */
+.dgr-name-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  padding: 0 0.25rem;
+  margin: 0;
+  background: var(--dgr-bg);
+  border: 1px solid var(--dgr-primary);
+  border-radius: var(--dgr-radius-sm);
+  outline: none;
+}
+
+.dgr-card-url {
+  font-size: 0.75rem;
+  font-family: var(--dgr-mono);
+  color: var(--dgr-muted-fg);
+  word-break: break-all;
+}
+
+.dgr-card-meta {
+  font-size: 0.75rem;
+  color: var(--dgr-faint-fg);
+}
+
+.dgr-card-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  border-top: 1px solid var(--dgr-border);
+  /* Extra top headroom: the scrubber's dot (5px) and sticker (10px) overhang
+     above the head line, which sits at 0 on the latest version — without
+     this they'd crowd into the card header. */
+  padding: 0.75rem 0.25rem 0.25rem;
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+/* In the selected card the changes area takes whatever the card's cap
+   leaves it and scrolls; cards with little history stay at their natural
+   height. */
+.dgr-card[data-selected] .dgr-card-changes {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* Right-aligned icon cluster in the selected card's title: the eye and the
+   action buttons (fork, fork-from-version, flag, and on drafts merge and
+   delete). */
+.dgr-card-tools {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+/* Icon actions in the card title: same look as the eye. */
+.dgr-card-action {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: var(--studio-radius, 0.25rem);
+  background: transparent;
+  color: var(--dgr-faint-fg);
+  cursor: pointer;
+}
+
+.dgr-card-action:hover:not(:disabled) {
+  background: var(--dgr-hover-bg);
+  color: var(--dgr-primary-text);
+}
+
+.dgr-card-action:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* The delete button reads in danger ink once you reach for it. */
+.dgr-card-action--danger:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--dgr-danger-text) 12%, transparent);
+  color: var(--dgr-danger-text);
+}
+
+/* Sits in the card title, left-aligned right after the name, while the
+   timeline is pinned; drops the pin and returns to the latest version. */
+.dgr-card-return {
+  flex-shrink: 0;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--dgr-border);
+  border-radius: var(--studio-radius-round, 9999px);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  color: var(--dgr-primary-text);
+  cursor: pointer;
+}
+
+.dgr-card-return:hover {
+  background: var(--dgr-hover-bg);
+}
+
+/* The diff toggle (eye) in the card title's tool cluster. Active = diff
+   highlighting showing (the checkpoint carries baselines). */
+.dgr-card-eye {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border: none;
+  border-radius: var(--studio-radius, 0.25rem);
+  background: transparent;
+  color: var(--dgr-faint-fg);
+  cursor: pointer;
+}
+
+.dgr-card-eye:hover:not([data-disabled]) {
+  background: var(--dgr-hover-bg);
+  color: var(--dgr-primary-text);
+}
+
+.dgr-card-eye[data-active] {
+  color: var(--dgr-primary-text);
+}
+
+/* Kept hoverable while disabled (aria-disabled, not the attribute) so the
+   explanatory tooltip shows; clicks are ignored in the handler. */
+.dgr-card-eye[data-disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dgr-changes-empty {
+  font-size: 0.75rem;
+  color: var(--dgr-faint-fg);
+}
+
+.dgr-changes-building {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0;
+  font-size: 0.75rem;
+  color: var(--dgr-faint-fg);
+}
+
+.dgr-building-spinner {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  animation: dgr-building-spin 0.8s linear infinite;
+}
+
+@keyframes dgr-building-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dgr-change-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  width: 100%;
+  padding: 0.25rem 0.5rem;
+  border: none;
+  border-radius: var(--dgr-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.dgr-change-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dgr-change-row:hover {
+  background: var(--dgr-hover-bg);
+}
+
+.dgr-change-row[data-selected] {
+  background: var(--dgr-selected-bg);
+  box-shadow: inset 0 0 0 1px var(--dgr-primary);
+}
+
+.dgr-change-time {
+  flex: none;
+  color: var(--dgr-muted-fg);
+  white-space: nowrap;
+}
+
+.dgr-change-doc {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--dgr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dgr-change-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--dgr-fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dgr-change-hash {
+  font-family: var(--dgr-mono);
+  font-size: 0.625rem;
+  color: var(--dgr-faint-fg);
+  word-break: break-all;
+}
+
+/* ---- Grouped history: one non-expandable row per time window ---- */
+
+/* Group row layout, three columns: +/- counts on the far left, the avatar
+   stack and names in the middle, the time on the far right.
+   The extra vertical padding gives each group a taller scrubber band, so
+   per-change stops inside a group are easier to hit. */
+.dgr-group-row {
+  display: flex;
+  /* A row that can't fit all three columns wraps its time onto a second
+     line, still on the far right, rather than clipping it. */
+  flex-wrap: wrap;
+  align-items: center;
+  /* Generous column gap: the counts, the person and the time each get
+     clear air. */
+  gap: 0.125rem 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.375rem;
+  border: none;
+  border-radius: var(--dgr-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.75rem;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* Group backgrounds stay lightly translucent so the row highlight reads as a
+   soft wash rather than a hard block. */
+.dgr-group-row:hover {
+  background: color-mix(in oklch, var(--dgr-hover-bg) 60%, transparent);
+}
+
+
+/* The right-hand column ("Tue 28 Oct, 14:40"), pushed to the far edge;
+   never shrinks — the author's name gives way instead. */
+.dgr-group-time {
+  flex: none;
+  margin-left: auto;
+  padding-left: 0.75rem;
+  text-align: right;
+  color: var(--dgr-muted-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The joining word before the document in Document mode ("in"). */
+.dgr-group-word {
+  flex: none;
+  color: var(--dgr-faint-fg);
+}
+
+/* The authors' names after their avatars; the only thing that truncates
+   when the row runs out of room. */
+.dgr-group-author {
+  flex: 0 1 auto;
+  /* Enough for a truncated first name, so the person never vanishes. */
+  min-width: 3rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dgr-fg);
+}
+
+/* Author avatars */
+.dgr-avatars {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.dgr-avatar {
+  position: relative;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 300;
+  color: white;
+  user-select: none;
+}
+
+.dgr-avatar--extra {
+  margin-left: -4px;
+  font-size: 7px;
+  background: var(--dgr-faint-fg);
+}
+
+/* An attributed author embeds the contact tool's avatar (a <patchwork-view
+   tool-id="contact-inline">, see AuthorAvatars); size it to the stack slot —
+   the wrapper keeps the stack geometry (overlap + z-index). */
+.dgr-avatar > patchwork-view {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.dgr-avatar .contact-avatar {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Scrubber: the history gutter left of the group rows ---- */
+
+/* Two-column body inside the scrollable changes area: gutter + group rows,
+   with the indicator overlaid across both. Positioned so the rows'
+   offsetTop measurements (used to map changes onto the gutter) are relative
+   to this box, and isolated so the indicator's own stacking context stays
+   contained to this card. */
+.dgr-changes-body {
+  /* One softened ink for every scrubber mark (head, baseline, connector,
+     sticker border): mixed toward the background so the lines read as
+     annotations, not hard rules. Defined here so all of them share it. */
+  --dgr-scrub-color: color-mix(in oklch, var(--dgr-fg) 55%, var(--dgr-bg));
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+
+.dgr-changes-rows {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* The gutter spans the whole history: top = latest change, bottom = first.
+   Pressing anywhere in it jumps the head there and scrubs from that point;
+   the indicator's handles sit on top of it and drag from where they're held. */
+.dgr-scrubber {
+  position: relative;
+  flex: none;
+  width: 16px;
+  border-radius: var(--dgr-radius-sm);
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* A milestone's stop in the gutter: a small solid dot in the milestone ink,
+   centred on the track level with the marker's text (where the head rests
+   when it is on that version). Below the head so the head covers it. */
+.dgr-scrubber-stop {
+  position: absolute;
+  left: 5px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--dgr-milestone);
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* The indicator sits at the head like a calendar's now-line: a dot in the
+   gutter plus a line across the rows (the version being looked at). The
+   handles paint on top of everything in the changes area; the line paints
+   behind the rows. The box itself ignores pointer events so rows stay
+   clickable; the handles re-enable them. */
+.dgr-scrubber-token {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* No stacking context of its own, so its parts can sit on either side of
+     the rows: the line behind them, the handles in front. */
+  z-index: auto;
+  pointer-events: none;
+}
+
+.dgr-scrubber-dot {
+  position: absolute;
+  top: -5px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  z-index: 20;
+  border-radius: 50%;
+  background: var(--dgr-scrub-color);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dgr-scrubber-dot:active {
+  cursor: grabbing;
+}
+
+/* The visible head line, spanning across the rows BEHIND them: it shows
+   through the gaps and under the text, and a row's or marker's own tint
+   covers it, so it never strikes through a name. */
+.dgr-scrubber-line {
+  position: absolute;
+  top: 0;
+  left: 8px;
+  right: 0;
+  height: 2px;
+  margin-top: -1px;
+  z-index: -1;
+  border-radius: 1px;
+  background: var(--dgr-scrub-color);
+}
+
+/* The baseline's line reads fainter than the head's, so the version being
+   viewed stays the dominant mark. */
+.dgr-scrubber-token--baseline .dgr-scrubber-line {
+  opacity: 0.55;
+}
+
+/* Invisible grab strip over the line's gutter end; dragging only starts
+   from this (or the dot), never from the rows or the bare gutter. */
+.dgr-scrubber-edge {
+  position: absolute;
+  top: -4.5px;
+  left: 0;
+  width: 16px;
+  height: 9px;
+  z-index: 20;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* The diff baseline handle: a hollow circle (vs the head's solid dot) in the
+   gutter, sharing the head's line style across the rows. Only rendered with
+   the eye open and a version pinned. */
+.dgr-scrubber-baseline {
+  position: absolute;
+  top: -5px;
+  left: 3px;
+  width: 10px;
+  height: 10px;
+  z-index: 20;
+  box-sizing: border-box;
+  border: 2px solid var(--dgr-scrub-color);
+  border-radius: 50%;
+  background: var(--studio-fill, white);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dgr-scrubber-baseline:active {
+  cursor: grabbing;
+}
+
+/* Joins the head and baseline handles down the gutter so the two read as one
+   diff range. Above the rows, below the handles. */
+.dgr-scrubber-connector {
+  position: absolute;
+  left: 7px;
+  width: 2px;
+  z-index: 10;
+  background: var(--dgr-scrub-color);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* While pinned, a chip anchored to the head line overlays the group row's
+   time/summary with the exact change the line sits on. Painted above
+   everything in the changes body (opaque, topmost z-index) so neither the
+   head line nor the row content shows through. */
+.dgr-scrubber-sticker {
+  position: absolute;
+  top: -10px;
+  left: calc(16px + 0.25rem);
+  right: 0;
+  height: 20px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0 0.375rem;
+  border: 1px solid var(--dgr-scrub-color);
+  border-radius: var(--dgr-radius-sm);
+  background: var(--dgr-bg);
+  font-size: 0.6875rem;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.dgr-sticker-time {
+  flex: none;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  color: var(--dgr-muted-fg);
+}
+
+
+/* Edit-size counts: the left-hand column, a fixed width split into two
+   equal slots (additions, deletions) so the bars behind the numbers share
+   one scale down the list. The sticker's counts use the same column. */
+.dgr-counts {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+  flex: none;
+  width: 4.5rem;
+}
+
+/* One count over its bar: the bar is a tinted strip behind the number,
+   `--dgr-size` (0..1) of the slot's width, anchored at the left. */
+.dgr-count {
+  position: relative;
+  z-index: 0;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.0625rem 0.25rem;
+  border-radius: var(--dgr-radius-sm);
+  font-size: 0.6875rem;
+  font-weight: 300;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.dgr-count::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  width: calc(var(--dgr-size, 0) * 100%);
+  border-radius: var(--dgr-radius-sm);
+}
+
+.dgr-count--add {
+  color: var(--dgr-added);
+}
+
+.dgr-count--add::before {
+  background: color-mix(in oklch, var(--dgr-added) 22%, transparent);
+}
+
+.dgr-count--del {
+  color: var(--dgr-deleted);
+}
+
+.dgr-count--del::before {
+  background: color-mix(in oklch, var(--dgr-deleted) 22%, transparent);
+}
+
+
+/* ---- Grouping picker: how the history is folded (top of the panel) ---- */
+
+.dgr-grouping {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.5rem;
+  padding: 0.25rem 0.25rem 0.5rem;
+  border-bottom: 1px solid var(--dgr-border);
+  font-size: 0.75rem;
+  color: var(--dgr-muted-fg);
+}
+
+.dgr-grouping-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.dgr-grouping-caption {
+  white-space: nowrap;
+}
+
+.dgr-grouping-select {
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--dgr-fg);
+  padding: 0.125rem 0.25rem;
+  background: var(--dgr-bg);
+  border: 1px solid var(--dgr-border);
+  border-radius: var(--dgr-radius-sm);
+  cursor: pointer;
+}
+
+.dgr-grouping-select:hover {
+  background: var(--dgr-hover-bg);
+}
+
+/* The mode's one-line explanation, on its own line below the controls. */
+.dgr-grouping-hint {
+  flex: 1 0 100%;
+  font-size: 0.6875rem;
+  color: var(--dgr-faint-fg);
+}
+
+/* The mode's caption on a row: the time bucket, the author's name, or the
+   document. Truncates before the counts do. */
+.dgr-group-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dgr-fg);
+}
+
+/* Who made the exact change the sticker sits on. */
+.dgr-sticker-author {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dgr-fg);
+}
+
+/* ---- Day dividers: a small bold heading between rows where the calendar
+   day changes, with a hairline either side so it reads as a divider. No
+   lull spacing is added around it — the heading is the break — so it sits
+   a little below the row above and the next day's rows start right under. */
+
+.dgr-day-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.375rem;
+  padding: 0.25rem 0.375rem;
+  pointer-events: none;
+}
+
+.dgr-day-divider::before,
+.dgr-day-divider::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--dgr-border);
+}
+
+.dgr-day-divider-label {
+  flex: none;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--dgr-muted-fg);
+  white-space: nowrap;
+}
+
+/* ---- Milestones: flagged, named versions drawn in the timeline ---- */
+
+/* A marker reads as a label in the list, not a button: no border, no fill,
+   just the flag and the bold name. Hover washes it like a row; while the
+   head rests on it, it takes the selected-row tint (the head line runs
+   through its middle). */
+.dgr-milestone {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.375rem;
+  border-radius: var(--dgr-radius-sm);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.dgr-milestone:hover {
+  background: color-mix(in oklch, var(--dgr-hover-bg) 60%, transparent);
+}
+
+.dgr-milestone[data-selected] {
+  background: color-mix(in oklch, var(--dgr-milestone) 10%, var(--dgr-bg));
+}
+
+.dgr-milestone-flag {
+  flex: none;
+  display: inline-flex;
+  color: var(--dgr-milestone);
+}
+
+/* The flag in the card's action button is in the milestone ink too, dimmed
+   until hovered like its neighbours. */
+.dgr-card-action .dgr-flag-icon {
+  color: var(--dgr-milestone);
+  opacity: 0.7;
+}
+
+.dgr-card-action:hover:not(:disabled) .dgr-flag-icon {
+  opacity: 1;
+}
+
+.dgr-milestone-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  font-weight: 600;
+  color: var(--dgr-fg);
+}
+
+.dgr-milestone-name .dgr-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Flush with the rows' time column on the far right. */
+.dgr-milestone-time {
+  flex: none;
+  margin-left: auto;
+  padding-left: 0.5rem;
+  text-align: right;
+  color: var(--dgr-muted-fg);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Beside the name, shown on hover only, so the marker reads as a label
+   until you reach for it. */
+.dgr-milestone-remove {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--dgr-radius-sm);
+  background: transparent;
+  color: var(--dgr-faint-fg);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.dgr-milestone:hover .dgr-milestone-remove,
+.dgr-milestone-remove:focus-visible {
+  opacity: 1;
+}
+
+.dgr-milestone-remove:hover {
+  background: color-mix(in oklch, var(--dgr-danger-text) 12%, transparent);
+  color: var(--dgr-danger-text);
+}

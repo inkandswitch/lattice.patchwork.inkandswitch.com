@@ -10,12 +10,16 @@ const ORDER_KEY = "lattice:inspector:order";
  * the inspectors down the right, like vscode's views: each folds away under
  * its heading, and moves above or below the others by dragging its heading
  * (or alt+up/down on it). which are open, and their order, are remembered.
- * `sections` is [{ id, name, render() }]
+ * `sections` is [{ id, name, render(), was? }], `was` the id it had before,
+ * so where it was and whether it was open carry over
  */
 export function Inspector(props) {
   const sections = new Map(props.sections.map((section) => [section.id, section]));
   const ids = [...sections.keys()];
-  const saved = remembered(ORDER_KEY, ids).filter((id) => sections.has(id));
+  const renamed = new Map(props.sections.filter((section) => section.was).map((section) => [section.was, section.id]));
+  const saved = remembered(ORDER_KEY, ids)
+    .map((id) => renamed.get(id) ?? id)
+    .filter((id) => sections.has(id));
   const [order, setOrder] = createSignal([...saved, ...ids.filter((id) => !saved.includes(id))]);
 
   // `id` to `index` in the order
@@ -32,7 +36,9 @@ export function Inspector(props) {
   function Section(props) {
     const section = sections.get(props.id);
     const openKey = `lattice:inspector:${section.id}:open`;
-    const [open, setOpen] = createSignal(remembered(openKey, true));
+    const [open, setOpen] = createSignal(
+      remembered(openKey, true, section.was && `lattice:inspector:${section.was}:open`),
+    );
     let heading;
 
     function onDragOver(event) {

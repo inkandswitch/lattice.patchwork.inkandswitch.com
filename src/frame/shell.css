@@ -303,6 +303,7 @@
 	& .lattice-tree-item[aria-current="page"] {
 		background: var(--lattice-current);
 		box-shadow: inset 2px 0 var(--lattice-shell-primary);
+		font-weight: bold;
 	}
 
 	/* you, down the bottom of the projects: your picture and your name, for
@@ -860,19 +861,38 @@
 		background: var(--lattice-shell-fill);
 		color: var(--lattice-shell-line);
 	}
+	/* the tab as wm draws it: the sheet's colour, curving out at its foot
+	   into the sheet below */
 	& .lattice-mini-tabs {
 		display: flex;
 		flex: none;
-		border-bottom: 1px solid var(--lattice-mini-rule);
+		padding: 3px 0 0 7px;
 		background: var(--lattice-shell-chrome-fill);
 
 		& span {
-			margin-bottom: -1px;
+			position: relative;
 			padding: 2px 6px;
-			border-right: 1px solid var(--lattice-mini-rule);
+			border-radius: 4px 4px 0 0;
 			background: var(--lattice-shell-fill);
 			box-shadow: inset 0 1.5px var(--lattice-shell-primary);
 			font-family: var(--lattice-heading-family, var(--lattice-shell-family-code));
+
+			&::before,
+			&::after {
+				content: "";
+				position: absolute;
+				bottom: 0;
+				width: 4px;
+				height: 4px;
+			}
+			&::before {
+				right: 100%;
+				background: radial-gradient(circle at 0 0, transparent 4px, var(--lattice-shell-fill) 4px);
+			}
+			&::after {
+				left: 100%;
+				background: radial-gradient(circle at 100% 0, transparent 4px, var(--lattice-shell-fill) 4px);
+			}
 		}
 	}
 	& .lattice-mini-tools {
@@ -997,11 +1017,11 @@
 		cursor: pointer;
 	}
 
-	/* the drafts panel's "+ more" avatar is filled with a gentle ink, which
+	/* the versions panel's "+ more" avatar is filled with a gentle ink, which
 	   is light in a dark theme: its + is black or white by contrast */
 	@supports (color: contrast-color(red)) {
-		& .draft-avatar--extra {
-			color: contrast-color(var(--drafts-faint-fg, #888));
+		& .dgr-avatar--extra {
+			color: contrast-color(var(--dgr-faint-fg, #888));
 		}
 	}
 

@@ -249,7 +249,7 @@ export function mountWorkspace(
   let menu;
 
   tooltips(".lattice-wm");
-  const filesSidebar = sidebar ?? sidebarState("lattice-wm:files", 200, "lattice:files");
+  const filesSidebar = sidebar ?? sidebarState("lattice-wm:files", 200, { was: "lattice:files" });
 
   // a stylesheet added by script doesn't hold up painting, so stay hidden
   // until it's in, or you see the whole thing unstyled first
@@ -1727,48 +1727,33 @@ export function mountWorkspace(
   // what the extensions say of it
   function Bar(props) {
     const panel = props.panel;
-    const [copied, setCopied] = createSignal(false);
     // a chip each for its labelled links, made again only when they change
     const chips = createMemo(() => linksOf(panel.url).filter((link) => link.label), [], {
       equals: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     });
 
-    function copy() {
-      navigator.clipboard?.writeText(panel.url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1200);
-    }
-
-    return html`<div class="lattice-wm-bar">
-      <button
-        class="lattice-wm-url"
-        data-colour=${() => docColour(panel.url)}
-        title=${() => `${panel.url} (click to copy)`}
-        onClick=${copy}
-        onPointerEnter=${() => setHovered(panel.url)}
-        onPointerLeave=${unhover}
-      >
-        <span class="lattice-wm-swatch"></span>
-        ${() => (copied() ? [icon("check"), " copied"] : shortUrl(panel.url))}
-      </button>
-      <${For} each=${chips}>
-        ${(link) => html`<button
-          class="lattice-wm-link"
-          title=${link.title ?? ""}
-          onClick=${() => reveal(link.url, panel.id, "left")}
-          data-colour=${docColour(link.url)}
-          data-stale=${link.live ? undefined : ""}
-          onPointerEnter=${() => setHovered(link.url)}
-          onPointerLeave=${unhover}
-        >
-          ${link.label}
-          <span class="lattice-wm-swatch"></span>
-          <span class="lattice-wm-link-name">${() => docInfo(link.url).name}</span>
-        </button>`}
-      <//>
-      <span class="lattice-wm-spacer"></span>
-      <${Status} panel=${panel} />
-    </div>`;
+    // nothing to say, no bar: the tab runs straight into the tool
+    return html`<${Show} when=${() => chips().length || statusOf(panel.url)}>
+      <div class="lattice-wm-bar">
+        <${For} each=${chips}>
+          ${(link) => html`<button
+            class="lattice-wm-link"
+            title=${link.title ?? ""}
+            onClick=${() => reveal(link.url, panel.id, "left")}
+            data-colour=${docColour(link.url)}
+            data-stale=${link.live ? undefined : ""}
+            onPointerEnter=${() => setHovered(link.url)}
+            onPointerLeave=${unhover}
+          >
+            ${link.label}
+            <span class="lattice-wm-swatch"></span>
+            <span class="lattice-wm-link-name">${() => docInfo(link.url).name}</span>
+          </button>`}
+        <//>
+        <span class="lattice-wm-spacer"></span>
+        <${Status} panel=${panel} />
+      </div>
+    <//>`;
   }
 
   // what an extension says of the doc: a line, and something to do about it

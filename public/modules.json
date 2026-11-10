@@ -4,7 +4,7 @@
 	},
 	"modules": [
 		"./packages/providers/",
-		"./packages/drafts/",
+		"./packages/versions/",
 		"./packages/account/",
 		"./packages/folder/",
 		"./packages/file/",

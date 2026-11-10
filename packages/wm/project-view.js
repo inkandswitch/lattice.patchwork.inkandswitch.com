@@ -69,9 +69,10 @@ function titledFiles(files, project) {
 
 /**
  * a card with a button to update something from before, and nothing else.
- * `update` does it, and throws to say what went wrong
+ * `update` does it, and throws to say what went wrong. `auto`: it's done
+ * straight away, and the button's only there to try again if it fails
  */
-export function mountUpdate(element, update) {
+export function mountUpdate(element, update, { auto = false } = {}) {
   const [styled, setStyled] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [problem, setProblem] = createSignal(null);
@@ -86,7 +87,7 @@ export function mountUpdate(element, update) {
     }
     setBusy(false);
   }
-  return render(
+  const dispose = render(
     () => html`<link
         rel="stylesheet"
         href=${STYLESHEET}
@@ -100,12 +101,14 @@ export function mountUpdate(element, update) {
         <div class="lattice-wm-empty">
           <div class="lattice-wm-empty-card">
             <h2 class="lattice-wm-update-heading">made with an older version</h2>
-            <p>older versions can't open it after · its drafts go</p>
-            <div class="lattice-wm-empty-actions">
-              <button class="lattice-wm-button" disabled=${busy} onClick=${onClick}>
-                ${() => (busy() ? "updating…" : "update")}
-              </button>
-            </div>
+            <p>${() => (auto ? (busy() ? "updating it…" : "couldn't update it") : "older versions can't open it after · its drafts go")}</p>
+            <${Show} when=${() => !auto || (!busy() && problem())}>
+              <div class="lattice-wm-empty-actions">
+                <button class="lattice-wm-button" disabled=${busy} onClick=${onClick}>
+                  ${() => (busy() ? "updating…" : auto ? "try again" : "update")}
+                </button>
+              </div>
+            <//>
             <${Show} when=${problem}>
               <p class="lattice-wm-empty-notice">${problem}</p>
             <//>
@@ -114,6 +117,8 @@ export function mountUpdate(element, update) {
       </div>`,
     element,
   );
+  if (auto) onClick();
+  return dispose;
 }
 
 // something that isn't a project, or whose parts can't be found
@@ -140,7 +145,8 @@ function mountProblem(element, text) {
  *             through, so it's the doc itself that changes
  *   old       projects from before, if the app has any: is(doc) says one
  *             is, and update(handle, baseRepo, hive) makes it a project,
- *             on the doc itself (`handle` is from baseRepo)
+ *             on the doc itself (`handle` is from baseRepo). auto: true
+ *             updates one as soon as it's opened
  *
  * and the rest of the workspace's options (see workspace.js): repo, hive,
  * tools, extensions, self, sidebar, onShowing, onFocused, onOpen, pointer
@@ -166,10 +172,14 @@ export function mountProject(element, { project, repo, baseRepo = repo, hive, ol
     shown = now;
 
     if (key === "old") {
-      now.unmount = mountUpdate(box, async () => {
-        const handle = await baseRepo.find(project.url);
-        await old.update(handle, baseRepo, hive);
-      });
+      now.unmount = mountUpdate(
+        box,
+        async () => {
+          const handle = await baseRepo.find(project.url);
+          await old.update(handle, baseRepo, hive);
+        },
+        { auto: old.auto },
+      );
       return;
     }
     if (key === "none") {
