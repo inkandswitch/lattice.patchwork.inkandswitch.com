@@ -1,4 +1,6 @@
 /dist/
+# the Knitout JS package, staged for pushwork (scripts/stage-knitoutjs.mjs)
+/stage/
 .pushwork/
 node_modules/
 playright-report/
