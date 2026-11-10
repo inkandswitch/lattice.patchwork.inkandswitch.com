@@ -1,5 +1,5 @@
 /dist/
-# the Knitout JS package, staged for pushwork (scripts/stage-knitoutjs.mjs)
+# packages staged for pushwork (scripts/stage.mjs)
 /stage/
 .pushwork/
 node_modules/

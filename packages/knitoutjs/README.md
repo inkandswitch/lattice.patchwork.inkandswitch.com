@@ -21,13 +21,16 @@ its app imports knitoutjs's tools and wm from beside it, which a pushed
 folder can't reach, so it's staged first, into one folder with both:
 
 ```
-pnpm stage:knitoutjs -- --state ~/soft/agnescameron/knitoutjs.pushwork
+pnpm stage knitoutjs --state ~/soft/agnescameron/knitoutjs.pushwork
 cd stage/knitoutjs && pushwork sync
 ```
 
 `--state` links in the `.pushwork` that says which patchwork folder it is,
 so its url (the one people's module settings have) stays the same. `pushwork
 url` in `stage/knitoutjs` says which one it is before anything's synced.
+(this folder's own `.pushwork`, from when it was lattice's submodule, is
+another one.) lattice's frame is staged the same way: `pnpm stage lattice
+--state src/frame/.pushwork`.
 
 ## where it comes from
 
