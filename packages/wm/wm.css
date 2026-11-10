@@ -345,10 +345,12 @@
 		flex: none;
 		align-items: center;
 		gap: 6px;
-		margin: 0;
-		padding: 0 7px;
+		/* its hover is a pill inside the tab, clear of its edges and the
+		   colour line along its top */
+		margin: 4px 0 3px;
+		padding: 0 6px;
 		border: none;
-		border-radius: 0;
+		border-radius: 4px;
 		background: none;
 		color: var(--lattice-wm-ink);
 		/* the tab name's own type and line box, just boxed, so the two sit on
@@ -377,11 +379,12 @@
 		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: 22px;
+		width: 18px;
+		/* a pill inside the tab, as the tool's is */
+		margin: 4px 3px 3px 0;
 		padding: 0;
 		border: none;
-		/* the tab's own corner */
-		border-radius: 0 6px 0 0;
+		border-radius: 4px;
 		background: none;
 		color: inherit;
 		opacity: 0.7;

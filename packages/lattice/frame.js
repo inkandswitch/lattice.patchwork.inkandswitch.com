@@ -604,16 +604,12 @@ function Frame(props) {
         : html`<button
             class="lattice-tree-item"
             aria-current=${() => (!page() && currentUrl() === project.url ? "page" : undefined)}
-            data-old=${isOld(project) ? "" : undefined}
-            title=${isOld(project)
-              ? "made with an older version: open it to update it"
-              : "double click to rename · right click for menu"}
+            title="double click to rename · right click for menu"
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
             onContextMenu=${(event) => openProjectMenu(event, project)}
           >
             <span class="lattice-tree-name">${project.name}</span>
-            ${isOld(project) && html`<small class="lattice-tree-old">old</small>`}
           </button>`;
   }
 

@@ -288,18 +288,6 @@
 		text-overflow: ellipsis;
 	}
 
-	/* made with an older version: open it, and there's a button to update it */
-	& .lattice-tree-item[data-old] {
-		color: var(--lattice-muted);
-	}
-
-	& .lattice-tree-old {
-		flex: none;
-		margin-left: auto;
-		font-family: var(--lattice-shell-family-ui);
-		font-size: 10.5px;
-	}
-
 	& .lattice-tree-item[aria-current="page"] {
 		background: var(--lattice-current);
 		box-shadow: inset 2px 0 var(--lattice-shell-primary);

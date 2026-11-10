@@ -70,7 +70,8 @@ function titledFiles(files, project) {
 /**
  * a card with a button to update something from before, and nothing else.
  * `update` does it, and throws to say what went wrong. `auto`: it's done
- * straight away, and the button's only there to try again if it fails
+ * straight away, and nothing shows unless it fails, when there's a button to
+ * try again
  */
 export function mountUpdate(element, update, { auto = false } = {}) {
   const [styled, setStyled] = createSignal(false);
@@ -96,12 +97,12 @@ export function mountUpdate(element, update, { auto = false } = {}) {
       />
       <div
         class="lattice-wm-update"
-        style=${() => (styled() ? {} : { visibility: "hidden" })}
+        style=${() => (styled() && (!auto || problem()) ? {} : { visibility: "hidden" })}
       >
         <div class="lattice-wm-empty">
           <div class="lattice-wm-empty-card">
             <h2 class="lattice-wm-update-heading">made with an older version</h2>
-            <p>${() => (auto ? (busy() ? "updating it…" : "couldn't update it") : "older versions can't open it after · its drafts go")}</p>
+            <p>${() => (auto ? "couldn't update it" : "older versions can't open it after · its drafts go")}</p>
             <${Show} when=${() => !auto || (!busy() && problem())}>
               <div class="lattice-wm-empty-actions">
                 <button class="lattice-wm-button" disabled=${busy} onClick=${onClick}>
