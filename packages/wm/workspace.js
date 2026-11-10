@@ -1672,43 +1672,41 @@ export function mountWorkspace(
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}
     >
-      <span class="lattice-wm-tab-pill">
-        <span class="lattice-wm-tab-title">
-          <span class="lattice-wm-swatch"></span>
-          ${() =>
-            renaming()
-              ? html`<input
-                  class="lattice-wm-rename"
-                  value=${info.name}
-                  ref=${(el) => queueMicrotask(() => (el.focus(), el.select()))}
-                  onKeyDown=${onKeyDown}
-                  onBlur=${(event) => rename(event.currentTarget.value)}
-                  onClick=${(event) => event.stopPropagation()}
-                />`
-              : html`<span
-                  class="lattice-wm-tab-name"
-                  title="double click to rename"
-                  onDblClick=${() => setRenaming(true)}
-                >
-                  ${() => info.name}
-                </span>`}
-        </span>
-        <button
-          class="lattice-wm-tab-tool"
-          aria-haspopup="menu"
-          title="what it's shown with: change it here, or open it with something else in a new tab"
-          onClick=${(event) => {
-            event.stopPropagation();
-            showTab(group.id, panel.id);
-            openToolMenu(event, panel, group.id);
-          }}
-        >
-          <span class="lattice-wm-tab-tool-name">${() => toolName(panel)}</span>
-          <svg class="lattice-wm-tab-tool-arrow" aria-hidden="true" viewBox="0 0 10 6" width="10" height="6">
-            <path d="M0 0h10L5 6z" fill="currentColor" />
-          </svg>
-        </button>
+      <span class="lattice-wm-tab-title">
+        <span class="lattice-wm-swatch"></span>
+        ${() =>
+          renaming()
+            ? html`<input
+                class="lattice-wm-rename"
+                value=${info.name}
+                ref=${(el) => queueMicrotask(() => (el.focus(), el.select()))}
+                onKeyDown=${onKeyDown}
+                onBlur=${(event) => rename(event.currentTarget.value)}
+                onClick=${(event) => event.stopPropagation()}
+              />`
+            : html`<span
+                class="lattice-wm-tab-name"
+                title="double click to rename"
+                onDblClick=${() => setRenaming(true)}
+              >
+                ${() => info.name}
+              </span>`}
       </span>
+      <button
+        class="lattice-wm-tab-tool"
+        aria-haspopup="menu"
+        title="what it's shown with: change it here, or open it with something else in a new tab"
+        onClick=${(event) => {
+          event.stopPropagation();
+          showTab(group.id, panel.id);
+          openToolMenu(event, panel, group.id);
+        }}
+      >
+        <span class="lattice-wm-tab-tool-name">${() => toolName(panel)}</span>
+        <svg class="lattice-wm-tab-tool-arrow" aria-hidden="true" viewBox="0 0 10 6" width="10" height="6">
+          <path d="M0 0h10L5 6z" fill="currentColor" />
+        </svg>
+      </button>
       <button
         class="lattice-wm-close"
         title="close"
