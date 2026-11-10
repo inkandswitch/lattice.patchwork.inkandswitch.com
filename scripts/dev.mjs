@@ -256,27 +256,53 @@ function startTunnel(url) {
 	})
 }
 
+// every child's whole process group (each has its own, so a terminal's
+// ctrl-c goes to this, which says when they go): a child that's gone may
+// have left its own behind, as pnpm can its vite, so the group's told anyway
+function signalAll(signal) {
+	for (const child of children) {
+		if (!child.pid) continue
+		try {
+			if (processGroups) process.kill(-child.pid, signal)
+			else if (child.exitCode === null) child.kill(signal)
+		} catch (error) {
+			if (error.code !== "ESRCH" && error.code !== "EPERM") throw error
+		}
+	}
+}
+const running = () => children.some(child => child.exitCode === null && child.signalCode === null)
+
 function stop() {
 	if (stopping) return
 	stopping = true
 	stopSpinner()
 	process.stdout.off("resize", showFooter)
 	hideFooter()
-	for (const child of children) {
-		if (child.exitCode !== null || child.killed) continue
-		try {
-			if (processGroups && child.pid) process.kill(-child.pid, "SIGTERM")
-			else child.kill("SIGTERM")
-		} catch (error) {
-			if (error.code !== "ESRCH") throw error
-		}
-	}
-	if (!children.some(child => child.exitCode === null)) process.exit()
+	signalAll("SIGTERM")
+	if (!running()) process.exit()
+	for (const child of children) child.once("exit", () => running() || process.exit())
+	// what's still going in a few seconds (cloudflared waits out its
+	// connections) is made to stop
+	setTimeout(() => {
+		signalAll("SIGKILL")
+		process.exit()
+	}, 3000).unref()
 }
 
-process.on("SIGINT", stop)
-process.on("SIGTERM", stop)
-process.on("exit", hideFooter)
+// however this ends (ctrl-c, the terminal closing, a kill, or its own
+// mistake), nothing it started outlives it
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, stop)
+for (const event of ["uncaughtException", "unhandledRejection"]) {
+	process.on(event, error => {
+		console.error(error)
+		process.exitCode = 1
+		stop()
+	})
+}
+process.on("exit", () => {
+	hideFooter()
+	signalAll("SIGTERM")
+})
 
 const core = checkout(["PATCHWORK_SYSTEM_DIRECTORY", "PATCHWORK_CORE_DIR"])
 const base = checkout(["PATCHWORK_PKG_BASE_DIRECTORY", "PATCHWORK_BASE_DIR"])
