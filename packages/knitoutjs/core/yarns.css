@@ -13,7 +13,9 @@
 	border: 1px solid var(--knitoutjs-line);
 	border-radius: 50%;
 	background: var(--knitoutjs-yarn);
-	color: var(--knitoutjs-sheet);
+	/* its number in black or white, whichever reads on the yarn: black on
+	   anything lighter than about the middle, white on the rest */
+	color: oklch(from var(--knitoutjs-yarn) clamp(0, (0.65 - l) * 1000, 1) 0 0);
 	font: 600 10px var(--knitoutjs-mono);
 	cursor: pointer;
 
