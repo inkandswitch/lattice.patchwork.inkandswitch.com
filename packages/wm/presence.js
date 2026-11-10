@@ -102,7 +102,7 @@ const VIEW = "view:";
 /**
  * join the room on `handle`: the project's files, from the repo under any
  * draft overlay. `onPeople` hears everyone else whenever that changes:
- * [{peer, contact, name, colour, avatar, nodes, active, pointer, look, views,
+ * [{peer, contact, name, colour, avatar, nodes, active, pointer, look, following, views,
  * shared}], one each (their tab that did something last). colour is their
  * pointer's: their contact's, or else one for them from the palette. `repo`
  * finds who you are (your account's contact). `reads` is any more channels
@@ -124,6 +124,8 @@ export function joinRoom(handle, repo, reads, onPeople) {
     active: {},
     pointer: null,
     look: "arrow",
+    // whose panes you're following (their peer id), or null
+    following: null,
   };
   let dead = false;
 
@@ -146,6 +148,7 @@ export function joinRoom(handle, repo, reads, onPeople) {
       active: activeFrom(value.active),
       pointer: pointerFrom(value.pointer),
       look: value.look === "mouse" ? "mouse" : "arrow",
+      following: string(value.following) || null,
       views: viewsFrom(value),
       shared: Object.fromEntries(Object.entries(reads).map(([channel, read]) => [channel, read(value[channel])])),
     }));

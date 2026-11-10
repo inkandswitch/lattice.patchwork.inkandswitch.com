@@ -815,6 +815,25 @@
 		touch-action: none;
 	}
 
+	/* who you're following, hanging from the top left of the line round
+	   their panes, in their colour */
+	& .lattice-wm-following-tag {
+		position: absolute;
+		top: 0;
+		left: 0;
+		padding: 2px 8px 3px;
+		border: none;
+		border-radius: 0 0 6px 0;
+		background: var(--lattice-wm-button-fill);
+		color: var(--lattice-wm-button-ink, white);
+		font: 600 11px/1.3 var(--lattice-wm-sans);
+		cursor: pointer;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
+
 	/* their face, under their name, while you're in a call with them */
 	& .lattice-wm-pointer-face {
 		position: absolute;
@@ -1345,6 +1364,25 @@
 		position: relative;
 		display: block;
 		width: 100%;
+	}
+
+	/* a circle as tall as the picture would be, in the middle of where it
+	   would be */
+	& .lattice-wm-call-float[data-shape="round"] {
+		& .lattice-wm-call-float-picture {
+			display: flex;
+			justify-content: center;
+		}
+		& .lattice-wm-call-face {
+			width: 75%;
+			height: auto;
+			aspect-ratio: 1;
+			border-radius: 50%;
+			font-size: 32px;
+		}
+		& .lattice-wm-call-size {
+			right: 14%;
+		}
 	}
 	& .lattice-wm-call-size {
 		position: absolute;

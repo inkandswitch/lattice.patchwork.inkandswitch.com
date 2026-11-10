@@ -352,7 +352,11 @@ export function mountWorkspace(
           { key: "peer" },
         ),
       );
-      if (following()) {
+      // whoever you follow starting to follow someone else: you stop. you'd
+      // only be seeing their copy of someone else's panes, and two people
+      // following each other would see nothing of their own
+      if (following() && theirs.get(following())?.following) follow(null);
+      else if (following()) {
         readLayout();
         showTheirViews();
       }
@@ -2409,8 +2413,10 @@ export function mountWorkspace(
 
   // following, a sheet over their panes to draw on (ink.js), the size of
   // the frame. your pointer goes to everyone from here too, as the panes
-  // under it are inert
+  // under it are inert. on it, at the corner of the line round their panes,
+  // who it is you're following: pressed, you stop
   function InkSheet() {
+    const leader = () => people.find((person) => person.peer === following());
     const box = () => {
       frameSize();
       const rect = root?.getBoundingClientRect();
@@ -2444,7 +2450,17 @@ export function mountWorkspace(
       onPointerCancel=${() => ink.end()}
       onLostPointerCapture=${() => ink.end()}
       onPointerLeave=${offPanes}
-    ></div>`;
+    >
+      <button
+        class="lattice-wm-following-tag"
+        style=${() => ({ "--lattice-wm-button-fill": followingColour() })}
+        title="stop following"
+        onPointerDown=${(event) => event.stopPropagation()}
+        onClick=${() => follow(null)}
+      >
+        following ${() => leader()?.name ?? "someone"}
+      </button>
+    </div>`;
   }
 
   // the colour round the panes while they're someone else's
@@ -2486,6 +2502,8 @@ export function mountWorkspace(
     createEffect(() => onShowing?.(showing()));
     createEffect(() => onFocused?.(focused()));
     createEffect(() => room?.share("look", look?.() === "mouse" ? "mouse" : "arrow"));
+    // who you're following, for anyone following you (they stop)
+    createEffect(() => room?.share("following", following()));
     // what the extensions share of yours, for everyone else, as it changes
     for (const { channel, mine } of presenceKeys) {
       let sent = "";

@@ -188,8 +188,9 @@ function inWindow({ x, y, width }) {
 
 /**
  * everyone's faces, floating over everything, each where you put it and the
- * size you made it: dragged to move, and by its corner to size. they're
- * the picture's own shape (4:3), so none of it's cut off
+ * size you made it: dragged to move, and by its corner to size. each is the
+ * picture's own shape (4:3), so none of it's cut off, or, double clicked, a
+ * circle as tall, centred on their face (and double clicked again, back)
  */
 export function CallFloating() {
   return html`<${Show} when=${() => call.get() && call.settings.faces === "floating"}>
@@ -228,8 +229,11 @@ export function CallFloating() {
             if (dragging) setFloating(key(), dragging.at);
             dragging = null;
           }
+          const shape = () => (at().shape === "round" ? "round" : "tile");
           return html`<div
             class="lattice-wm-call-float"
+            data-shape=${shape}
+            onDblClick=${() => setFloating(key(), { ...at(), shape: shape() === "round" ? "tile" : "round" })}
             ref=${(el) => (float = el)}
             style=${() => ({ ...inWindow(at()), width: `${at().width}px` })}
             onPointerDown=${onPointerDown}
@@ -238,7 +242,7 @@ export function CallFloating() {
             onPointerCancel=${onPointerUp}
           >
             <span class="lattice-wm-call-float-picture">
-              <${Face} id=${peer.id} shape="tile" />
+              <${Face} id=${peer.id} shape=${shape} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
             </span>
             <span class="lattice-wm-call-float-name">${() => peer.name}</span>
