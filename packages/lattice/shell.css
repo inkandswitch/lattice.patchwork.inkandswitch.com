@@ -85,11 +85,6 @@
 	--lattice-path-family: var(--lattice-heading-family, var(--lattice-shell-family-code));
 	--lattice-current: color-mix(in oklch, var(--lattice-shell-primary) 16%, transparent);
 
-	& button {
-		font: inherit;
-		color: inherit;
-	}
-
 	/* what a box says before anything's in it: gentle, but readable */
 	& ::placeholder {
 		color: var(--lattice-shell-sheet-muted);
@@ -1178,4 +1173,12 @@
 	.lattice-shell :where(button, label) {
 		--lattice-shell-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--lattice-shell-button-fill)) 80%, var(--lattice-shell-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 	}
+}
+
+/* buttons in the shell take the type and colour around them. no
+   specificity, so a package's own rules for its buttons (one class, say)
+   win over it, as the browser's own don't */
+:where(.lattice-shell) :where(button) {
+	font: inherit;
+	color: inherit;
 }

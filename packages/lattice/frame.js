@@ -24,6 +24,7 @@ import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
 import { colourFor, pointerCursor } from "./pointer.js";
+import { parsePath, projectByShort, projectPath } from "./paths.js";
 import { useToolStorage } from "./storage.js";
 
 // wm's, too, for its menus, before any project has brought it; knitout.js's
@@ -259,9 +260,18 @@ function Frame(props) {
 
   const projectKey = `lattice:${accountUrl}:project`;
   const [chosen, setChosen] = createSignal(remembered(projectKey, null));
+  // a project the address asks for (/projects/<name>-<short>), till it's
+  // found among yours
+  const [wanted, setWanted] = createSignal(parsePath(location.pathname)?.short ?? null);
   // the chosen project, while it's still in the root folder; else the first
   const current = createMemo(() => {
     const all = projects();
+    if (wanted()) {
+      const asked = projectByShort(all, wanted());
+      if (asked) return asked;
+      // not loaded yet, so not yet known not to be one of yours
+      if (!homeDoc()) return null;
+    }
     const found = all.find((project) => project.url === chosen());
     if (found) return found;
     // (a folder that's still being looked in might be it)
@@ -281,7 +291,46 @@ function Frame(props) {
   }
 
   // what's in the middle instead of the project, when it isn't: "settings"
-  const [page, setPage] = createSignal(null);
+  const [page, setPage] = createSignal(parsePath(location.pathname)?.page ?? null);
+
+  // the address says what's showing: /settings, or the project's path. a
+  // new project or page is a new step back can return to; the same one
+  // under a new name (or found for the first time) just has its address put
+  // right. back and forward show what the address then says
+  let shown = null;
+  createEffect(() => {
+    const project = current();
+    const now = { page: page(), url: project?.url ?? null };
+    // a project the address asked for, found: it's the one chosen now. one
+    // that isn't among yours, once they're in: what was chosen shows instead
+    if (wanted() && homeDoc()) {
+      const asked = projectByShort(projects(), wanted());
+      untrack(() => {
+        setWanted(null);
+        if (!asked) return;
+        setChosen(asked.url);
+        remember(projectKey, asked.url);
+      });
+    }
+    const path = now.page === "settings" ? "/settings" : project ? projectPath(project) : null;
+    if (!path || location.pathname === path) {
+      shown = now;
+      return;
+    }
+    const step = shown && (shown.page !== now.page || shown.url !== now.url);
+    const address = `${path}${location.search}${location.hash}`;
+    if (step) history.pushState(history.state, "", address);
+    else history.replaceState(history.state, "", address);
+    shown = now;
+  });
+  function onPopState() {
+    const asked = parsePath(location.pathname);
+    shown = null;
+    setPage(asked?.page ?? null);
+    if (asked?.short) setWanted(asked.short);
+  }
+  addEventListener("popstate", onPopState);
+  onCleanup(() => removeEventListener("popstate", onPopState));
 
   // the page's title: the file you're in, and its project (as patchwork's
   // own router has it, "<what> | <site>"). when patchwork's router puts its
