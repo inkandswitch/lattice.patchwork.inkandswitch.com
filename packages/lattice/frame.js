@@ -785,8 +785,20 @@ function Frame(props) {
   const [menuFiles, setMenuFiles] = createSignal(null);
   const [packing, setPacking] = createSignal(null);
 
+  // the project menu has more in it while alt is held (copy link), as the
+  // panes' + menu does
+  const [menuAlt, setMenuAlt] = createSignal(false);
+  const onMenuAlt = (event) => event.key === "Alt" && setMenuAlt(event.type === "keydown");
+  document.addEventListener("keydown", onMenuAlt);
+  document.addEventListener("keyup", onMenuAlt);
+  onCleanup(() => {
+    document.removeEventListener("keydown", onMenuAlt);
+    document.removeEventListener("keyup", onMenuAlt);
+  });
+
   function openProjectMenu(event, project) {
     event.preventDefault();
+    setMenuAlt(event.altKey);
     setMenuProject(project);
     setPacking(null);
     setMenuFiles(isOld(project) ? project.url : null);
@@ -824,15 +836,17 @@ function Frame(props) {
       popover="auto"
       ref=${(el) => (projectMenu = el)}
     >
-      <button
-        class="lattice-wm-menu-item"
-        disabled=${() => !menuFiles()}
-        onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
-      >
-        ${icon("link")}
-        copy link
-        <small>a link here · they get their own</small>
-      </button>
+      <${Show} when=${menuAlt}>
+        <button
+          class="lattice-wm-menu-item"
+          disabled=${() => !menuFiles()}
+          onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
+        >
+          ${icon("link")}
+          copy link
+          <small>a link here · they get their own</small>
+        </button>
+      <//>
       <button
         class="lattice-wm-menu-item"
         disabled=${() => packing() === "packing it…"}
