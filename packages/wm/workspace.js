@@ -762,6 +762,9 @@ export function mountWorkspace(
     if (host) destroyHost(id, host);
     host = { id, url, tool, patchworkTool, el: document.createElement(PANE_TAG), cleanup: null };
     host.el.className = "lattice-wm-tool";
+    // which tool it is (patchwork's own id, for one of patchwork's), so an
+    // app can style what a tool shows in its panes
+    host.el.dataset.tool = patchworkTool ?? tool;
     host.el.addEventListener("scroll", (event) => onScroll(host, event), { capture: true, passive: true });
     hosts.set(id, host);
     mountTool(host);

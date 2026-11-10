@@ -1182,3 +1182,11 @@
 	font: inherit;
 	color: inherit;
 }
+
+/* patchwork's markdown editor, in a pane: from the pane's own edge, as the
+   code is, not a column centred in a field of space */
+.lattice-shell .lattice-wm-tool .cm-content[data-language="markdown"] {
+	max-width: none;
+	margin: 0;
+	padding: 12px 16px 48px;
+}
