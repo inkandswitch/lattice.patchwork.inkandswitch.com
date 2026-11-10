@@ -40,15 +40,9 @@ function stopSpinner() {
 	clearInterval(spinning)
 	spinning = null
 }
-const WAITING = "✿ a link to send her, once the tunnel's up"
 const tunnelText = () => (spinning ? `${tunnelURL} ${SPINNER[spin]}` : tunnelURL)
 
-// bold, and each letter its own colour
-const RAINBOW = [197, 208, 220, 82, 45, 63, 171]
-const rainbow = text =>
-	[...text]
-		.map((letter, index) => `\x1b[1;38;5;${RAINBOW[index % RAINBOW.length]}m${letter}`)
-		.join("") + "\x1b[0m"
+const bold = text => `\x1b[1m${text}\x1b[0m`
 // a link the terminal can open (and copy whole, if it's cut short here)
 const link = (url, shown = url) => `\x1b]8;;${url}\x1b\\\x1b[1;4;38;5;213m${shown}\x1b[0m\x1b]8;;\x1b\\`
 
@@ -84,7 +78,7 @@ function showFooter() {
 				corePackages.length + 17,
 				basePackages.length + 17,
 				tunnelText().length + 17,
-				devLink ? devLink.length + 7 : WAITING.length + 5
+				devLink ? devLink.length + 7 : 0
 			)
 		)
 	)
@@ -99,9 +93,7 @@ function showFooter() {
 		...(tunnel
 			? [
 					`\x1b[2m│\x1b[0m  \x1b[36m→\x1b[0m tunnel:   \x1b[36m${fit(tunnelText(), valueWidth)}\x1b[0m`,
-					devLink
-						? `\x1b[2m│\x1b[0m  ${rainbow("✿ send her this link:")}`
-						: `\x1b[2m│\x1b[0m  \x1b[2m${WAITING}\x1b[0m`,
+					devLink ? `\x1b[2m│\x1b[0m  ${bold("send her this link:")}` : `\x1b[2m│\x1b[0m`,
 					devLink ? `\x1b[2m│\x1b[0m    ${link(devLink, fit(devLink, width - 7))}` : `\x1b[2m│\x1b[0m`,
 				]
 			: []),
@@ -239,7 +231,7 @@ function startTunnel(url) {
 		tunnelURL = match[0]
 		devLink = `${SITE}/?dev=${tunnelURL}`
 		console.log(
-			`\n  tunnel: ${tunnelURL}\n\n  ${rainbow("✿ send her this link:")}\n  ${link(devLink)}\n\n  \x1b[2m(anyone with it can use this dev server)\x1b[0m\n`
+			`\n  tunnel: ${tunnelURL}\n\n  ${bold("send her this link:")}\n  ${link(devLink)}\n\n  \x1b[2m(anyone with it can use this dev server)\x1b[0m\n`
 		)
 		showFooter()
 	}

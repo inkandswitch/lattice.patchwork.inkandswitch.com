@@ -95,6 +95,11 @@ export default function LatticeFrameTool(handle, element) {
     link.href = href;
     return link;
   });
+  // nothing's drawn till they're in (or have failed), so it's never seen
+  // unstyled
+  const styled = Promise.all(
+    links.map((link) => new Promise((resolve) => (link.onload = link.onerror = resolve))),
+  );
   element.append(...links);
   roughFilters();
   tooltips(".lattice-shell");
@@ -102,8 +107,9 @@ export default function LatticeFrameTool(handle, element) {
   // the frame is the account doc's tool, so its providers are the account's
   const providers = nestProviders(element, frameProviders(handle.url));
   let dispose = null;
-  providers.ready.then((inner) => {
-    if (!inner) return;
+  let dead = false;
+  Promise.all([providers.ready, styled]).then(([inner]) => {
+    if (!inner || dead) return;
     dispose = render(
       () => html`<${RepoContext.Provider} value=${repo}>
         <${Frame} handle=${handle} element=${inner} repo=${repo} baseRepo=${baseRepo} hive=${hive} />
@@ -113,6 +119,7 @@ export default function LatticeFrameTool(handle, element) {
   });
 
   return () => {
+    dead = true;
     dispose?.();
     providers.remove();
     for (const link of links) link.remove();
