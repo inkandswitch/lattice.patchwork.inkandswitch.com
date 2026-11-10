@@ -30,7 +30,7 @@ so its url (the one people's module settings have) stays the same. `pushwork
 url` in `stage/knitoutjs` says which one it is before anything's synced.
 (this folder's own `.pushwork`, from when it was lattice's submodule, is
 another one.) lattice's frame is staged the same way: `pnpm stage lattice
---state src/frame/.pushwork`.
+--state packages/lattice/.pushwork`.
 
 ## where it comes from
 
@@ -63,7 +63,7 @@ backend © 2020 Carnegie Mellon Textiles Lab, and lezer © Marijn Haverbeke and
 others. their notices are in [`core/vendor/LICENSE.md`](core/vendor/LICENSE.md),
 and that code keeps its licence.
 
-the patchwork side (the panes, the editor and the projects) is by chee, with
+the patchwork side (the panes, the editor and the projects) is by chee, and
 Mimi Reyburn.
 
 ## licence

@@ -1,16 +1,16 @@
 // stage.mjs <knitoutjs|lattice> [dir] [--state <.pushwork dir>]: a patchwork
 // package from this repo, in one folder pushwork can sync. knitoutjs's app
-// imports knitoutjs's tools and wm, and lattice's frame (src/frame) imports
-// both, from packages/; a relative import can't leave the folder that's
-// pushed, so the folder has them all at the paths they have on the site:
-// packages/knitoutjs, packages/wm (and packages/lattice, for lattice's
-// frame), under a modules.json that points at the package.
+// imports knitoutjs's tools and wm, and lattice's frame (packages/lattice)
+// imports both, from beside it in packages/; a relative import can't leave
+// the folder that's pushed, so the folder has them all at the paths they have
+// on the site: packages/knitoutjs, packages/wm (and packages/lattice, for
+// lattice's frame), under a modules.json that points at the package.
 //
 // what's in `dir` (stage/<package>, if not given) is replaced, all but its
 // .pushwork: the state that says which patchwork folder it is, and so which
 // url people's module settings have. --state links one in, if `dir` hasn't
 // one yet (~/soft/agnescameron/knitoutjs.pushwork is Knitout JS's, and
-// src/frame/.pushwork lattice's).
+// packages/lattice/.pushwork lattice's).
 //
 // it only stages. syncing it (pushwork sync, in `dir`) is for whoever
 // publishes
@@ -24,7 +24,7 @@ const args = process.argv.slice(2)
 const PACKAGES = {
 	// the app, what it's called, and what it brings with it
 	knitoutjs: {entry: "./packages/knitoutjs/app/index.js", name: "Knitout JS", with: ["knitoutjs", "wm"], meta: "packages/knitoutjs"},
-	lattice: {entry: "./packages/lattice/index.js", name: "Lattice", with: ["knitoutjs", "wm"], frame: true, meta: "src/frame"},
+	lattice: {entry: "./packages/lattice/index.js", name: "Lattice", with: ["knitoutjs", "wm", "lattice"], meta: "packages/lattice"},
 }
 const which = PACKAGES[args[0]]
 if (!which) throw new Error(`stage what? ${Object.keys(PACKAGES).join(" or ")}`)
@@ -67,7 +67,6 @@ if (state && !existsSync(join(dir, ".pushwork"))) {
 	await symlink(state, join(dir, ".pushwork"), "dir")
 }
 for (const each of which.with) await copyPackage(join(root, "packages", each), each)
-if (which.frame) await copyPackage(join(root, "src", "frame"), "lattice")
 
 await writeFile(
 	join(dir, "modules.json"),
