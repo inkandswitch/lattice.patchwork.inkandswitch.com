@@ -7,9 +7,12 @@ import {turnOf} from "./strands.js"
 import {YARNS_CHANGED, yarnPicker, yarnStrands} from "../knitoutjs/core/yarns.js"
 import {icon} from "../wm/ui/icons.js"
 import {stylesheet} from "../wm/ui/stylesheet.js"
+import {viewStateOf} from "../wm/view-state.js"
 
 const STYLESHEET = new URL("./animation.css", import.meta.url).href
 const SVG = "http://www.w3.org/2000/svg"
+// how often where it's got to goes to anyone following, while it plays (ms)
+const SHARE_EVERY = 1000
 const REPARSE_DELAY = 250
 
 // the machine, front on, in svg units: the back bed's needles hang down to
@@ -304,6 +307,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// 0–1, and so how wide the picture is, 1 to −1
 	let fromBack = false
 	let turned = 0
+	// where it's got to, for anyone following you (see "following" below)
+	let view = null
 	const facing = () => Math.cos(Math.PI * ease(turned))
 	const mirror = () => (facing() < 0 ? -1 : 1)
 	// the loop being pulled on: {id, offset from the pointer, the pointer}
@@ -800,6 +805,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function flip() {
 		fromBack = !fromBack
 		requestFrame()
+		share()
 	}
 
 	// turn it a little further round, if it's turning: whether it still is
@@ -872,6 +878,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			// skip over ops there's nothing to see of, so the next one's ready
 			while (index < knitout.ops.length && progress === 0 && !durationOf(index)) commit()
 			if (index >= knitout.ops.length) pause()
+			else if (now - sharedAt > SHARE_EVERY) share()
 			followAlong(now)
 		}
 		if (turnRound(dt)) needsFrame = true
@@ -903,12 +910,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		camera.follow = true
 		playButton.replaceChildren(icon("pause"), " pause")
 		requestFrame()
+		share()
 	}
 
 	function pause() {
 		playing = false
 		playButton.replaceChildren(icon("play"), " play")
 		requestFrame()
+		share()
 	}
 
 	// finish the op that's moving, or do the next one there's something to
@@ -921,6 +930,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (index < ops.length) commit()
 		}
 		requestFrame()
+		share()
 	}
 
 	// undo the op that's moving, or the last one there was something to see of
@@ -941,6 +951,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		progress = 0
 		drawAll()
 		requestFrame()
+		share()
 	}
 
 	// ── where we are, in words, and in the editors
@@ -1192,6 +1203,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	addEventListener(SETTINGS_CHANGED, onSettings)
 	speedSelect.addEventListener("change", () => {
 		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
+		share()
 	})
 	scrubber.addEventListener("input", () => {
 		pause()
@@ -1231,6 +1243,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		// the knitting stays where it was, if it's still that long
 		seek(Math.min(index, knitout.ops.length))
 		panel.check(text)
+		// someone's, from before it had anything to show it on
+		applyTheirs()
 	}
 
 	function scheduleReread() {
@@ -1241,9 +1255,60 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	handle.on("change", scheduleReread)
 	events.addEventListener("knitout:highlight-lines", onHighlightLines)
+	// ── following: where it's got to goes to anyone following you, as wm's
+	//    view state for the pane (the op it's at, whether it's playing, how
+	//    fast, which way round), again every SHARE_EVERY while it plays.
+	//    following someone, it's theirs that changes: it goes where they
+	//    are, and plays when they do, at its own pace, kept in step
+
+	let applying = false
+	let sharedAt = 0
+	let theirs = null
+	function share() {
+		if (applying || !view) return
+		sharedAt = performance.now()
+		view.set({at: index, playing, speed: SPEEDS.indexOf(speed), back: fromBack})
+	}
+	function applyTheirs() {
+		const state = theirs
+		if (!state || !knitout.ops.length) return
+		applying = true
+		try {
+			if (typeof state.back === "boolean" && state.back !== fromBack) flip()
+			if (Number.isInteger(state.speed) && SPEEDS[state.speed] && SPEEDS[state.speed] !== speed) {
+				speed = SPEEDS[state.speed]
+				speedSelect.value = String(state.speed)
+			}
+			if (Number.isInteger(state.at)) {
+				const target = Math.max(0, Math.min(knitout.ops.length, state.at))
+				// while it plays, near is near enough: each draws at its own pace
+				const slack = state.playing ? Math.max(2, speed.perSecond) : 0
+				if (Math.abs(target - index) > slack) goTo(target)
+			}
+			if (state.playing && !playing) play()
+			else if (!state.playing && playing) pause()
+		} finally {
+			applying = false
+		}
+	}
+	// to op `target`: forward from here when it's not far, else from the start
+	function goTo(target) {
+		if (target < index || target - index > 500) return seek(target)
+		while (index < target) commit()
+		progress = 0
+		requestFrame()
+	}
+	if (context.repo) {
+		view = viewStateOf(element, context.repo, state => {
+			theirs = state
+			applyTheirs()
+		})
+	}
+
 	reread()
 
 	return () => {
+		view?.stop()
 		delete element.inkSpace
 		playing = false
 		clearTimeout(timer)

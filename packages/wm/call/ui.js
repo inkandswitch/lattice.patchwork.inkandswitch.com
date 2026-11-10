@@ -51,7 +51,9 @@ function videoOf(stream, face) {
 /**
  * someone in the call (`props.id`, or "me" for you), as a round face: their
  * pictures while their camera's on, else their avatar, or their initial.
- * `props.size` is in px; `props.shape` "round" (the default) or "tile"
+ * `props.size` is in px; `props.shape` "round" (the default) or "tile";
+ * `props.muted` false leaves out saying they're muted (it's said beside
+ * their name instead)
  */
 export function Face(props) {
   const mine = () => props.id === "me";
@@ -77,7 +79,7 @@ export function Face(props) {
     title=${() => (props.title === false ? undefined : mine() ? "you" : person()?.name)}
   >
     ${() => (stream() ? video : image() ? "" : initial(person()?.name))}
-    <${Show} when=${() => person() && !person().mic}>
+    <${Show} when=${() => props.muted !== false && person() && !person().mic}>
       <span class="lattice-wm-call-muted" aria-label="muted">${icon("mic-off", 9)}</span>
     <//>
   </span>`;
@@ -188,9 +190,9 @@ function inWindow({ x, y, width }) {
 
 /**
  * everyone's faces, floating over everything, each where you put it and the
- * size you made it: dragged to move, and by its corner to size. each is the
- * picture's own shape (4:3), so none of it's cut off, or, double clicked, a
- * circle as tall, centred on their face (and double clicked again, back)
+ * size you made it: dragged to move, and by its corner to size. each is a
+ * circle centred on their face, or, double clicked, the picture's own shape
+ * (4:3), none of it cut off (and double clicked again, a circle)
  */
 export function CallFloating() {
   return html`<${Show} when=${() => call.get() && call.settings.faces === "floating"}>
@@ -229,7 +231,7 @@ export function CallFloating() {
             if (dragging) setFloating(key(), dragging.at);
             dragging = null;
           }
-          const shape = () => (at().shape === "round" ? "round" : "tile");
+          const shape = () => (at().shape === "tile" ? "tile" : "round");
           return html`<div
             class="lattice-wm-call-float"
             data-shape=${shape}
@@ -242,10 +244,15 @@ export function CallFloating() {
             onPointerCancel=${onPointerUp}
           >
             <span class="lattice-wm-call-float-picture">
-              <${Face} id=${peer.id} shape=${shape} />
+              <${Face} id=${peer.id} shape=${shape} muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
             </span>
-            <span class="lattice-wm-call-float-name">${() => peer.name}</span>
+            <span class="lattice-wm-call-float-name">
+              ${() => peer.name}
+              <${Show} when=${() => !peer.mic}>
+                <span class="lattice-wm-call-float-muted" aria-label="muted">${icon("mic-off", 10)}</span>
+              <//>
+            </span>
           </div>`;
         }}
       <//>

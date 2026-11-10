@@ -24,6 +24,54 @@ export function paneRepo(baseRepo, pane) {
 }
 
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
+
+/**
+ * for a tool: its view state, in a pane (or anywhere else that answers
+ * patchwork:view-state). `element` is where the tool is, `repo` the one it
+ * was given. `onState(state)` hears it, plain, whenever it changes to other
+ * than what you last set: someone you follow's, say. returns {set(fields),
+ * stop()}: set writes those fields (undefined ones go)
+ */
+export function viewStateOf(element, repo, onState) {
+  let handle = null;
+  let last = "";
+  let stopped = false;
+  const plain = () => JSON.parse(JSON.stringify(handle?.doc() ?? {}));
+  function read() {
+    if (!handle || stopped) return;
+    const state = plain();
+    const json = JSON.stringify(state);
+    if (json === last) return;
+    last = json;
+    onState(state);
+  }
+  const off = providers.subscribe(element, { type: "patchwork:view-state" }, async (url) => {
+    if (stopped || typeof url !== "string") return;
+    const found = await repo.find(url);
+    if (stopped) return;
+    handle?.off("change", read);
+    handle = found;
+    handle.on("change", read);
+    read();
+  });
+  return {
+    set(fields) {
+      if (!handle || stopped) return;
+      handle.change((doc) => {
+        for (const [key, value] of Object.entries(fields)) {
+          if (value === undefined) delete doc[key];
+          else if (!same(doc[key], value)) doc[key] = value;
+        }
+      });
+      last = JSON.stringify(plain());
+    },
+    stop() {
+      stopped = true;
+      off?.();
+      handle?.off("change", read);
+    },
+  };
+}
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 // `source` (plain) written over `target` (a doc being changed), touching only

@@ -1407,6 +1407,18 @@
 		opacity: 1;
 	}
 
+	& .lattice-wm-call-float-muted {
+		display: inline-grid;
+		place-items: center;
+		width: 14px;
+		height: 14px;
+		margin-left: 3px;
+		border-radius: 50%;
+		background: var(--lattice-wm-danger-fill);
+		color: var(--lattice-wm-danger-ink);
+		vertical-align: -3px;
+	}
+
 	& .lattice-wm-call-float-name {
 		padding: 1px 6px;
 		border-radius: var(--lattice-wm-round);
