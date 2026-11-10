@@ -957,14 +957,16 @@ function Frame(props) {
           </p>
         <//>
       </div>
-      <div class="lattice-tree-heading lattice-packages">
-        <${Fold}
-          name="packages"
-          open=${packagesOpen}
-          toggle=${fold(packagesOpen, setPackagesOpen, "lattice:packages-list:open")}
-        />
-      </div>
-      <div class="lattice-tree-children" hidden=${() => !packagesOpen()}></div>
+      <${Show} when=${secret}>
+        <div class="lattice-tree-heading lattice-packages">
+          <${Fold}
+            name="packages"
+            open=${packagesOpen}
+            toggle=${fold(packagesOpen, setPackagesOpen, "lattice:packages-list:open")}
+          />
+        </div>
+        <div class="lattice-tree-children" hidden=${() => !packagesOpen()}></div>
+      <//>
       </div>
       <${CallBar} inspector=${inspector} />
       <${Me} />
