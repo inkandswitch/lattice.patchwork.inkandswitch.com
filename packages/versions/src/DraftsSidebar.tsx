@@ -1475,7 +1475,7 @@ function CardActions(props: {
             title={`${label()} — fork a new draft from the version you're viewing`}
             onClick={(e) => run(e, props.onForkAt)}
           >
-            <HistoryIcon />
+            <ForkAtIcon />
           </button>
         )}
       </Show>
@@ -1614,7 +1614,10 @@ function TrashIcon() {
 }
 
 // A clock rewinding: the fork-from-a-past-version item.
-function HistoryIcon() {
+// Forking from a version in the history: the branch, with the history badge
+// over its bottom-right corner. The branch is cut away behind the badge (a
+// mask, so it reads on any background) rather than drawn over.
+function ForkAtIcon() {
   return (
     <svg
       width="14"
@@ -1626,9 +1629,21 @@ function HistoryIcon() {
       stroke-linecap="round"
       stroke-linejoin="round"
     >
-      <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-      <path d="M3 3v5h5" />
-      <path d="M12 7v5l4 2" />
+      <mask id="dgr-fork-at-cut">
+        <rect width="24" height="24" fill="white" />
+        <circle cx="17.5" cy="17.5" r="7.5" fill="black" />
+      </mask>
+      <g mask="url(#dgr-fork-at-cut)">
+        <line x1="6" x2="6" y1="3" y2="15" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+        <path d="M18 9a9 9 0 0 1-9 9" />
+      </g>
+      <g transform="translate(11.5 11.5) scale(0.5)" stroke-width="3.4">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+        <path d="M3 3v5h5" />
+        <path d="M12 7v5l4 2" />
+      </g>
     </svg>
   );
 }
@@ -1830,13 +1845,23 @@ function DraftChangesList(props: {
     changes: [],
     building: true,
   });
+  // Built once things are quiet: while a project opens, its docs mount one
+  // after another (each a new member, each a rebuild), and reading every
+  // member's history then competes with the opening. So the build waits
+  // until the members have held still a moment and the browser is idle.
   createEffect(() => {
     const members = props.members();
     const mainDocUrl = props.mainDocUrl;
     setTimeline({ changes: [], building: true });
     if (!repo) return;
-    const source = createTimelineSource(repo, members, mainDocUrl, setTimeline);
-    onCleanup(() => source.dispose());
+    let source: { dispose(): void } | null = null;
+    const wait = whenSettledAndIdle(() => {
+      source = createTimelineSource(repo, members, mainDocUrl, setTimeline);
+    });
+    onCleanup(() => {
+      wait.cancel();
+      source?.dispose();
+    });
   });
 
   // Member doc handles, resolved once per member set — needed for the
@@ -2940,6 +2965,27 @@ function authorColor(authorKey: string): string {
   }
   const h = Math.abs(hash) % 360;
   return `hsl(${h}, 45%, 63%)`;
+}
+
+// Run `then` once nothing's changed for SETTLE_MS and the browser is next
+// idle (or IDLE_TIMEOUT_MS has gone by, so it can't be put off forever).
+const SETTLE_MS = 600;
+const IDLE_TIMEOUT_MS = 4000;
+function whenSettledAndIdle(then: () => void): { cancel(): void } {
+  let idle: number | null = null;
+  const settle = setTimeout(() => {
+    if (typeof requestIdleCallback === "function") {
+      idle = requestIdleCallback(() => then(), { timeout: IDLE_TIMEOUT_MS });
+    } else {
+      then();
+    }
+  }, SETTLE_MS);
+  return {
+    cancel() {
+      clearTimeout(settle);
+      if (idle !== null) cancelIdleCallback(idle);
+    },
+  };
 }
 
 // ---- Grouping choice -------------------------------------------------------
