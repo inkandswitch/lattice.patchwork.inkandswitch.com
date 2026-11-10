@@ -8,12 +8,14 @@ built on, and Knitout JS too.
   button to update one from before.
 - `doc/`: the project's shape and its layout. nothing in it imports a
   package, so a datatype can use it in a worker.
-- `ui/`: icons, tooltips, sidebars, and the stylesheet helper.
+- `ui/`: icons, tooltips, sidebars, and the stylesheet helper. and
+  `secret.js`: what's hidden till ctrl, alt and command are tapped together
+  twice, with nothing else in between (the same again hides it).
 - `call/`: calls. `call.js` is the call itself (one in a tab, over webrtc,
   connecting over the project's room, the one presence is in), and `ui.js`
   its faces, the question before you join, and faces floating or down a
   sidebar. made from patchwork's `call` experiment. the phone's beside the
-  files' +, while a call's on or ctrl, alt and command are held.
+  files' +, while a call's on, or while it's not a secret.
 - `patchwork/`: finding and making docs, and a + menu item for a new doc of
   one of patchwork's datatypes.
 - `wm.css`: how it all looks, in `--lattice-wm-*` tokens made from the

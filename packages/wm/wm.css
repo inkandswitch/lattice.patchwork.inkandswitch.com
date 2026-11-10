@@ -214,8 +214,11 @@
 		/* clip, not hidden: an editor bringing its cursor into view mustn't
 		   scroll the pane itself and push the tabs off the top */
 		overflow: clip;
+		position: relative;
 		border-radius: var(--lattice-wm-radius);
 		background: var(--lattice-wm-sheet);
+		/* how far a selected tab's feet curve out */
+		--lattice-wm-tab-flare: 6px;
 	}
 
 	& .lattice-wm-tabs {
@@ -240,7 +243,8 @@
 	   them */
 	& .lattice-wm-tab {
 		--lattice-wm-tab-fill: transparent;
-		--lattice-wm-tab-flare: 6px;
+		/* the line round its pane, when there is one, carried round it */
+		--lattice-wm-tab-ring: 0px;
 		position: relative;
 		display: flex;
 		flex: none;
@@ -276,11 +280,14 @@
 				height: var(--lattice-wm-tab-flare);
 				pointer-events: none;
 			}
+			/* (and the line, round the curve, when there is one) */
 			&::before {
 				right: 100%;
 				background: radial-gradient(
 					circle at 0 0,
-					transparent var(--lattice-wm-tab-flare),
+					transparent calc(var(--lattice-wm-tab-flare) - var(--lattice-wm-tab-ring)),
+					var(--lattice-wm-doc) calc(var(--lattice-wm-tab-flare) - var(--lattice-wm-tab-ring)),
+					var(--lattice-wm-doc) var(--lattice-wm-tab-flare),
 					var(--lattice-wm-tab-fill) var(--lattice-wm-tab-flare)
 				);
 			}
@@ -288,9 +295,24 @@
 				left: 100%;
 				background: radial-gradient(
 					circle at 100% 0,
-					transparent var(--lattice-wm-tab-flare),
+					transparent calc(var(--lattice-wm-tab-flare) - var(--lattice-wm-tab-ring)),
+					var(--lattice-wm-doc) calc(var(--lattice-wm-tab-flare) - var(--lattice-wm-tab-ring)),
+					var(--lattice-wm-doc) var(--lattice-wm-tab-flare),
 					var(--lattice-wm-tab-fill) var(--lattice-wm-tab-flare)
 				);
+			}
+
+			/* its pane's lined (.lattice-wm-ring): the line comes up round it,
+			   one with the pane's, open only where it opens into the pane */
+			&[data-glow="same"] {
+				--lattice-wm-tab-ring: 1.5px;
+			}
+			&[data-shared] {
+				--lattice-wm-tab-ring: 2px;
+			}
+			&[data-glow="same"],
+			&[data-shared] {
+				box-shadow: 0 0 0 var(--lattice-wm-tab-ring) var(--lattice-wm-doc);
 			}
 		}
 
@@ -579,20 +601,12 @@
 			transition: box-shadow 0.15s;
 		}
 
-		/* showing the doc you're pointing at */
-		&[data-glow="same"]::after {
-			box-shadow:
-				inset 0 0 0 1.5px var(--lattice-wm-doc),
-				inset 0 0 10px color-mix(in oklab, var(--lattice-wm-doc) 14%, transparent);
-		}
-
 		/* showing a doc linked to it: the .js that writes it, the .k it writes.
 		   just the glow, softer, without the line */
 		&[data-glow="linked"]::after {
 			box-shadow: inset 0 0 12px color-mix(in oklab, var(--lattice-wm-doc) 16%, transparent);
 		}
 
-		&[data-shared]::before,
 		&[data-stuck]::before {
 			content: "";
 			position: absolute;
@@ -601,14 +615,44 @@
 			pointer-events: none;
 		}
 
-		/* showing a doc that's open in another pane too */
-		&[data-shared]::before {
-			box-shadow: inset 0 0 0 2px var(--lattice-wm-doc);
-		}
-
 		/* a .k that isn't keeping up with its .js: it failed, or it's out of date */
 		&[data-stuck]::before {
 			background: color-mix(in oklab, var(--lattice-wm-danger) 16%, transparent);
+		}
+	}
+
+	/* the line round a pane: showing the doc you're pointing at, or one
+	   that's open in another pane too. it runs along the tab bar's foot,
+	   under the other tabs, and is open where the selected tab is, whose
+	   own line carries it up and round (the workspace says where that is,
+	   as --lattice-wm-ring-start and -end: the tab's edges) */
+	& .lattice-wm-ring {
+		--lattice-wm-ring: 0px;
+		position: absolute;
+		inset: calc(var(--lattice-wm-ring-top, 34px) - var(--lattice-wm-ring)) 0 0;
+		z-index: 5;
+		border-radius: 0 0 var(--lattice-wm-radius) var(--lattice-wm-radius);
+		pointer-events: none;
+		transition: box-shadow 0.15s;
+		mask:
+			linear-gradient(#000 0 0) 0 0 / calc(var(--lattice-wm-ring-start, 0px) - var(--lattice-wm-tab-flare)) 3px no-repeat,
+			linear-gradient(#000 0 0) 100% 0 / calc(100% - var(--lattice-wm-ring-end, 0px) - var(--lattice-wm-tab-flare)) 3px no-repeat,
+			linear-gradient(#000 0 0) 0 100% / 100% calc(100% - 3px) no-repeat;
+
+		&[data-glow="same"] {
+			--lattice-wm-ring: 1.5px;
+		}
+		&[data-shared] {
+			--lattice-wm-ring: 2px;
+		}
+		&[data-glow="same"],
+		&[data-shared] {
+			box-shadow: inset 0 0 0 var(--lattice-wm-ring) var(--lattice-wm-doc);
+		}
+		&[data-glow="same"] {
+			box-shadow:
+				inset 0 0 0 var(--lattice-wm-ring) var(--lattice-wm-doc),
+				inset 0 0 10px color-mix(in oklab, var(--lattice-wm-doc) 14%, transparent);
 		}
 	}
 

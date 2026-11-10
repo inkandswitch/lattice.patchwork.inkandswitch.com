@@ -20,6 +20,7 @@ import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.j
 import { icon } from "../wm/ui/icons.js";
 import { tooltips } from "../wm/ui/tooltip.js";
 import { menuKeys } from "../wm/ui/menus.js";
+import { secret } from "../wm/ui/secret.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
@@ -875,18 +876,23 @@ function Frame(props) {
           if (files.length) takeArchives(files);
         }}
       />
-      <form class="lattice-wm-menu-url" onSubmit=${onAddFromUrl}>
-        <input
-          name="url"
-          placeholder="automerge:… url"
-          aria-label="a project's, folder's or directory's automerge url, or a .patchworkfolder pasted"
-          autocomplete="off"
-          disabled=${() => !!adding()}
-          onInput=${() => setAddProblem(null)}
-        />
-      </form>
+      <${Show} when=${secret}>
+        <form class="lattice-wm-menu-url" onSubmit=${onAddFromUrl}>
+          <input
+            name="url"
+            placeholder="automerge:… url"
+            aria-label="a project's, folder's or directory's automerge url, or a .patchworkfolder pasted"
+            autocomplete="off"
+            disabled=${() => !!adding()}
+            onInput=${() => setAddProblem(null)}
+          />
+        </form>
+      <//>
       <p class="lattice-wm-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
-        ${() => addProblem() ?? adding() ?? "a project, folder or directory · or drop or paste a .patchworkfolder"}
+        ${() =>
+          addProblem() ??
+          adding() ??
+          (secret() ? "a project, folder or directory · or drop or paste a .patchworkfolder" : "drop or paste a .patchworkfolder")}
       </p>
     </div>`;
   }

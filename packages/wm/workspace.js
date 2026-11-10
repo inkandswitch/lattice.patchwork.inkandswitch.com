@@ -22,6 +22,7 @@ import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
+import { secret } from "./ui/secret.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
 import { CallPrompt, CallFloating, Face } from "./call/ui.js";
 
@@ -359,8 +360,8 @@ export function mountWorkspace(
 
   // ── a call, in the project (call/call.js): hearing whether there's one
   //    on, and asking, as you arrive, whether you'll join it. the phone,
-  //    beside the +, is there while one's on, or while ctrl, alt and
-  //    command are held (and a moment after, to press it)
+  //    beside the +, is there while one's on, or while it's not a secret
+  //    (ui/secret.js: ctrl, alt and command, tapped together twice)
   const callProject = roomHandle && {
     room: roomHandle,
     repo: baseRepo,
@@ -376,35 +377,11 @@ export function mountWorkspace(
     : () => {};
   const callHere = () => !!callProject && call.get()?.room === roomHandle.url;
   const callOn = () => !!callProject && onCallIn(roomHandle.url).length > 0;
-  const [chord, setChord] = createSignal(false);
-  let chordTimer = null;
-  function onChord(event) {
-    clearTimeout(chordTimer);
-    if (event.ctrlKey && event.altKey && event.metaKey) setChord(true);
-    else if (chord()) chordTimer = setTimeout(() => setChord(false), 2500);
-  }
-  document.addEventListener("keydown", onChord);
-  document.addEventListener("keyup", onChord);
   let phone;
   function pressPhone() {
     if (callHere()) return hangUp();
     const box = phone?.getBoundingClientRect();
     ask(callProject, { at: box && { x: box.left, y: box.bottom + 6 }, focus: true });
-  }
-  // a ctrl-click on a mac is a right click, and never a click: it's the
-  // press that's the phone's, then (once it's let go of, so letting go
-  // doesn't close what it opens)
-  let chordPress = false;
-  function onPhoneDown(event) {
-    chordPress = event.button === 0 && event.ctrlKey;
-  }
-  function onPhoneUp() {
-    if (!chordPress) return;
-    setTimeout(pressPhone);
-  }
-  function onPhoneClick() {
-    if (chordPress) chordPress = false;
-    else pressPhone();
   }
 
   // ── what's going on in each pane: wm answers patchwork:view-state for
@@ -1585,6 +1562,33 @@ export function mountWorkspace(
     const active = createMemo(() => activeIn(group));
     let tabs;
     let body;
+    let section;
+
+    // where the selected tab is, across the pane, for the line round it
+    // (.lattice-wm-ring): it's open there. measured whenever the tabs
+    // move, change or scroll
+    const [ring, setRing] = createSignal({});
+    function measureRing() {
+      if (!section || !tabs) return;
+      const box = section.getBoundingClientRect();
+      const tab = tabs.querySelector(".lattice-wm-tab[data-selected]")?.getBoundingClientRect();
+      setRing({
+        "--lattice-wm-ring-top": `${tabs.offsetHeight}px`,
+        "--lattice-wm-ring-start": `${tab ? tab.left - box.left : 0}px`,
+        "--lattice-wm-ring-end": `${tab ? tab.right - box.left : 0}px`,
+      });
+    }
+    let ringFrame = null;
+    const remeasure = () => {
+      if (ringFrame == null) ringFrame = requestAnimationFrame(() => ((ringFrame = null), measureRing()));
+    };
+    const ringResized = new ResizeObserver(remeasure);
+    const ringChanged = new MutationObserver(remeasure);
+    onCleanup(() => {
+      ringResized.disconnect();
+      ringChanged.disconnect();
+      cancelAnimationFrame(ringFrame);
+    });
 
     // which part of this pane a drag is over: the tab bar (as a tab), a band
     // along an edge (to split), over .js code (to import), or the middle
@@ -1620,6 +1624,10 @@ export function mountWorkspace(
     return html`<section
       class="lattice-wm-group"
       data-group=${group.id}
+      ref=${(el) => {
+        section = el;
+        ringResized.observe(el);
+      }}
       onPointerDown=${() => setLastGroupId(group.id)}
       onFocusIn=${() => setLastGroupId(group.id)}
       onPointerMove=${(event) => {
@@ -1637,8 +1645,17 @@ export function mountWorkspace(
       }}
       onPointerLeave=${offPanes}
     >
-      <header class="lattice-wm-tabs" data-drop=${() => (onTabs() ? "" : undefined)} ref=${(el) => (tabs = el)}>
-        <div class="lattice-wm-tablist" role="tablist" aria-label="tabs">
+      <header
+        class="lattice-wm-tabs"
+        data-drop=${() => (onTabs() ? "" : undefined)}
+        ref=${(el) => {
+          tabs = el;
+          ringResized.observe(el);
+          ringChanged.observe(el, { subtree: true, childList: true, attributes: true, attributeFilter: ["data-selected"] });
+        }}
+        onScroll=${remeasure}
+      >
+        <div class="lattice-wm-tablist" role="tablist" aria-label="tabs" ref=${(el) => ringResized.observe(el)}>
           <${For} each=${() => group.panels}>
             ${(panel) => html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`}
           <//>
@@ -1710,6 +1727,14 @@ export function mountWorkspace(
           <//>
         </div>
       </div>
+      <div
+        class="lattice-wm-ring"
+        aria-hidden="true"
+        data-colour=${() => active() && docColour(active().url)}
+        data-glow=${() => active() && glow(active().url)}
+        data-shared=${() => (active() && inManyPanes(active().url) ? "" : undefined)}
+        style=${ring}
+      ></div>
     </section>`;
   }
 
@@ -2237,7 +2262,7 @@ export function mountWorkspace(
         <header class="lattice-wm-files-heading">
           <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
-          <${Show} when=${() => callProject && (chord() || callHere() || callOn())}>
+          <${Show} when=${() => callProject && (secret() || callHere() || callOn())}>
             <button
               class="lattice-wm-icon-button lattice-wm-phone"
               ref=${(el) => (phone = el)}
@@ -2245,10 +2270,7 @@ export function mountWorkspace(
               data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
               title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
               aria-label=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
-              onPointerDown=${onPhoneDown}
-              onPointerUp=${onPhoneUp}
-              onContextMenu=${(event) => event.preventDefault()}
-              onClick=${onPhoneClick}
+              onClick=${pressPhone}
             >
               ${() => icon(callHere() ? "hang-up" : "phone", 14)}
             </button>
@@ -2480,9 +2502,6 @@ export function mountWorkspace(
     document.removeEventListener("pointerdown", onPressWhileOpen, true);
     menusOff();
     document.removeEventListener("keyup", onAltKey);
-    document.removeEventListener("keydown", onChord);
-    document.removeEventListener("keyup", onChord);
-    clearTimeout(chordTimer);
     offCalls();
     offCallProject();
     clearTimeout(noticeTimer);
