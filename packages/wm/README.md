@@ -9,7 +9,16 @@ built on, and Knitout JS too.
 - `doc/`: the project's shape and its layout. nothing in it imports a
   package, so a datatype can use it in a worker.
 - `ui/`: icons, tooltips, sidebars, and the stylesheet helper.
-- `patchwork/`: finding and making docs.
+- `patchwork/`: finding and making docs, and a + menu item for a new doc of
+  one of patchwork's datatypes.
+- `wm.css`: how it all looks, in `--lattice-wm-*` tokens made from the
+  patchwork theme's. an app gives it a look of its own by setting those
+  (knitoutjs's `look.css` does, for lattice and Knitout JS). its menus
+  (`.lattice-wm-menu`), tooltips and sidebar resizers are an app's to use
+  too.
+
+what an app adds to the panes it adds as an extension: see the top of
+`workspace.js`. knitoutjs's is `../knitoutjs/wm.js`.
 
 it started as the panes in [knitoutjs](../knitoutjs), and is
 [AGPL-3.0-or-later](LICENSE), as it was there.

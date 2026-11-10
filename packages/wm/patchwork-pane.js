@@ -49,16 +49,16 @@ export default function PatchworkPane(handle, element, context) {
 // the "nothing's open" card, for a doc nothing here can open
 function noTool(type) {
   const empty = document.createElement("div");
-  empty.className = "knitoutjs-empty";
+  empty.className = "lattice-wm-empty";
   const card = document.createElement("div");
-  card.className = "knitoutjs-empty-card";
+  card.className = "lattice-wm-empty-card";
   const heading = document.createElement("h2");
-  heading.className = "knitoutjs-rough";
+  heading.className = "lattice-wm-heading";
   heading.textContent = "no tool for this";
   const kind = document.createElement("p");
   kind.append("it's a ");
   const tag = document.createElement("code");
-  tag.className = "knitoutjs-empty-type";
+  tag.className = "lattice-wm-empty-type";
   tag.textContent = type;
   kind.append(tag, ", and nothing here knows how to open one yet.");
   const wait = document.createElement("p");

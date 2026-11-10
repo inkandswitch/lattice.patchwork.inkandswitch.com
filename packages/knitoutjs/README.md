@@ -5,6 +5,16 @@ knitout in patchwork. write a pattern in javascript, build it into knitout
 tools lattice opens .js and .k files with, and "Knitout JS", a patchwork
 project of its own.
 
+## what's here
+
+- `core/`: the tools. the editor, the visualiser, running a pattern, yarns,
+  and `vendor/` (below). none of them knows about the panes they're in.
+- `wm.js`: what knitoutjs adds to a [wm](../wm) workspace: a .js linked to
+  the .k it writes, how its builds are going, and new patterns.
+- `look.css` and `look.js`: knitout.js's look, for a workspace. lattice wears
+  it too.
+- `app/`: "Knitout JS", the patchwork project of its own.
+
 ## where it comes from
 
 most of the knitting here is other people's work, carried over.

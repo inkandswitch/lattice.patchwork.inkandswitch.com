@@ -94,20 +94,20 @@ export function mountUpdate(element, update) {
         onError=${() => setStyled(true)}
       />
       <div
-        class="knitoutjs-editor-tool latticework-update"
+        class="lattice-wm-update"
         style=${() => (styled() ? {} : { visibility: "hidden" })}
       >
-        <div class="knitoutjs-empty">
-          <div class="knitoutjs-empty-card">
-            <h2 class="latticework-update-heading">made with an older version</h2>
+        <div class="lattice-wm-empty">
+          <div class="lattice-wm-empty-card">
+            <h2 class="lattice-wm-update-heading">made with an older version</h2>
             <p>older versions can't open it after · its drafts go</p>
-            <div class="knitoutjs-empty-actions">
-              <button class="knitoutjs-button" disabled=${busy} onClick=${onClick}>
+            <div class="lattice-wm-empty-actions">
+              <button class="lattice-wm-button" disabled=${busy} onClick=${onClick}>
                 ${() => (busy() ? "updating…" : "update")}
               </button>
             </div>
             <${Show} when=${problem}>
-              <p class="knitoutjs-empty-notice">${problem}</p>
+              <p class="lattice-wm-empty-notice">${problem}</p>
             <//>
           </div>
         </div>
@@ -120,9 +120,9 @@ export function mountUpdate(element, update) {
 function mountProblem(element, text) {
   return render(
     () => html`<link rel="stylesheet" href=${STYLESHEET} />
-      <div class="knitoutjs-editor-tool latticework-update">
-        <div class="knitoutjs-empty">
-          <div class="knitoutjs-empty-card"><p>${text}</p></div>
+      <div class="lattice-wm-update">
+        <div class="lattice-wm-empty">
+          <div class="lattice-wm-empty-card"><p>${text}</p></div>
         </div>
       </div>`,
     element,

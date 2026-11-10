@@ -172,7 +172,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	const events = context.events ?? element
 
 	const root = document.createElement("div")
-	root.className = "knitoutjs-editor-tool knitout-visualizer"
+	root.className = "knitoutjs-visualizer"
 	const link = stylesheet(STYLESHEET, root)
 	element.append(link, root)
 
@@ -184,10 +184,10 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	resizeObserver.observe(canvas)
 
 	const yarns = yarnPicker({handle})
-	const resetButton = withIcon("fit", button("knitout-button", "reset zoom", () => renderer?.resetZoom()))
-	const exportButton = withIcon("download", button("knitout-button", "export kcode", exportKcode))
+	const resetButton = withIcon("fit", button("knitoutjs-button", "reset zoom", () => renderer?.resetZoom()))
+	const exportButton = withIcon("download", button("knitoutjs-button", "export kcode", exportKcode))
 	const actions = document.createElement("div")
-	actions.className = "knitout-visualizer-actions"
+	actions.className = "knitoutjs-visualizer-actions"
 	actions.append(yarns.element, resetButton, exportButton)
 	resetButton.title = "fit the whole piece in view again (scroll to zoom, drag to move around)"
 	exportButton.title =
@@ -196,23 +196,23 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 
 	// what the stitch under the pointer is
 	const stitchInfo = document.createElement("div")
-	stitchInfo.className = "knitout-visualizer-stitch"
+	stitchInfo.className = "knitoutjs-visualizer-stitch"
 	stitchInfo.hidden = true
 	root.appendChild(stitchInfo)
 
 	const hint = document.createElement("div")
-	hint.className = "knitout-visualizer-hint"
+	hint.className = "knitoutjs-visualizer-hint"
 	hint.textContent =
 		"point at a stitch to see what it is · click it to find its line · double click to put the cursor there · hold shift to see the back bed"
 	root.appendChild(hint)
 
 	const empty = document.createElement("div")
-	empty.className = "knitout-visualizer-empty"
+	empty.className = "knitoutjs-visualizer-empty"
 	empty.textContent = "no stitches yet"
 	root.appendChild(empty)
 
 	const errorBar = document.createElement("div")
-	errorBar.className = "knitout-visualizer-error"
+	errorBar.className = "knitoutjs-visualizer-error"
 	root.appendChild(errorBar)
 
 	// every line a stitch came from, as {url, line}: the .js line first (if

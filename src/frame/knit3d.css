@@ -1,5 +1,25 @@
-.knitoutjs-editor-tool {
-	&.knit3d {
+/* the 3d tool: the fabric a .k makes, hanging from the needle bed */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--knit3d-sheet: var(--editor-fill);
+		--knit3d-ink: var(--editor-line);
+		--knit3d-sans: var(--studio-family-ui);
+		--knit3d-line-soft: var(--editor-fill-offset-20);
+		--knit3d-chrome: var(--studio-chrome-fill-offset-20);
+		--knit3d-chrome-ink: var(--studio-chrome-line);
+		--knit3d-line: var(--editor-line);
+		--knit3d-accent: var(--studio-primary-fill);
+		--knit3d-muted: oklch(from var(--knit3d-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--knit3d-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+		--knit3d-mono: var(--studio-family-code);
+		--knit3d-accent-ink: var(--studio-primary-line);
+	}
+}
+
+.knit3d {
+	& {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -9,9 +29,9 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		background: var(--knitoutjs-sheet);
-		color: var(--knitoutjs-ink);
-		font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+		background: var(--knit3d-sheet);
+		color: var(--knit3d-ink);
+		font: 12px var(--knit3d-sans);
 	}
 
 	& .knit3d-bar {
@@ -21,25 +41,25 @@
 		align-items: center;
 		gap: 6px 10px;
 		padding: 5px 6px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
+		border-bottom: 1px solid var(--knit3d-line-soft);
+		background: var(--knit3d-chrome);
+		color: var(--knit3d-chrome-ink);
 	}
 
 	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
 	& .knitout-button {
 		padding: 2px 8px;
-		border: 1px solid var(--knitoutjs-line, currentColor);
+		border: 1px solid var(--knit3d-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet, var(--studio-fill, #fff));
-		box-shadow: 1px 1px 0 var(--knitoutjs-line, currentColor);
+		background: var(--knit3d-sheet);
+		box-shadow: 1px 1px 0 var(--knit3d-line);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
 
 		&:hover {
 			translate: -1px -1px;
-			box-shadow: 2px 2px 0 var(--knitoutjs-line, currentColor);
+			box-shadow: 2px 2px 0 var(--knit3d-line);
 		}
 
 		&:active {
@@ -48,20 +68,20 @@
 		}
 	}
 
-	/* (its text by contrast with its fill: latticework.css's --button-ink.
+	/* (its text by contrast with its fill: latticework.css's --knit3d-button-ink.
 	   doubled up to outrank a shell's `button { color: inherit }`) */
 	& .knitout-button.knit3d-play {
-		--button-fill: var(--knitoutjs-accent);
+		--knit3d-button-fill: var(--knit3d-accent);
 		min-width: 5em;
-		background: var(--button-fill);
-		color: var(--button-ink, #fff);
+		background: var(--knit3d-button-fill);
+		color: var(--knit3d-button-ink, var(--knit3d-accent-ink));
 	}
 
 	& .knit3d-select {
 		padding: 2px 4px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--knit3d-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet);
+		background: var(--knit3d-sheet);
 		color: inherit;
 		font: inherit;
 	}
@@ -69,7 +89,7 @@
 	& .knit3d-scrubber {
 		flex: 1 1 120px;
 		min-width: 80px;
-		accent-color: var(--knitoutjs-accent);
+		accent-color: var(--knit3d-accent);
 	}
 
 	& .knit3d-round,
@@ -77,10 +97,10 @@
 		display: flex;
 		align-items: center;
 		gap: 4px;
-		color: var(--knitoutjs-muted);
+		color: var(--knit3d-muted);
 		font-size: 11px;
 		white-space: nowrap;
-		accent-color: var(--knitoutjs-accent);
+		accent-color: var(--knit3d-accent);
 
 		& input[type="range"] {
 			width: 70px;
@@ -112,8 +132,8 @@
 		inset: 0;
 		display: grid;
 		place-items: center;
-		color: var(--knitoutjs-muted);
-		font: italic 15px var(--knitoutjs-serif, Georgia, serif);
+		color: var(--knit3d-muted);
+		font: italic 15px var(--knit3d-serif);
 		pointer-events: none;
 	}
 
@@ -121,20 +141,30 @@
 		flex: none;
 		padding: 3px 8px;
 		overflow: hidden;
-		border-top: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
-		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		border-top: 1px solid var(--knit3d-line-soft);
+		background: var(--knit3d-chrome);
+		color: var(--knit3d-chrome-ink);
+		font: 11px var(--knit3d-mono);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 
-		&.is-hint {
-			color: var(--knitoutjs-muted);
-			font-family: var(--knitoutjs-sans, system-ui, sans-serif);
+		&[data-hint] {
+			color: var(--knit3d-muted);
+			font-family: var(--knit3d-sans);
 		}
 	}
 
 	& [hidden].knit3d-empty {
 		display: none;
+	}
+}
+
+/* a filled button's text: offset black or white, whichever reads better on
+   its fill. a button says what it's filled with as --knit3d-button-fill and
+   takes var(--knit3d-button-ink, …) for its colour: the …, where browsers can't
+   tell (offset black is black with a fifth of the fill in it) */
+@supports (color: contrast-color(red)) {
+	.knit3d :where(button, label) {
+		--knit3d-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--knit3d-button-fill)) 80%, var(--knit3d-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 	}
 }

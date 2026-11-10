@@ -1,0 +1,191 @@
+/* the .js and .k editor: patchwork's file editor, with a run bar over a
+   .js and a note over a .k that's generated */
+@import url("./tokens.css");
+
+.knitoutjs-editor {
+	display: flex;
+	flex: 1 1 0;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+
+	& .knitoutjs-runbar {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 8px;
+		padding: 4px 6px;
+		border-bottom: 1px solid var(--knitoutjs-line-soft);
+		font-size: 11px;
+	}
+
+	/* doubled up to outrank a shell's `button { color: inherit }` */
+	& .knitoutjs-button.knitoutjs-run {
+		--knitoutjs-button-fill: var(--knitoutjs-accent);
+		min-width: 5em;
+		padding: 1px 12px;
+		background: var(--knitoutjs-button-fill);
+		color: var(--knitoutjs-button-ink, var(--knitoutjs-accent-ink));
+		font-weight: 600;
+
+		&[data-running] {
+			--knitoutjs-button-fill: var(--knitoutjs-ink);
+			color: var(--knitoutjs-button-ink, var(--knitoutjs-sheet));
+		}
+	}
+
+	& .knitoutjs-auto {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		cursor: pointer;
+
+		& input {
+			margin: 0;
+			accent-color: var(--knitoutjs-ok);
+		}
+	}
+
+	& .knitoutjs-status {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		color: var(--knitoutjs-muted);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+
+		&[data-state="ok"] {
+			color: var(--knitoutjs-ok);
+		}
+		&[data-state="error"],
+		&[data-state="ask"] {
+			color: var(--knitoutjs-danger);
+		}
+	}
+
+	& .knitoutjs-target {
+		display: inline-flex;
+		flex: none;
+		align-items: center;
+		gap: 5px;
+
+		& select {
+			max-width: 16ch;
+			padding: 1px 2px;
+			border: 1px solid var(--knitoutjs-line-soft);
+			border-radius: 2px;
+			background: var(--knitoutjs-sheet);
+			color: inherit;
+			font: inherit;
+		}
+	}
+
+	& .knitoutjs-open {
+		flex: none;
+		padding: 0 2px;
+		border: none;
+		background: none;
+		color: var(--knitoutjs-muted);
+		font: inherit;
+		cursor: pointer;
+
+		&:hover:not(:disabled) {
+			color: var(--knitoutjs-ink);
+			text-decoration: underline;
+		}
+	}
+
+	& .knitoutjs-ask {
+		display: inline-flex;
+		flex: none;
+		gap: 6px;
+
+		& .knitoutjs-button {
+			padding: 0 8px;
+		}
+	}
+
+	& .knitoutjs-error-line {
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		font-weight: 600;
+		text-decoration: underline;
+		text-underline-offset: 2px;
+		cursor: pointer;
+	}
+
+	& .knitoutjs-readonly {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 10px;
+		padding: 4px 8px;
+		border-bottom: 1px solid var(--knitoutjs-line-soft);
+		background: var(--knitoutjs-highlighter);
+		font-size: 11px;
+
+		& span {
+			flex: 1;
+			min-width: 0;
+		}
+
+		& .knitoutjs-button {
+			flex: none;
+			padding: 0 8px;
+		}
+	}
+
+	& .knitoutjs-target-label {
+		color: var(--knitoutjs-muted);
+	}
+
+	/* a 1px line and a 1px shadow, lifting on hover */
+	& .knitoutjs-button {
+		padding: 2px 10px;
+		border: 1px solid var(--knitoutjs-line);
+		border-radius: 2px;
+		background: var(--knitoutjs-sheet);
+		box-shadow: 1px 1px 0 var(--knitoutjs-line);
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+
+		&:hover {
+			translate: -1px -1px;
+			box-shadow: 2px 2px 0 var(--knitoutjs-line);
+		}
+
+		&:active {
+			translate: 1px 1px;
+			box-shadow: none;
+		}
+	}
+
+	/* the .k it writes, in its colour (the one its panes wear) */
+	& .knitoutjs-swatch {
+		flex: none;
+		width: 8px;
+		height: 8px;
+		border: 1px solid var(--knitoutjs-line);
+		background: var(--knitoutjs-target-colour);
+	}
+
+	/* what a box says before anything's in it: gentle, but readable */
+	& ::placeholder {
+		color: var(--knitoutjs-muted);
+		opacity: 1;
+	}
+
+	/* a filled button's text: offset black or white, whichever reads better
+	   on its fill. a button says what it's filled with as --knitoutjs-button-fill and
+	   takes var(--knitoutjs-button-ink, …) for its colour: the …, where browsers can't
+	   tell (offset black is black with a fifth of the fill in it) */
+	@supports (color: contrast-color(red)) {
+		& :where(button, label) {
+			--knitoutjs-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--knitoutjs-button-fill)) 80%, var(--knitoutjs-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
+		}
+	}
+}

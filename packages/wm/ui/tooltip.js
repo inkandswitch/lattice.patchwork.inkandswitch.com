@@ -2,7 +2,9 @@
 // of these rather than the browser's own. the title stays where the words
 // live (and what screen readers read): it's lifted off while the pointer's
 // over it, so the browser's doesn't show too, and put back after
-const SCOPE = ".knitoutjs-editor-tool";
+// where they're shown: under any of these (each caller of tooltips() says
+// where it wants them)
+const scopes = new Set();
 // the first waits this long; for a while after one shuts, the next doesn't
 const DELAY = 450;
 const WARM = 400;
@@ -10,12 +12,13 @@ const GAP = 6;
 
 let installed = false;
 
-export function tooltips() {
+export function tooltips(scope) {
+  if (scope) scopes.add(scope);
   if (installed || typeof document === "undefined") return;
   installed = true;
 
   const tip = document.createElement("div");
-  tip.className = "knitoutjs-tooltip";
+  tip.className = "lattice-wm-tooltip";
   tip.popover = "manual";
   tip.setAttribute("aria-hidden", "true");
   document.body.append(tip);
@@ -28,7 +31,7 @@ export function tooltips() {
 
   const titled = (target) => {
     const el = target?.closest?.("[title], [data-tip]");
-    return el && el.closest(SCOPE) ? el : null;
+    return el && scopes.size && el.closest([...scopes].join(", ")) ? el : null;
   };
 
   function lift(el) {

@@ -216,7 +216,7 @@ export default function KniterateTool(handle, element, context = {}) {
 	const events = context.events ?? element
 
 	const root = document.createElement("div")
-	root.className = "knitoutjs-editor-tool kniterate"
+	root.className = "kniterate"
 	const link = stylesheet(STYLESHEET, root)
 	element.append(link, root)
 
@@ -314,14 +314,14 @@ export default function KniterateTool(handle, element, context = {}) {
 	let colours = null
 	function readColours() {
 		colours = {
-			sheet: resolve("var(--knitoutjs-sheet)"),
-			ink: resolve("var(--knitoutjs-ink)"),
-			muted: resolve("var(--knitoutjs-muted)"),
-			grid: resolve("var(--knitoutjs-line-soft)"),
-			chrome: resolve("var(--knitoutjs-chrome)"),
-			highlight: resolve("var(--knitoutjs-highlighter)"),
-			accent: resolve("var(--knitoutjs-accent)"),
-			mono: getComputedStyle(root).getPropertyValue("--knitoutjs-mono").trim() || "monospace",
+			sheet: resolve("var(--kniterate-sheet)"),
+			ink: resolve("var(--kniterate-ink)"),
+			muted: resolve("var(--kniterate-muted)"),
+			grid: resolve("var(--kniterate-line-soft)"),
+			chrome: resolve("var(--kniterate-chrome)"),
+			highlight: resolve("var(--kniterate-highlighter)"),
+			accent: resolve("var(--kniterate-accent)"),
+			mono: getComputedStyle(root).getPropertyValue("--kniterate-mono").trim() || "monospace",
 			yarns: yarnColours(handle.doc()),
 		}
 	}
@@ -362,8 +362,8 @@ export default function KniterateTool(handle, element, context = {}) {
 
 	function setSide(next) {
 		turn(() => (side = next))
-		frontButton.classList.toggle("is-on", side === "front")
-		rearButton.classList.toggle("is-on", side === "rear")
+		frontButton.toggleAttribute("data-on", side === "front")
+		rearButton.toggleAttribute("data-on", side === "rear")
 	}
 
 	function columns() {
@@ -788,7 +788,7 @@ export default function KniterateTool(handle, element, context = {}) {
 		const passChanged = spot?.pass !== hovered?.pass
 		hovered = spot
 		status.textContent = spot ? describe(spot) : HINT
-		status.classList.toggle("is-hint", !spot)
+		status.toggleAttribute("data-hint", !spot)
 		if (passChanged) {
 			dispatch("knitout:hover-source", located(passes[spot?.pass]) ?? {url: null, at: []})
 		}
@@ -969,7 +969,7 @@ export default function KniterateTool(handle, element, context = {}) {
 
 	setSide("front")
 	status.textContent = HINT
-	status.classList.add("is-hint")
+	status.toggleAttribute("data-hint", true)
 
 	const resizeObserver = new ResizeObserver(resize)
 	resizeObserver.observe(canvas)

@@ -8,6 +8,9 @@ import { docText, fileExtension, knitoutOf } from "./files.js";
 import { runInto } from "./run.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
+import { stylesheet } from "./stylesheet.js";
+
+const STYLESHEET = new URL("./editor.css", import.meta.url).href;
 
 const AUTO_RUN_DELAY = 600;
 
@@ -44,7 +47,8 @@ function identifierFor(name) {
  *   it forward); with a tool to open it with, else the file's first
  * - openIfClosed(url, element, edge): show a doc beside this one, unless it's
  *   showing somewhere already
- * - docColour(url): the colour a doc wears in every pane showing it
+ * - docColour(url): the colour a doc wears in every pane showing it (a css
+ *   colour)
  *
  * a .js file gets a build bar: it writes its knitout into a .k file. docs
  * dropped onto its code become imports (the frame asks `element.dropInto`)
@@ -325,7 +329,7 @@ export default function KnitoutEditorTool(handle, element, context) {
       <label
         class="knitoutjs-target"
         title="the .k file this pattern writes its knitout (the machine's instructions) into"
-        data-colour=${targetColour}
+        style=${() => ({ "--knitoutjs-target-colour": targetColour() })}
         onPointerEnter=${() => hover(run.target())}
         onPointerLeave=${() => hover(null)}
       >
@@ -402,10 +406,11 @@ export default function KnitoutEditorTool(handle, element, context) {
     `;
   }
 
+  let link;
   const dispose = render(() => {
     run = isJs ? createRunner() : null;
     return html`
-      <div class="knitoutjs-editor">
+      <div class="knitoutjs-editor" ref=${(el) => element.prepend((link = stylesheet(STYLESHEET, el)))}>
         <${Show} when=${isJs}>
           <${BuildBar} />
           <//>
@@ -453,5 +458,6 @@ export default function KnitoutEditorTool(handle, element, context) {
     delete element.dropInto;
     element.removeEventListener(EXTENSIONS_EVENT, onExtensions);
     dispose();
+    link?.remove();
   };
 }

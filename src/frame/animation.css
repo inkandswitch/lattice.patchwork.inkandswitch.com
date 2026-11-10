@@ -1,5 +1,26 @@
-.knitoutjs-editor-tool {
-	&.knitout-animation {
+/* the animation tool: a .k being knitted, a stitch at a time */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--knitout-animation-sheet: var(--editor-fill);
+		--knitout-animation-ink: var(--editor-line);
+		--knitout-animation-sans: var(--studio-family-ui);
+		--knitout-animation-line-soft: var(--editor-fill-offset-20);
+		--knitout-animation-chrome: var(--studio-chrome-fill-offset-20);
+		--knitout-animation-chrome-ink: var(--studio-chrome-line);
+		--knitout-animation-line: var(--editor-line);
+		--knitout-animation-accent: var(--studio-primary-fill);
+		--knitout-animation-accent-ink: var(--studio-primary-line);
+		--knitout-animation-muted: oklch(from var(--knitout-animation-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--knitout-animation-mono: var(--studio-family-code);
+		--knitout-animation-danger: var(--editor-danger-text);
+		--knitout-animation-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+	}
+}
+
+.knitout-animation {
+	& {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -9,9 +30,9 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		background: var(--knitoutjs-sheet);
-		color: var(--knitoutjs-ink);
-		font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+		background: var(--knitout-animation-sheet);
+		color: var(--knitout-animation-ink);
+		font: 12px var(--knitout-animation-sans);
 	}
 
 	& .knitout-animation-bar {
@@ -21,25 +42,25 @@
 		align-items: center;
 		gap: 6px;
 		padding: 5px 6px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
+		border-bottom: 1px solid var(--knitout-animation-line-soft);
+		background: var(--knitout-animation-chrome);
+		color: var(--knitout-animation-chrome-ink);
 	}
 
 	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
 	& .knitout-button {
 		padding: 2px 8px;
-		border: 1px solid var(--knitoutjs-line, currentColor);
+		border: 1px solid var(--knitout-animation-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet, var(--studio-fill, #fff));
-		box-shadow: 1px 1px 0 var(--knitoutjs-line, currentColor);
+		background: var(--knitout-animation-sheet);
+		box-shadow: 1px 1px 0 var(--knitout-animation-line);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
 
 		&:hover {
 			translate: -1px -1px;
-			box-shadow: 2px 2px 0 var(--knitoutjs-line, currentColor);
+			box-shadow: 2px 2px 0 var(--knitout-animation-line);
 		}
 
 		&:active {
@@ -49,27 +70,27 @@
 	}
 
 	/* the one button that does something (its text by contrast with its
-	   fill: latticework.css's --button-ink. doubled up to outrank a shell's
+	   fill: latticework.css's --knitout-animation-button-ink. doubled up to outrank a shell's
 	   `button { color: inherit }`) */
 	& .knitout-button.knitout-animation-play {
-		--button-fill: var(--knitoutjs-accent);
+		--knitout-animation-button-fill: var(--knitout-animation-accent);
 		min-width: 5em;
-		background: var(--button-fill);
-		color: var(--button-ink, #fff);
+		background: var(--knitout-animation-button-fill);
+		color: var(--knitout-animation-button-ink, var(--knitout-animation-accent-ink));
 	}
 
 	/* seen from behind */
 	& .knitout-animation-flip[aria-pressed="true"] {
-		--button-fill: var(--knitoutjs-accent);
-		background: var(--button-fill);
-		color: var(--button-ink, var(--knitoutjs-accent-ink));
+		--knitout-animation-button-fill: var(--knitout-animation-accent);
+		background: var(--knitout-animation-button-fill);
+		color: var(--knitout-animation-button-ink, var(--knitout-animation-accent-ink));
 	}
 
 	& .knitout-animation-speed {
 		padding: 2px 4px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--knitout-animation-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet);
+		background: var(--knitout-animation-sheet);
 		color: inherit;
 		font: inherit;
 	}
@@ -77,21 +98,21 @@
 	& .knitout-animation-scrubber {
 		flex: 1 1 120px;
 		min-width: 80px;
-		accent-color: var(--knitoutjs-accent);
+		accent-color: var(--knitout-animation-accent);
 	}
 
 	& .knitout-animation-toggle {
 		display: flex;
 		align-items: center;
 		gap: 3px;
-		color: var(--knitoutjs-muted);
+		color: var(--knitout-animation-muted);
 		font-size: 11px;
 		cursor: pointer;
 	}
 
 	& .knitout-animation-counter {
-		color: var(--knitoutjs-muted);
-		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		color: var(--knitout-animation-muted);
+		font: 11px var(--knitout-animation-mono);
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -133,7 +154,7 @@
 		/* (a <use> is drawn from what it inherits, not from rules on the shape
 		   it copies) */
 		& .rest {
-			stroke: var(--knitoutjs-muted);
+			stroke: var(--knitout-animation-muted);
 			stroke-width: 0.9;
 
 			&.busy {
@@ -142,11 +163,11 @@
 		}
 
 		& .sprite {
-			stroke: var(--knitoutjs-ink);
+			stroke: var(--knitout-animation-ink);
 			stroke-width: 1.2;
 
 			& .butt {
-				fill: var(--knitoutjs-ink);
+				fill: var(--knitout-animation-ink);
 				stroke: none;
 			}
 		}
@@ -156,7 +177,7 @@
 			opacity: 0.7;
 		}
 
-		&.is-from-back {
+		&[data-from-back] {
 			& .layer-backLoops {
 				opacity: 1;
 			}
@@ -171,38 +192,38 @@
 			cursor: grab;
 		}
 
-		&.is-pulling {
+		&[data-pulling] {
 			cursor: grabbing;
 		}
 
 		& .carriage {
 			& .body {
-				fill: color-mix(in oklab, var(--knitoutjs-chrome) 70%, var(--knitoutjs-ink));
-				stroke: var(--knitoutjs-ink);
+				fill: color-mix(in oklab, var(--knitout-animation-chrome) 70%, var(--knitout-animation-ink));
+				stroke: var(--knitout-animation-ink);
 				stroke-width: 0.8;
 			}
 
 			& .handle {
-				fill: var(--knitoutjs-ink);
+				fill: var(--knitout-animation-ink);
 			}
 
 			& .cam {
-				stroke: var(--knitoutjs-ink);
+				stroke: var(--knitout-animation-ink);
 				stroke-width: 1.2;
 			}
 
 			& .arrow {
-				stroke: var(--knitoutjs-chrome);
+				stroke: var(--knitout-animation-chrome);
 				stroke-width: 1.4;
 			}
 		}
 
 		& .loop[data-op]:hover {
-			stroke: var(--knitoutjs-ink);
+			stroke: var(--knitout-animation-ink);
 		}
 
 		& .loop {
-			stroke: var(--yarn);
+			stroke: var(--knitout-animation-yarn);
 			stroke-width: 1.7;
 
 			&.tuck {
@@ -212,27 +233,27 @@
 			/* showing strain: pulled a third, two thirds, all the way to its
 			   yarn's reach */
 			&.strain-1 {
-				stroke: color-mix(in oklab, var(--knitoutjs-danger) 35%, var(--yarn));
+				stroke: color-mix(in oklab, var(--knitout-animation-danger) 35%, var(--knitout-animation-yarn));
 			}
 
 			&.strain-2 {
-				stroke: color-mix(in oklab, var(--knitoutjs-danger) 65%, var(--yarn));
+				stroke: color-mix(in oklab, var(--knitout-animation-danger) 65%, var(--knitout-animation-yarn));
 			}
 
 			&.strain-3 {
-				stroke: var(--knitoutjs-danger);
+				stroke: var(--knitout-animation-danger);
 			}
 		}
 
 		& .feeder {
 			& rect {
-				fill: var(--yarn);
-				stroke: var(--knitoutjs-ink);
+				fill: var(--knitout-animation-yarn);
+				stroke: var(--knitout-animation-ink);
 				stroke-width: 0.5;
 			}
 
 			& .yarn {
-				stroke: var(--yarn);
+				stroke: var(--knitout-animation-yarn);
 				stroke-width: 1.1;
 			}
 
@@ -242,28 +263,28 @@
 			}
 
 			& text {
-				fill: var(--knitoutjs-muted);
+				fill: var(--knitout-animation-muted);
 				stroke: none;
-				font: 5px var(--knitoutjs-mono, ui-monospace, monospace);
+				font: 5px var(--knitout-animation-mono);
 			}
 		}
 
-		/* carriers' yarns (--yarn-0…5, set from yarns.js), in the order the
+		/* carriers' yarns (--knitout-animation-yarn-0…5, set from yarns.js), in the order the
 		   Carriers header names them */
-		& .y0 { --yarn: var(--yarn-0); }
-		& .y1 { --yarn: var(--yarn-1); }
-		& .y2 { --yarn: var(--yarn-2); }
-		& .y3 { --yarn: var(--yarn-3); }
-		& .y4 { --yarn: var(--yarn-4); }
-		& .y5 { --yarn: var(--yarn-5); }
+		& .y0 { --knitout-animation-yarn: var(--knitout-animation-yarn-0); }
+		& .y1 { --knitout-animation-yarn: var(--knitout-animation-yarn-1); }
+		& .y2 { --knitout-animation-yarn: var(--knitout-animation-yarn-2); }
+		& .y3 { --knitout-animation-yarn: var(--knitout-animation-yarn-3); }
+		& .y4 { --knitout-animation-yarn: var(--knitout-animation-yarn-4); }
+		& .y5 { --knitout-animation-yarn: var(--knitout-animation-yarn-5); }
 		/* and their second strands', 6…11, if they've two (what's shown of a
 		   loop on a needle is the strand on top: see strands.js) */
-		& .y6 { --yarn: var(--yarn-6); }
-		& .y7 { --yarn: var(--yarn-7); }
-		& .y8 { --yarn: var(--yarn-8); }
-		& .y9 { --yarn: var(--yarn-9); }
-		& .y10 { --yarn: var(--yarn-10); }
-		& .y11 { --yarn: var(--yarn-11); }
+		& .y6 { --knitout-animation-yarn: var(--knitout-animation-yarn-6); }
+		& .y7 { --knitout-animation-yarn: var(--knitout-animation-yarn-7); }
+		& .y8 { --knitout-animation-yarn: var(--knitout-animation-yarn-8); }
+		& .y9 { --knitout-animation-yarn: var(--knitout-animation-yarn-9); }
+		& .y10 { --knitout-animation-yarn: var(--knitout-animation-yarn-10); }
+		& .y11 { --knitout-animation-yarn: var(--knitout-animation-yarn-11); }
 	}
 
 	& .knitout-animation-empty {
@@ -271,8 +292,8 @@
 		inset: 0;
 		display: grid;
 		place-items: center;
-		color: var(--knitoutjs-muted);
-		font: italic 15px var(--knitoutjs-serif, Georgia, serif);
+		color: var(--knitout-animation-muted);
+		font: italic 15px var(--knitout-animation-serif);
 		pointer-events: none;
 	}
 
@@ -280,30 +301,40 @@
 		flex: none;
 		padding: 3px 8px;
 		overflow: hidden;
-		border-top: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
-		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		border-top: 1px solid var(--knitout-animation-line-soft);
+		background: var(--knitout-animation-chrome);
+		color: var(--knitout-animation-chrome-ink);
+		font: 11px var(--knitout-animation-mono);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 
-		&.is-hint {
-			color: var(--knitoutjs-muted);
-			font-family: var(--knitoutjs-sans, system-ui, sans-serif);
+		&[data-hint] {
+			color: var(--knitout-animation-muted);
+			font-family: var(--knitout-animation-sans);
 		}
 	}
 
 	& .knitout-animation-error {
 		flex: none;
 		padding: 4px 8px;
-		border-top: 1px solid var(--knitoutjs-danger);
-		background: color-mix(in oklab, var(--knitoutjs-danger) 12%, var(--knitoutjs-sheet));
-		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		border-top: 1px solid var(--knitout-animation-danger);
+		background: color-mix(in oklab, var(--knitout-animation-danger) 12%, var(--knitout-animation-sheet));
+		font: 11px var(--knitout-animation-mono);
 		cursor: pointer;
 	}
 
 	& [hidden].knitout-animation-empty,
 	& [hidden].knitout-animation-error {
 		display: none;
+	}
+}
+
+/* a filled button's text: offset black or white, whichever reads better on
+   its fill. a button says what it's filled with as --knitout-animation-button-fill and
+   takes var(--knitout-animation-button-ink, …) for its colour: the …, where browsers can't
+   tell (offset black is black with a fifth of the fill in it) */
+@supports (color: contrast-color(red)) {
+	.knitout-animation :where(button, label) {
+		--knitout-animation-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--knitout-animation-button-fill)) 80%, var(--knitout-animation-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 	}
 }

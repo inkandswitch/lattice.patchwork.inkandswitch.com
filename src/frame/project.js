@@ -4,6 +4,7 @@ import { createRoot } from "solid-js";
 import { mountProject } from "../../packages/wm/project-view.js";
 import { datatypeItem } from "../../packages/wm/patchwork/docs.js";
 import { knitout } from "../../packages/knitoutjs/wm.js";
+import { wearLook } from "../../packages/knitoutjs/look.js";
 import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../../packages/knitoutjs/app/migrate.js";
 import { tools } from "./files.js";
 import { newMachine, newSwatch, newYarn } from "./profile-docs.js";
@@ -64,6 +65,8 @@ export function latticeOptions(baseRepo, hive) {
 }
 
 export default function LatticeProjectTool(handle, element) {
+  // knitout.js's look, which the frame wears too
+  wearLook();
   const repo = element.repo;
   const baseRepo = repo.baseRepo ?? repo;
   return createRoot((dispose) => {

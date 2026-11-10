@@ -1,16 +1,67 @@
 /* the frame around a project: top bar, projects and /system down the left,
    and the inspector down the right. the project itself, its files beside its
    panes, is wm's (packages/wm/wm.css) */
-.knitoutjs-editor-tool.lattice-shell {
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--lattice-shell-chrome-fill: var(--studio-chrome-fill);
+		--lattice-shell-chrome-line: var(--studio-chrome-line);
+		--lattice-shell-family-ui: var(--studio-family-ui);
+		--lattice-shell-chrome-fill-offset-30: var(--studio-chrome-fill-offset-30);
+		--lattice-shell-family-code: var(--studio-family-code);
+		--lattice-shell-primary: var(--studio-primary);
+		--lattice-shell-radius-sm: var(--studio-radius-sm);
+		--lattice-shell-chrome-fill-offset-20: var(--studio-chrome-fill-offset-20);
+		--lattice-shell-radius-round: var(--studio-radius-round);
+		--lattice-shell-warning-fill: var(--studio-warning-fill);
+		--lattice-shell-warning-line: var(--studio-warning-line);
+		--lattice-shell-fill: var(--studio-fill);
+		--lattice-shell-transition-fast: var(--studio-transition-fast);
+		--lattice-shell-danger: var(--studio-danger);
+		--lattice-shell-radius: var(--studio-radius);
+		--lattice-shell-line: var(--studio-line);
+		--lattice-shell-danger-line: var(--studio-danger-line);
+		--lattice-shell-primary-line: var(--studio-primary-line);
+		--lattice-shell-text-editor-line: var(--text-editor-line);
+		--lattice-shell-text-editor-family: var(--text-editor-family);
+		--lattice-shell-text-editor-gutter-line: var(--text-editor-gutter-line);
+		--lattice-shell-danger-text: var(--studio-danger-text);
+		--lattice-shell-shadow-sm: var(--studio-shadow-sm);
+		/* gentle text on a sheet (an input's placeholder): the sheet's own
+		   colour, half oklch's lightness from it, as wm's is */
+		--lattice-shell-sheet-muted: oklch(from var(--studio-fill) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		/* the theme's code colours, for its little preview */
+		--lattice-shell-syntax-comment: var(--syntax-comment);
+		--lattice-shell-syntax-keyword: var(--syntax-keyword);
+		--lattice-shell-syntax-number: var(--syntax-number);
+		--lattice-shell-syntax-string: var(--syntax-string);
+		/* the drawn mouse's eye: near black, whatever the theme */
+		--lattice-shell-mouse-eye: #1c1a17;
+	}
+}
+
+/* what lattice gives wm: the names of things in its heading font (a theme's
+   own, if it has one), and your pointer over the tabs too */
+:root,
+:host,
+[theme] {
+	--lattice-wm-path-family: var(--lattice-heading-family, var(--studio-family-code));
+}
+.lattice-shell {
+	--lattice-wm-cursor: var(--lattice-pointer, default);
+}
+
+.lattice-shell {
 	display: flex;
 	flex-direction: column;
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
 	overflow: hidden;
-	background: var(--studio-chrome-fill, #eaeaeb);
-	color: var(--studio-chrome-line, var(--studio-line, #383a42));
-	font: 13px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+	background: var(--lattice-shell-chrome-fill);
+	color: var(--lattice-shell-chrome-line);
+	font: 13px/1.4 var(--lattice-shell-family-ui);
 	/* your mouse: your pointer, in your colour (frame.js). where there's
 	   text to type in, it's the text cursor still */
 	cursor: var(--lattice-pointer, auto);
@@ -24,19 +75,25 @@
 		cursor: text;
 	}
 
-	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
+	--lattice-rule: var(--lattice-shell-chrome-fill-offset-30);
 	/* gentle text: the chrome's own colour, half oklch's lightness from it,
 	   towards black on a light chrome and white on a dark one. that's 4.5:1
 	   or more on the chrome and the window, whatever the theme */
-	--lattice-muted: oklch(from var(--studio-chrome-fill, #eaeaeb) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+	--lattice-muted: oklch(from var(--lattice-shell-chrome-fill) calc(l + (1 - 2 * round(l)) * 0.5) c h);
 	/* headings, and the names of things: the theme's code font, unless
 	   there's a heading font of its own */
-	--lattice-path-family: var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace));
-	--lattice-current: color-mix(in oklch, var(--studio-primary, #007aff) 16%, transparent);
+	--lattice-path-family: var(--lattice-heading-family, var(--lattice-shell-family-code));
+	--lattice-current: color-mix(in oklch, var(--lattice-shell-primary) 16%, transparent);
 
 	& button {
 		font: inherit;
 		color: inherit;
+	}
+
+	/* what a box says before anything's in it: gentle, but readable */
+	& ::placeholder {
+		color: var(--lattice-shell-sheet-muted);
+		opacity: 1;
 	}
 
 	/* ── top bar ──────────────────────────────────────────────────────── */
@@ -58,13 +115,13 @@
 		height: 24px;
 		padding: 0;
 		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
+		border-radius: var(--lattice-shell-radius-sm);
 		background: none;
 		color: var(--lattice-muted);
 		cursor: pointer;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-shell-chrome-fill-offset-20);
 		}
 		&[aria-pressed="true"] {
 			color: inherit;
@@ -89,10 +146,10 @@
 	& .lattice-dev-frame {
 		padding: 2px 8px;
 		border: none;
-		border-radius: var(--studio-radius-round, 999px);
-		--button-fill: var(--studio-warning-fill, #c18401);
-		background: var(--button-fill);
-		color: var(--button-ink, var(--studio-warning-line, black));
+		border-radius: var(--lattice-shell-radius-round);
+		--lattice-shell-button-fill: var(--lattice-shell-warning-fill);
+		background: var(--lattice-shell-button-fill);
+		color: var(--lattice-shell-button-ink, var(--lattice-shell-warning-line));
 		font-family: var(--lattice-path-family);
 		font-size: 11px;
 		cursor: pointer;
@@ -110,7 +167,7 @@
 		display: flex;
 		flex: 1;
 		min-width: 0;
-		background: var(--studio-fill, #fafafa);
+		background: var(--lattice-shell-fill);
 	}
 
 	& .lattice-panes {
@@ -148,7 +205,7 @@
 	/* a .patchworkfolder over it, to be dropped */
 	& .lattice-sidebar[data-dropping] {
 		background: var(--lattice-current);
-		outline: 2px dashed var(--studio-primary, #007aff);
+		outline: 2px dashed var(--lattice-shell-primary);
 		outline-offset: -4px;
 	}
 
@@ -181,7 +238,7 @@
 		place-items: center;
 		width: 10px;
 		color: var(--lattice-muted);
-		transition: rotate var(--studio-transition-fast, 0.1s ease);
+		transition: rotate var(--lattice-shell-transition-fast);
 	}
 	& .lattice-fold[aria-expanded="true"] .lattice-fold-chevron {
 		rotate: 90deg;
@@ -222,7 +279,7 @@
 		text-overflow: ellipsis;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-shell-chrome-fill-offset-20);
 		}
 	}
 
@@ -239,13 +296,13 @@
 	& .lattice-tree-old {
 		flex: none;
 		margin-left: auto;
-		font-family: var(--studio-family-ui, system-ui, sans-serif);
+		font-family: var(--lattice-shell-family-ui);
 		font-size: 10.5px;
 	}
 
 	& .lattice-tree-item[aria-current="page"] {
 		background: var(--lattice-current);
-		box-shadow: inset 2px 0 var(--studio-primary, #007aff);
+		box-shadow: inset 2px 0 var(--lattice-shell-primary);
 	}
 
 	/* you, down the bottom of the projects: your picture and your name, for
@@ -271,7 +328,7 @@
 		cursor: pointer;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-shell-chrome-fill-offset-20);
 		}
 		&[aria-pressed="true"] {
 			background: var(--lattice-current);
@@ -360,8 +417,8 @@
 			min-width: 0;
 			padding: 4px 6px;
 			border: 1px solid var(--lattice-rule);
-			border-radius: var(--studio-radius-sm, 4px);
-			background: var(--studio-fill, #fff);
+			border-radius: var(--lattice-shell-radius-sm);
+			background: var(--lattice-shell-fill);
 			color: inherit;
 			font-size: inherit;
 		}
@@ -374,7 +431,7 @@
 	}
 
 	& .lattice-settings :is(input, select, .lattice-button):focus-visible {
-		outline: 2px solid var(--studio-primary, #007aff);
+		outline: 2px solid var(--lattice-shell-primary);
 		outline-offset: 1px;
 	}
 
@@ -417,7 +474,7 @@
 			height: 56px;
 		}
 		&:focus-visible {
-			outline: 2px solid var(--studio-primary, #007aff);
+			outline: 2px solid var(--lattice-shell-primary);
 			outline-offset: 2px;
 		}
 		&:disabled {
@@ -436,22 +493,22 @@
 		padding: 0;
 		border: 1px solid var(--lattice-rule);
 		border-radius: 50%;
-		background: var(--studio-fill, #fff);
+		background: var(--lattice-shell-fill);
 		color: var(--lattice-muted);
 		cursor: pointer;
 		transition: transform 120ms ease-out;
 
 		@media (hover: hover) and (pointer: fine) {
 			&:hover {
-				border-color: var(--studio-danger, #e45649);
-				color: var(--studio-danger, #e45649);
+				border-color: var(--lattice-shell-danger);
+				color: var(--lattice-shell-danger);
 			}
 		}
 		&:active {
 			transform: scale(0.9);
 		}
 		&:focus-visible {
-			outline: 2px solid var(--studio-primary, #007aff);
+			outline: 2px solid var(--lattice-shell-primary);
 			outline-offset: 1px;
 		}
 	}
@@ -471,7 +528,7 @@
 		margin-left: -7px;
 		padding: 3px 6px;
 		border: 1px solid transparent;
-		border-radius: var(--studio-radius-sm, 4px);
+		border-radius: var(--lattice-shell-radius-sm);
 		background: none;
 		color: inherit;
 		font: 600 17px var(--lattice-path-family);
@@ -483,8 +540,8 @@
 			border-color: var(--lattice-rule);
 		}
 		&:focus {
-			border-color: var(--studio-primary, #007aff);
-			background: var(--studio-fill, #fff);
+			border-color: var(--lattice-shell-primary);
+			background: var(--lattice-shell-fill);
 			outline: none;
 		}
 	}
@@ -507,23 +564,23 @@
 		height: 30px;
 		padding: 0;
 		border: 1px solid transparent;
-		border-radius: var(--studio-radius, 6px);
+		border-radius: var(--lattice-shell-radius);
 		background: none;
-		color: var(--mouse);
+		color: var(--lattice-mouse);
 		cursor: pointer;
 		transition: transform 120ms ease-out;
 
 		@media (hover: hover) and (pointer: fine) {
 			&:hover {
-				background: var(--studio-chrome-fill-offset-20, #0001);
+				background: var(--lattice-shell-chrome-fill-offset-20);
 			}
 		}
 		&:active {
 			transform: scale(0.94);
 		}
 		&[aria-checked="true"] {
-			border-color: var(--mouse);
-			background: color-mix(in oklch, var(--mouse) 14%, transparent);
+			border-color: var(--lattice-mouse);
+			background: color-mix(in oklch, var(--lattice-mouse) 14%, transparent);
 		}
 		& svg {
 			fill: currentColor;
@@ -531,7 +588,7 @@
 		}
 	}
 	& .lattice-pointer path {
-		stroke: var(--studio-fill, #fff);
+		stroke: var(--lattice-shell-fill);
 		stroke-width: 1.2px;
 		stroke-linejoin: round;
 		paint-order: stroke;
@@ -546,7 +603,7 @@
 		fill: color-mix(in oklch, currentColor, white 55%);
 	}
 	& .lattice-mouse-eye {
-		fill: #1c1a17;
+		fill: var(--lattice-shell-mouse-eye);
 	}
 	& .lattice-mouse-nose {
 		fill: color-mix(in oklch, hotpink, currentColor 25%);
@@ -576,7 +633,7 @@
 		}
 		&[aria-checked="true"] .lattice-mini,
 		&:focus-visible .lattice-mini {
-			outline: 2px solid var(--studio-primary, #007aff);
+			outline: 2px solid var(--lattice-shell-primary);
 			outline-offset: 2px;
 		}
 		&:focus-visible {
@@ -617,9 +674,9 @@
 			appearance: base-select;
 			max-height: 320px;
 			border: 1px solid var(--lattice-rule);
-			border-radius: var(--studio-radius-sm, 4px);
-			background: var(--studio-fill, #fff);
-			color: var(--studio-line, inherit);
+			border-radius: var(--lattice-shell-radius-sm);
+			background: var(--lattice-shell-fill);
+			color: var(--lattice-shell-line);
 			box-shadow: 2px 2px 0 var(--lattice-rule);
 		}
 		& optgroup {
@@ -628,7 +685,7 @@
 		}
 		& option {
 			padding: 3px 8px;
-			color: var(--studio-line, inherit);
+			color: var(--lattice-shell-line);
 			font-size: 13px;
 			font-weight: 400;
 		}
@@ -650,9 +707,9 @@
 			width: 64px;
 			padding: 4px 6px;
 			border: 1px solid var(--lattice-rule);
-			border-radius: var(--studio-radius-sm, 4px);
-			background: var(--studio-fill, #fff);
-			color: var(--studio-line, inherit);
+			border-radius: var(--lattice-shell-radius-sm);
+			background: var(--lattice-shell-fill);
+			color: var(--lattice-shell-line);
 			font: inherit;
 		}
 	}
@@ -673,7 +730,7 @@
 	& .lattice-reset {
 		padding: 4px 8px;
 		border: 1px solid transparent;
-		border-radius: var(--studio-radius, 6px);
+		border-radius: var(--lattice-shell-radius);
 		background: none;
 		color: var(--lattice-muted);
 		cursor: pointer;
@@ -681,7 +738,7 @@
 		@media (hover: hover) and (pointer: fine) {
 			&:hover:not(:disabled) {
 				border-color: var(--lattice-rule);
-				color: var(--studio-danger, #e45649);
+				color: var(--lattice-shell-danger);
 			}
 		}
 		&:disabled {
@@ -694,10 +751,10 @@
 		color: var(--lattice-muted);
 	}
 	& .lattice-button.lattice-button-danger {
-		--button-fill: var(--studio-danger, #e45649);
-		border-color: var(--button-fill);
-		background: var(--button-fill);
-		color: var(--button-ink, var(--studio-danger-line, #fff));
+		--lattice-shell-button-fill: var(--lattice-shell-danger);
+		border-color: var(--lattice-shell-button-fill);
+		background: var(--lattice-shell-button-fill);
+		color: var(--lattice-shell-button-ink, var(--lattice-shell-danger-line));
 	}
 
 	& .lattice-colours {
@@ -734,17 +791,17 @@
 	/* a little lattice: everything in it is the theme's own, not the
 	   frame's (it's in a theme of its own) */
 	& .lattice-mini {
-		--mini-rule: var(--studio-chrome-fill-offset-30, #0002);
+		--lattice-mini-rule: var(--lattice-shell-chrome-fill-offset-30);
 
 		display: flex;
 		flex-direction: column;
 		aspect-ratio: 16 / 10;
 		overflow: hidden;
-		border: 1px solid var(--mini-rule);
-		border-radius: var(--studio-radius, 6px);
-		background: var(--studio-chrome-fill);
-		color: var(--studio-chrome-line);
-		font: 400 7.5px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+		border: 1px solid var(--lattice-mini-rule);
+		border-radius: var(--lattice-shell-radius);
+		background: var(--lattice-shell-chrome-fill);
+		color: var(--lattice-shell-chrome-line);
+		font: 400 7.5px/1.4 var(--lattice-shell-family-ui);
 		text-align: left;
 		pointer-events: none;
 		user-select: none;
@@ -756,7 +813,7 @@
 		gap: 3px;
 		height: 10px;
 		padding: 0 5px;
-		border-bottom: 1px solid var(--mini-rule);
+		border-bottom: 1px solid var(--lattice-mini-rule);
 
 		& i {
 			width: 6px;
@@ -777,8 +834,8 @@
 		flex-direction: column;
 		width: 34%;
 		padding: 4px 0;
-		border-right: 1px solid var(--mini-rule);
-		font-family: var(--lattice-heading-family, var(--studio-family-code, monospace));
+		border-right: 1px solid var(--lattice-mini-rule);
+		font-family: var(--lattice-heading-family, var(--lattice-shell-family-code));
 
 		& b {
 			padding: 0 5px 2px;
@@ -791,8 +848,8 @@
 			text-overflow: ellipsis;
 		}
 		& [data-current] {
-			background: color-mix(in oklch, var(--studio-primary) 16%, transparent);
-			box-shadow: inset 1.5px 0 var(--studio-primary);
+			background: color-mix(in oklch, var(--lattice-shell-primary) 16%, transparent);
+			box-shadow: inset 1.5px 0 var(--lattice-shell-primary);
 		}
 	}
 	& .lattice-mini-main {
@@ -800,22 +857,22 @@
 		flex: 1;
 		flex-direction: column;
 		min-width: 0;
-		background: var(--studio-fill);
-		color: var(--studio-line);
+		background: var(--lattice-shell-fill);
+		color: var(--lattice-shell-line);
 	}
 	& .lattice-mini-tabs {
 		display: flex;
 		flex: none;
-		border-bottom: 1px solid var(--mini-rule);
-		background: var(--studio-chrome-fill);
+		border-bottom: 1px solid var(--lattice-mini-rule);
+		background: var(--lattice-shell-chrome-fill);
 
 		& span {
 			margin-bottom: -1px;
 			padding: 2px 6px;
-			border-right: 1px solid var(--mini-rule);
-			background: var(--studio-fill);
-			box-shadow: inset 0 1.5px var(--studio-primary);
-			font-family: var(--lattice-heading-family, var(--studio-family-code, monospace));
+			border-right: 1px solid var(--lattice-mini-rule);
+			background: var(--lattice-shell-fill);
+			box-shadow: inset 0 1.5px var(--lattice-shell-primary);
+			font-family: var(--lattice-heading-family, var(--lattice-shell-family-code));
 		}
 	}
 	& .lattice-mini-tools {
@@ -825,44 +882,44 @@
 	/* drawn as the build button is: its text by contrast too (a span, so
 	   latticework's buttons-and-labels rule for it doesn't reach it) */
 	& .lattice-mini-build {
-		--button-fill: var(--studio-primary);
+		--lattice-shell-button-fill: var(--lattice-shell-primary);
 		display: inline-block;
 		padding: 0 5px;
 		border-radius: 2px;
-		background: var(--button-fill);
-		color: var(--button-ink, var(--studio-primary-line, white));
+		background: var(--lattice-shell-button-fill);
+		color: var(--lattice-shell-button-ink, var(--lattice-shell-primary-line));
 		font-weight: 600;
 
 		@supports (color: contrast-color(red)) {
-			--button-ink: oklch(from color-mix(in oklch, contrast-color(var(--button-fill)) 80%, var(--button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
+			--lattice-shell-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--lattice-shell-button-fill)) 80%, var(--lattice-shell-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 		}
 	}
 	& .lattice-mini-code {
 		padding: 1px 0;
-		color: var(--text-editor-line, var(--studio-line));
-		font-family: var(--text-editor-family, var(--studio-family-code, monospace));
+		color: var(--lattice-shell-text-editor-line);
+		font-family: var(--lattice-shell-text-editor-family);
 		white-space: pre;
 
 		& s {
 			display: inline-block;
 			width: 9px;
 			padding-right: 5px;
-			color: var(--text-editor-gutter-line, var(--studio-line));
+			color: var(--lattice-shell-text-editor-gutter-line);
 			text-align: right;
 			text-decoration: none;
 			opacity: 0.8;
 		}
 		& .k {
-			color: var(--syntax-keyword);
+			color: var(--lattice-shell-syntax-keyword);
 		}
 		& .n {
-			color: var(--syntax-number);
+			color: var(--lattice-shell-syntax-number);
 		}
 		& .t {
-			color: var(--syntax-string);
+			color: var(--lattice-shell-syntax-string);
 		}
 		& .c {
-			color: var(--syntax-comment);
+			color: var(--lattice-shell-syntax-comment);
 			font-style: italic;
 		}
 	}
@@ -870,9 +927,9 @@
 	& .lattice-tree-rename {
 		margin: 1px 6px 1px 18px;
 		padding: 2px 5px;
-		border: 1px solid var(--studio-primary, #007aff);
-		border-radius: var(--studio-radius-sm, 4px);
-		background: var(--studio-fill, #fff);
+		border: 1px solid var(--lattice-shell-primary);
+		border-radius: var(--lattice-shell-radius-sm);
+		background: var(--lattice-shell-fill);
 		color: inherit;
 		font: inherit;
 	}
@@ -890,7 +947,7 @@
 		overflow-wrap: anywhere;
 
 		&[data-problem] {
-			color: var(--studio-danger-text, #e45649);
+			color: var(--lattice-shell-danger-text);
 		}
 	}
 
@@ -901,14 +958,14 @@
 		height: 22px;
 		padding: 0;
 		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
+		border-radius: var(--lattice-shell-radius-sm);
 		background: none;
 		color: var(--lattice-muted);
 		font-size: 15px;
 		cursor: pointer;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-shell-chrome-fill-offset-20);
 			color: inherit;
 		}
 	}
@@ -920,23 +977,23 @@
 		align-items: center;
 		justify-content: center;
 		gap: 8px;
-		background: var(--studio-fill, #fafafa);
+		background: var(--lattice-shell-fill);
 		color: var(--lattice-muted);
 	}
 
-	& .knitoutjs-menu.lattice-context-menu {
+	& .lattice-wm-menu.lattice-context-menu {
 		width: 300px;
 	}
 
-	& .knitoutjs-menu-hint[data-problem] {
-		color: var(--studio-danger-text, #e45649);
+	& .lattice-wm-menu-hint[data-problem] {
+		color: var(--lattice-shell-danger-text);
 	}
 
 	& .lattice-button {
 		padding: 4px 12px;
 		border: 1px solid var(--lattice-rule);
-		border-radius: var(--studio-radius, 6px);
-		background: var(--studio-fill, #fff);
+		border-radius: var(--lattice-shell-radius);
+		background: var(--lattice-shell-fill);
 		cursor: pointer;
 	}
 
@@ -945,28 +1002,6 @@
 	@supports (color: contrast-color(red)) {
 		& .draft-avatar--extra {
 			color: contrast-color(var(--drafts-faint-fg, #888));
-		}
-	}
-
-	/* along a sidebar's right edge, over its border */
-	& .lattice-resizer {
-		position: absolute;
-		top: 0;
-		right: -3px;
-		bottom: 0;
-		z-index: 1;
-		width: 6px;
-		cursor: col-resize;
-
-		&:hover,
-		&[data-dragging] {
-			background: color-mix(in oklch, var(--studio-primary, #007aff) 45%, transparent);
-		}
-
-		/* the inspector's, down the right: along its left edge */
-		&[data-side="left"] {
-			right: auto;
-			left: -3px;
 		}
 	}
 
@@ -981,7 +1016,7 @@
 		width: 300px;
 		min-height: 0;
 		border-left: 1px solid var(--lattice-rule);
-		background: var(--studio-chrome-fill, #eaeaeb);
+		background: var(--lattice-shell-chrome-fill);
 	}
 
 	&[data-inspector="closed"] .lattice-inspector {
@@ -1003,10 +1038,10 @@
 
 	/* where a dragged heading would go */
 	& .lattice-inspector-section[data-drop="before"] {
-		box-shadow: inset 0 2px var(--studio-primary, #007aff);
+		box-shadow: inset 0 2px var(--lattice-shell-primary);
 	}
 	& .lattice-inspector-section[data-drop="after"] {
-		box-shadow: inset 0 -2px var(--studio-primary, #007aff);
+		box-shadow: inset 0 -2px var(--lattice-shell-primary);
 	}
 
 	& .lattice-inspector-heading {
@@ -1029,7 +1064,7 @@
 	& .lattice-inspector-chevron {
 		display: inline-grid;
 		place-items: center;
-		transition: transform var(--studio-transition-fast, 0.1s ease);
+		transition: transform var(--lattice-shell-transition-fast);
 	}
 	& [data-open] > .lattice-inspector-heading .lattice-inspector-chevron {
 		transform: rotate(90deg);
@@ -1072,7 +1107,7 @@
 		gap: 6px;
 		padding: 2px 4px;
 		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
+		border-radius: var(--lattice-shell-radius-sm);
 		background: none;
 		font-family: var(--lattice-path-family);
 		font-size: 12px;
@@ -1081,7 +1116,7 @@
 		cursor: pointer;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-shell-chrome-fill-offset-20);
 		}
 	}
 
@@ -1092,9 +1127,9 @@
 
 	& .lattice-comment-thread {
 		display: block;
-		border-radius: var(--studio-radius, 6px);
-		background: var(--studio-fill, #fff);
-		box-shadow: var(--studio-shadow-sm, none);
+		border-radius: var(--lattice-shell-radius);
+		background: var(--lattice-shell-fill);
+		box-shadow: var(--lattice-shell-shadow-sm);
 		overflow: hidden;
 	}
 
@@ -1104,5 +1139,15 @@
 		flex-direction: column;
 		min-height: 0;
 		overflow: auto;
+	}
+}
+
+/* a filled button's text: offset black or white, whichever reads better on
+   its fill. a button says what it's filled with as --lattice-shell-button-fill and
+   takes var(--lattice-shell-button-ink, …) for its colour: the …, where browsers can't
+   tell (offset black is black with a fifth of the fill in it) */
+@supports (color: contrast-color(red)) {
+	.lattice-shell :where(button, label) {
+		--lattice-shell-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--lattice-shell-button-fill)) 80%, var(--lattice-shell-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 	}
 }

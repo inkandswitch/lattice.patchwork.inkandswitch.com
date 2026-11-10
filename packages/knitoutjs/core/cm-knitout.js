@@ -155,12 +155,12 @@ export function showError(view, error) {
 const knitoutTheme = EditorView.baseTheme({
 	".cm-knitout-error-line": {
 		backgroundColor:
-			"color-mix(in oklab, var(--studio-danger, #d33a4c) 14%, transparent)",
-		boxShadow: "inset 3px 0 0 var(--studio-danger, #d33a4c)",
+			"color-mix(in oklab, var(--knitoutjs-error) 14%, transparent)",
+		boxShadow: "inset 3px 0 0 var(--knitoutjs-error)",
 	},
 	".cm-knitout-error-message": {
 		marginLeft: "2ch",
-		color: "var(--studio-danger, #d33a4c)",
+		color: "var(--knitoutjs-error)",
 		fontStyle: "italic",
 	},
 	".cm-knitout-hover-line": {

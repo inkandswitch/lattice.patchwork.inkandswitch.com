@@ -369,7 +369,7 @@ void main() {
  */
 export default function Knit3dTool(handle, element, context = {}) {
 	const root = document.createElement("div")
-	root.className = "knitoutjs-editor-tool knit3d"
+	root.className = "knit3d"
 	const link = stylesheet(STYLESHEET, root)
 	element.append(link, root)
 
@@ -585,7 +585,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			bed: [0.3, 0.31, 0.34],
 			carriage: [0.78, 0.76, 0.72],
 			cam: [0.2, 0.2, 0.22],
-			danger: rgb(getComputedStyle(root).getPropertyValue("--knitoutjs-danger").trim() || "#d33a4c"),
+			danger: rgb(getComputedStyle(root).getPropertyValue("--knit3d-danger").trim() || "#d33a4c"),
 		}
 	}
 
@@ -897,7 +897,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 		status.textContent = op
 			? `${upTo} / ${knitout.ops.length} · line ${op.kLine} · ${op.text}`
 			: "drag to turn it round · shift-drag to move it · scroll to zoom · play to watch it grow"
-		status.classList.toggle("is-hint", !op)
+		status.toggleAttribute("data-hint", !op)
 	}
 
 	function tick(now) {

@@ -1,25 +1,49 @@
 /* the check's button, in a tool's bar, and its list over the stage. (filled
-   with its colour, its text by contrast with it (latticework.css's
-   --button-ink), or white: as specific as it takes to beat the tools'
-   buttons. only advice leaves it as the other buttons are: advice is neither
-   good nor bad) */
+   with its colour, its text by contrast with it (--checks-button-ink, below):
+   as specific as it takes to beat the tools' buttons. only advice leaves it
+   as the other buttons are: advice is neither good nor bad) */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--checks-danger: var(--editor-danger-text);
+		--checks-line: var(--editor-line);
+		--checks-radius: var(--studio-radius-sm);
+		--checks-sheet: var(--editor-fill);
+		--checks-ink: var(--editor-line);
+		--checks-sans: var(--studio-family-ui);
+		--checks-line-soft: var(--editor-fill-offset-20);
+		--checks-chrome: var(--studio-chrome-fill-offset-20);
+		--checks-chrome-ink: var(--studio-chrome-line);
+		--checks-accent: var(--studio-primary-fill);
+		--checks-muted: oklch(from var(--checks-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--checks-mono: var(--studio-family-code);
+		--checks-accent-ink: var(--studio-primary-line);
+		/* how it went: the colours knitout.js's look gives a doc, a mint stem
+		   and butter, leaning a quarter towards the theme's own for the job */
+		--checks-stem: color-mix(in oklab, #40dcba 75%, var(--studio-added));
+		--checks-butter: color-mix(in oklab, #fdca40 75%, var(--studio-warning));
+		/* a deeper butter: white reads on it */
+		--checks-risk: color-mix(in oklab, var(--checks-butter) 55%, #8a5a00);
+	}
+}
+
 .knitout-button.checks-button[data-level] {
 	&:is([data-level="ok"], [data-level="error"], [data-level="risk"]) {
-		background: var(--button-fill);
-		color: var(--button-ink, #fff);
+		background: var(--checks-button-fill);
+		color: var(--checks-button-ink, var(--checks-accent-ink));
 	}
 
 	&[data-level="ok"] {
-		--button-fill: var(--knitoutjs-stem);
+		--checks-button-fill: var(--checks-stem);
 	}
 
 	&[data-level="error"] {
-		--button-fill: var(--knitoutjs-danger);
+		--checks-button-fill: var(--checks-danger);
 	}
 
-	/* (a deeper butter: white reads on it) */
 	&[data-level="risk"] {
-		--button-fill: color-mix(in oklab, var(--knitoutjs-butter) 55%, #8a5a00);
+		--checks-button-fill: var(--checks-risk);
 	}
 }
 
@@ -32,12 +56,12 @@
 	display: flex;
 	flex-direction: column;
 	width: min(440px, calc(100% - 16px));
-	border: 1px solid var(--knitoutjs-line);
-	border-radius: var(--knitoutjs-radius);
-	background: var(--knitoutjs-sheet);
-	box-shadow: 2px 2px 0 var(--knitoutjs-line);
-	color: var(--knitoutjs-ink);
-	font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+	border: 1px solid var(--checks-line);
+	border-radius: var(--checks-radius);
+	background: var(--checks-sheet);
+	box-shadow: 2px 2px 0 var(--checks-line);
+	color: var(--checks-ink);
+	font: 12px var(--checks-sans);
 
 	&[hidden] {
 		display: none;
@@ -48,9 +72,9 @@
 	display: grid;
 	gap: 4px;
 	padding: 8px 10px;
-	border-bottom: 1px solid var(--knitoutjs-line-soft);
-	background: var(--knitoutjs-chrome);
-	color: var(--knitoutjs-chrome-ink);
+	border-bottom: 1px solid var(--checks-line-soft);
+	background: var(--checks-chrome);
+	color: var(--checks-chrome-ink);
 	font-size: 11px;
 
 	& input[type="number"] {
@@ -60,7 +84,7 @@
 
 	& input[type="range"] {
 		width: 90px;
-		accent-color: var(--knitoutjs-accent);
+		accent-color: var(--checks-accent);
 	}
 
 	& select {
@@ -76,7 +100,7 @@
 }
 
 .checks-setting-name {
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 }
 
 .checks-setting-field {
@@ -87,7 +111,7 @@
 }
 
 .checks-hint {
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 }
 
 .checks-reset {
@@ -95,7 +119,7 @@
 	padding: 0;
 	border: none;
 	background: none;
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 	font: inherit;
 	text-decoration: underline;
 	cursor: pointer;
@@ -104,7 +128,7 @@
 /* what's measured of the yarn: folded away till it's wanted */
 .checks-fabric {
 	& summary {
-		color: var(--knitoutjs-muted);
+		color: var(--checks-muted);
 		cursor: pointer;
 	}
 
@@ -123,13 +147,13 @@
 	display: grid;
 	gap: 1px;
 	margin-top: 4px;
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 	font-size: 11px;
 	line-height: 1.35;
 
 	& .checks-size-main,
 	& .checks-size-on {
-		color: var(--knitoutjs-ink);
+		color: var(--checks-ink);
 	}
 
 	& [data-from="guess"] {
@@ -149,7 +173,7 @@
 	grid-template-columns: 1fr auto;
 	gap: 2px 8px;
 	padding: 8px 10px;
-	border-bottom: 1px solid var(--knitoutjs-line-soft);
+	border-bottom: 1px solid var(--checks-line-soft);
 
 	& strong {
 		font-weight: 600;
@@ -158,7 +182,7 @@
 
 .checks-facts {
 	grid-column: 1 / -1;
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 	font-size: 11px;
 }
 
@@ -166,12 +190,12 @@
 	padding: 0 4px;
 	border: none;
 	background: none;
-	color: var(--knitoutjs-muted);
-	font: 16px/1 var(--knitoutjs-sans, system-ui, sans-serif);
+	color: var(--checks-muted);
+	font: 16px/1 var(--checks-sans);
 	cursor: pointer;
 
 	&:hover {
-		color: var(--knitoutjs-ink);
+		color: var(--checks-ink);
 	}
 }
 
@@ -188,16 +212,16 @@
 	grid-template-columns: 7.5em 1fr;
 	gap: 8px;
 	padding: 6px 10px 6px 8px;
-	border-bottom: 1px solid var(--knitoutjs-line-soft);
-	border-left: 3px solid var(--knitoutjs-line-soft);
+	border-bottom: 1px solid var(--checks-line-soft);
+	border-left: 3px solid var(--checks-line-soft);
 	line-height: 1.35;
 
 	&[data-level="error"] {
-		border-left-color: var(--knitoutjs-danger);
+		border-left-color: var(--checks-danger);
 	}
 
 	&[data-level="risk"] {
-		border-left-color: var(--knitoutjs-butter);
+		border-left-color: var(--checks-butter);
 	}
 
 	&[tabindex] {
@@ -205,7 +229,7 @@
 
 		&:hover,
 		&:focus-visible {
-			background: var(--knitoutjs-line-soft);
+			background: var(--checks-line-soft);
 			outline: none;
 		}
 	}
@@ -213,19 +237,19 @@
 
 .checks-kind {
 	display: block;
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 	font-size: 10px;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 
 	[data-level="error"] > .checks-what > & {
-		color: var(--knitoutjs-danger);
+		color: var(--checks-danger);
 	}
 }
 
 .checks-where {
-	color: var(--knitoutjs-muted);
-	font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+	color: var(--checks-muted);
+	font: 11px var(--checks-mono);
 	white-space: nowrap;
 }
 
@@ -262,18 +286,28 @@
 	}
 
 	& td:first-child {
-		color: var(--knitoutjs-muted);
+		color: var(--checks-muted);
 	}
 }
 
 .checks-chip {
 	padding: 0 5px;
-	border: 1px solid var(--knitoutjs-line-soft);
+	border: 1px solid var(--checks-line-soft);
 	border-radius: 999px;
-	color: var(--knitoutjs-muted);
+	color: var(--checks-muted);
 	font-size: 10px;
 }
 
 .checks-size-note {
-	color: color-mix(in oklab, var(--knitoutjs-butter) 55%, #8a5a00);
+	color: var(--checks-risk);
+}
+
+/* a filled button's text: offset black or white, whichever reads better on
+   its fill. a button says what it's filled with as --checks-button-fill and
+   takes var(--checks-button-ink, …) for its colour: the …, where browsers can't
+   tell (offset black is black with a fifth of the fill in it) */
+@supports (color: contrast-color(red)) {
+	:is(.checks-panel :where(button, label), .checks-button) {
+		--checks-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--checks-button-fill)) 80%, var(--checks-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
+	}
 }

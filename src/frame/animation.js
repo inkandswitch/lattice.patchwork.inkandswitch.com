@@ -105,7 +105,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const id = `knit-${++instances}`
 
 	const root = document.createElement("div")
-	root.className = "knitoutjs-editor-tool knitout-animation"
+	root.className = "knitout-animation"
 	const link = stylesheet(STYLESHEET, root)
 	element.append(link, root)
 
@@ -248,13 +248,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function readYarns() {
 		const strands = yarnStrands(handle.doc())
 		const yarns = [...strands.map(({colours}) => colours[0]), ...strands.map(({colours}) => colours[1] ?? colours[0])]
-		yarns.forEach((colour, index) => root.style.setProperty(`--yarn-${index}`, colour))
+		yarns.forEach((colour, index) => root.style.setProperty(`--knitout-animation-yarn-${index}`, colour))
 		const style = getComputedStyle(root)
 		colours = {
 			yarns,
 			strands,
 			ink: style.color,
-			danger: style.getPropertyValue("--knitoutjs-danger").trim() || "#d33a4c",
+			danger: style.getPropertyValue("--knitout-animation-danger").trim() || "#d33a4c",
 		}
 	}
 	readYarns()
@@ -798,7 +798,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		if (stacked !== back) {
 			stacked = back
 			for (const name of back ? FROM_BACK : FROM_FRONT) world.appendChild(layers[name])
-			picture.classList.toggle("is-from-back", back)
+			picture.toggleAttribute("data-from-back", back)
 		}
 		flipButton.setAttribute("aria-pressed", String(fromBack))
 		flipButton.title = fromBack
@@ -951,7 +951,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		status.textContent = op
 			? describe(op)
 			: "press play to watch it knit · point at a stitch to see what made it, drag it to pull · space plays, ← → step, f flips"
-		status.classList.toggle("is-hint", !op)
+		status.toggleAttribute("data-hint", !op)
 	}
 
 	function dispatch(type, detail) {
@@ -1022,7 +1022,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			return
 		}
 		status.textContent = describe(knitout.ops[op])
-		status.classList.remove("is-hint")
+		status.removeAttribute("data-hint")
 		dispatch("knitout:hover-source", located(handle, knitout.ops[op]))
 	}
 
@@ -1080,7 +1080,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (at) {
 				const id = drag.stitch
 				pull = {id, dx: fabric.xs[id] - fabricX(at.x), dy: fabric.ys[id] - fabricY(at.y)}
-				picture.classList.add("is-pulling")
+				picture.toggleAttribute("data-pulling", true)
 			}
 		}
 		drag.moved = true
@@ -1105,7 +1105,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		drag = null
 		if (pull) {
 			pull = null
-			picture.classList.remove("is-pulling")
+			picture.removeAttribute("data-pulling")
 			requestFrame()
 		}
 	}

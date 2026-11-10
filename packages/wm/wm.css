@@ -1,66 +1,85 @@
-/* latticework: a project's panes, and its files down the side. knitout.js's
-   look — chee rabbits (a lemon page, black lines, cherry on a mint stem,
-   blue) with a touch of Mimi Reyburn (cream sheets, a serif drawn a little
-   by hand). follows the patchwork theme through --studio-* */
+/* wm: a project's panes, and its files down the side. it's drawn in the
+   patchwork theme's own colours: its chrome for the gutters and tab bars,
+   its editor fill for the sheets a tool sits on, its primary for the one
+   button that does something, its selection for highlights. an app can
+   give it a look of its own by setting these tokens (knitoutjs's look.css
+   does, for lattice and the Knitout JS app) */
 
-.knitoutjs-editor-tool {
-	/* everything you see is the patchwork theme's own colours: its chrome for
-	   the gutters and tab bars, its editor fill for the sheets, its primary for
-	   the one button that does something, its selection for highlights. the
-	   chee rabbits are the docs' own colours (one each, on swatches and glows),
-	   leaning a quarter towards the theme's colour for the same job */
-	&,
-	& [theme] {
-		--knitoutjs-ink: var(--studio-line, #1c1a17);
-		--knitoutjs-fill: var(--studio-fill, #fffdf5);
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--lattice-wm-ink: var(--studio-line);
+		--lattice-wm-fill: var(--studio-fill);
 		/* gentle text: the sheet's own colour, moved half oklch's lightness
 		   from it (towards black on a light sheet, white on a dark one). a
 		   mix of ink and fill is only as readable as the theme's ink is
 		   strong; this is 4.5:1 or more on the sheet and the chrome in any
 		   theme. it keeps the sheet's hue, so a tinted theme's stays tinted */
-		--knitoutjs-muted: oklch(from var(--knitoutjs-fill) calc(l + (1 - 2 * round(l)) * 0.5) c h);
-		--knitoutjs-line: var(--studio-chrome-line, var(--knitoutjs-ink));
-		--knitoutjs-line-soft: var(--studio-fill-offset-20, color-mix(in oklab, var(--knitoutjs-ink) 16%, transparent));
+		--lattice-wm-muted: oklch(from var(--lattice-wm-fill) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--lattice-wm-line: var(--studio-chrome-line);
+		--lattice-wm-line-soft: var(--studio-fill-offset-20);
 
-		--knitoutjs-paper: var(--studio-chrome-fill, var(--knitoutjs-fill));
-		--knitoutjs-chrome: var(--studio-chrome-fill-offset-20, var(--knitoutjs-paper));
-		--knitoutjs-chrome-hover: var(--studio-chrome-fill-offset-30, var(--knitoutjs-chrome));
-		--knitoutjs-chrome-ink: var(--studio-chrome-line, var(--knitoutjs-ink));
-		--knitoutjs-sheet: var(--editor-fill, var(--text-editor-fill, var(--knitoutjs-fill)));
-		--knitoutjs-highlighter: var(--studio-selection-fill, #ffee8888);
-		--knitoutjs-accent: var(--studio-primary-fill, var(--studio-primary, #ff2284));
-		--knitoutjs-accent-ink: var(--studio-primary-line, #fff);
-		--knitoutjs-danger: var(--studio-danger-text, var(--studio-danger, #d33a4c));
+		--lattice-wm-paper: var(--studio-chrome-fill);
+		--lattice-wm-chrome: var(--studio-chrome-fill-offset-20);
+		--lattice-wm-chrome-hover: var(--studio-chrome-fill-offset-30);
+		--lattice-wm-chrome-ink: var(--studio-chrome-line);
+		--lattice-wm-sheet: var(--editor-fill);
+		--lattice-wm-highlighter: var(--studio-selection-fill);
+		--lattice-wm-accent: var(--studio-primary-fill);
+		--lattice-wm-accent-ink: var(--studio-primary-line);
+		--lattice-wm-danger: var(--studio-danger-text);
+		--lattice-wm-danger-fill: var(--studio-danger-fill);
+		--lattice-wm-danger-ink: var(--studio-danger-line);
 
-		/* the docs' colours */
-		--knitoutjs-cherry: color-mix(in oklab, #ff2284 75%, var(--studio-primary, #ff2284));
-		--knitoutjs-stem: color-mix(in oklab, #40dcba 75%, var(--studio-added, #40dcba));
-		--knitoutjs-blue: color-mix(in oklab, #2269ff 75%, var(--studio-link, var(--studio-secondary, #2269ff)));
-		--knitoutjs-lilac: color-mix(in oklab, #9879e8 75%, var(--studio-secondary, #9879e8));
-		--knitoutjs-peach: color-mix(in oklab, #ff9a6a 75%, var(--studio-warning, #ff9a6a));
-		--knitoutjs-butter: color-mix(in oklab, #fdca40 75%, var(--studio-warning, #fdca40));
+		/* the files down the side: rules between things, and what's quieter */
+		--lattice-wm-rule: var(--studio-chrome-fill-offset-30);
+		--lattice-wm-edge: var(--studio-fill-offset-30);
+		--lattice-wm-quiet: var(--studio-chrome-line-offset-30);
+		--lattice-wm-ink-soft: var(--studio-line-offset-30);
 
-		--knitoutjs-radius: var(--studio-radius-sm, 3px);
-		--knitoutjs-sans: var(--studio-family-ui, var(--studio-family-sans, "Jost", ui-sans-serif, system-ui, sans-serif));
-		--knitoutjs-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
-		--knitoutjs-mono: var(--studio-family-code, Monaco, ui-monospace, monospace);
+		/* the docs' colours: one each, on swatches and glows */
+		--lattice-wm-cherry: var(--studio-primary);
+		--lattice-wm-stem: var(--studio-added);
+		--lattice-wm-blue: var(--studio-link);
+		--lattice-wm-lilac: var(--studio-secondary);
+		--lattice-wm-peach: var(--studio-warning);
+		--lattice-wm-butter: oklch(from var(--studio-warning) calc(l + 0.1) c calc(h + 20));
+
+		--lattice-wm-radius: var(--studio-radius-sm);
+		--lattice-wm-round: var(--studio-radius-round);
+		--lattice-wm-sans: var(--studio-family-ui);
+		--lattice-wm-mono: var(--studio-family-code);
+		/* the names of things down the side */
+		--lattice-wm-path-family: var(--studio-family-code);
+		/* a card's heading, and a link's name and a hint: an app's own, if it
+		   has one (a serif drawn by hand, say: filter and wobble are for that) */
+		--lattice-wm-heading-family: var(--lattice-wm-sans);
+		--lattice-wm-aside-family: var(--lattice-wm-sans);
+		--lattice-wm-heading-filter: none;
+		--lattice-wm-heading-wobble: none;
+		--lattice-wm-card-shadow: 0 0 10px 2px color-mix(in oklab, var(--lattice-wm-ink) 12%, transparent);
+		--lattice-wm-float-shadow: 0 4px 18px 2px color-mix(in oklab, var(--lattice-wm-ink) 20%, transparent);
+		/* the pointer over the tabs: an app's own cursor, say */
+		--lattice-wm-cursor: default;
 	}
+}
 
-	/* every doc wears one colour, wherever it's shown */
-	& [data-colour="cherry"] { --doc: var(--knitoutjs-cherry); }
-	& [data-colour="blue"] { --doc: var(--knitoutjs-blue); }
-	& [data-colour="stem"] { --doc: var(--knitoutjs-stem); }
-	& [data-colour="lilac"] { --doc: var(--knitoutjs-lilac); }
-	& [data-colour="peach"] { --doc: var(--knitoutjs-peach); }
-	& [data-colour="butter"] { --doc: var(--knitoutjs-butter); }
+/* every doc wears one colour, wherever it's shown */
+.lattice-wm {
+	& [data-colour="cherry"] { --lattice-wm-doc: var(--lattice-wm-cherry); }
+	& [data-colour="blue"] { --lattice-wm-doc: var(--lattice-wm-blue); }
+	& [data-colour="stem"] { --lattice-wm-doc: var(--lattice-wm-stem); }
+	& [data-colour="lilac"] { --lattice-wm-doc: var(--lattice-wm-lilac); }
+	& [data-colour="peach"] { --lattice-wm-doc: var(--lattice-wm-peach); }
+	& [data-colour="butter"] { --lattice-wm-doc: var(--lattice-wm-butter); }
+}
 
-	& .knitoutjs-defs {
-		position: absolute;
-		width: 0;
-		height: 0;
-	}
+/* the panes, and the cards of a pane with nothing in it or a project from
+   before */
+:is(.lattice-wm, .lattice-wm-update) {
 
-	&.knitoutjs-frame {
+	& .lattice-wm-frame {
 		position: relative;
 		display: flex;
 		box-sizing: border-box;
@@ -68,9 +87,9 @@
 		height: 100%;
 		padding: 4px;
 		overflow: hidden;
-		background: var(--knitoutjs-paper);
-		color: var(--knitoutjs-ink);
-		font: 12px/1.4 var(--knitoutjs-sans);
+		background: var(--lattice-wm-paper);
+		color: var(--lattice-wm-ink);
+		font: 12px/1.4 var(--lattice-wm-sans);
 
 		& *,
 		& *::before,
@@ -84,7 +103,7 @@
 			position: absolute;
 			inset: 0;
 			z-index: 20;
-			border: 2px solid var(--following-colour, var(--knitoutjs-ink));
+			border: 2px solid var(--lattice-wm-following);
 			pointer-events: none;
 		}
 
@@ -118,7 +137,7 @@
 		&[data-resizing] {
 			user-select: none;
 
-			& .knitoutjs-tool {
+			& .lattice-wm-tool {
 				pointer-events: none;
 			}
 		}
@@ -126,7 +145,7 @@
 
 	/* ── splits ───────────────────────────────────────────────────────────── */
 
-	& .knitoutjs-split {
+	& .lattice-wm-split {
 		display: flex;
 		flex: 1 1 0;
 		min-width: 0;
@@ -139,7 +158,7 @@
 
 	/* flex is set inline from the node's size: a share of what's left, or a
 	   fixed width or height */
-	& .knitoutjs-cell {
+	& .lattice-wm-cell {
 		display: flex;
 		flex-grow: 0;
 		flex-shrink: 1;
@@ -148,7 +167,7 @@
 	}
 
 	/* a 4px gap with a 40px grabber in the middle */
-	& .knitoutjs-resizer {
+	& .lattice-wm-divider {
 		position: relative;
 		flex: none;
 		touch-action: none;
@@ -167,7 +186,7 @@
 			position: absolute;
 			inset: 50% auto auto 50%;
 			translate: -50% -50%;
-			background: var(--knitoutjs-line-soft);
+			background: var(--lattice-wm-line-soft);
 		}
 		[data-direction="row"] > &::after {
 			width: 2px;
@@ -180,13 +199,13 @@
 
 		&:hover::after,
 		&:active::after {
-			background: var(--knitoutjs-accent);
+			background: var(--lattice-wm-accent);
 		}
 	}
 
 	/* ── groups and tabs ──────────────────────────────────────────────────── */
 
-	& .knitoutjs-group {
+	& .lattice-wm-group {
 		display: flex;
 		flex: 1 1 0;
 		flex-direction: column;
@@ -195,53 +214,53 @@
 		/* clip, not hidden: an editor bringing its cursor into view mustn't
 		   scroll the pane itself and push the tabs off the top */
 		overflow: clip;
-		border-radius: var(--knitoutjs-radius);
-		background: var(--knitoutjs-sheet);
+		border-radius: var(--lattice-wm-radius);
+		background: var(--lattice-wm-sheet);
 	}
 
-	& .knitoutjs-tabs {
+	& .lattice-wm-tabs {
 		display: flex;
 		flex: none;
 		height: 34px;
 		overflow-x: auto;
 		scrollbar-width: none;
-		background: var(--knitoutjs-chrome);
-		border-bottom: 1px solid var(--knitoutjs-line);
-		color: var(--knitoutjs-chrome-ink);
+		background: var(--lattice-wm-chrome);
+		border-bottom: 1px solid var(--lattice-wm-line);
+		color: var(--lattice-wm-chrome-ink);
 	}
 
-	& .knitoutjs-tab {
+	& .lattice-wm-tab {
 		display: flex;
 		align-items: center;
 		gap: 4px;
 		max-width: 300px;
 		padding: 0 4px 0 6px;
-		border-right: 2px solid var(--knitoutjs-line-soft);
+		border-right: 2px solid var(--lattice-wm-line-soft);
 		/* the name and its tool share this, so they shrink together */
 		font-size: 11px;
 		white-space: nowrap;
-		cursor: var(--lattice-pointer, default);
+		cursor: var(--lattice-wm-cursor);
 		user-select: none;
 
 		&[aria-selected="true"] {
-			background: var(--knitoutjs-sheet);
-			box-shadow: inset 0 -2px 0 var(--doc);
+			background: var(--lattice-wm-sheet);
+			box-shadow: inset 0 -2px 0 var(--lattice-wm-doc);
 		}
 
 		/* its doc is open in another pane too */
 		&[data-shared] {
-			box-shadow: inset 0 -2px 0 var(--doc);
+			box-shadow: inset 0 -2px 0 var(--lattice-wm-doc);
 		}
 
 		&[data-glow="same"] {
-			background: color-mix(in oklab, var(--doc) 16%, var(--knitoutjs-sheet));
+			background: color-mix(in oklab, var(--lattice-wm-doc) 16%, var(--lattice-wm-sheet));
 		}
 
 		/* a doc linked to the one you're pointing at: the .js that writes it,
 		   the .k it writes, a copy, as its panes show it */
 		&[data-glow="linked"] {
-			background: color-mix(in oklab, var(--doc) 8%, var(--knitoutjs-sheet));
-			outline: 1px dashed color-mix(in oklab, var(--doc) 70%, transparent);
+			background: color-mix(in oklab, var(--lattice-wm-doc) 8%, var(--lattice-wm-sheet));
+			outline: 1px dashed color-mix(in oklab, var(--lattice-wm-doc) 70%, transparent);
 			outline-offset: -3px;
 		}
 
@@ -249,7 +268,7 @@
 
 	/* the tab's one control: the name on the left, what it's shown with on the
 	   right, in a single outlined pill */
-	& .knitoutjs-tab-pill {
+	& .lattice-wm-tab-pill {
 		display: inline-flex;
 		align-items: stretch;
 		align-self: center;
@@ -257,13 +276,13 @@
 		height: 22px;
 		/* clear of the bar's bottom rule and the selected tab's underline */
 		margin-bottom: 1px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--lattice-wm-line);
 		border-radius: 4px;
-		background: var(--knitoutjs-sheet);
+		background: var(--lattice-wm-sheet);
 		overflow: hidden;
 	}
 
-	& .knitoutjs-tab-title {
+	& .lattice-wm-tab-title {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
@@ -271,24 +290,24 @@
 		padding: 0 8px;
 	}
 
-	& .knitoutjs-tab-name {
+	& .lattice-wm-tab-name {
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
-	& .knitoutjs-rename {
+	& .lattice-wm-rename {
 		width: 14ch;
 		padding: 0 2px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--lattice-wm-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet);
+		background: var(--lattice-wm-sheet);
 		color: inherit;
 		font: inherit;
 	}
 
 	/* what the tab's shown with: opens its tool menu. the pill's right-hand
 	   segment, a shade darker than the name */
-	& .knitoutjs-tab-tool {
+	& .lattice-wm-tab-tool {
 		display: inline-flex;
 		flex: none;
 		align-items: center;
@@ -296,10 +315,10 @@
 		margin: 0;
 		padding: 0 7px;
 		border: none;
-		border-left: 1px solid var(--knitoutjs-line);
+		border-left: 1px solid var(--lattice-wm-line);
 		border-radius: 0;
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-ink);
+		background: var(--lattice-wm-chrome);
+		color: var(--lattice-wm-ink);
 		/* the tab name's own type and line box, just boxed, so the two sit on
 		   one line */
 		font: inherit;
@@ -308,7 +327,7 @@
 		cursor: pointer;
 
 		/* drawn, not a glyph, so it sits where the text does whatever the font */
-		& .knitoutjs-tab-tool-arrow {
+		& .lattice-wm-tab-tool-arrow {
 			display: block;
 			flex: none;
 			width: 9px;
@@ -316,12 +335,12 @@
 		}
 
 		&:hover {
-			background: var(--knitoutjs-chrome-hover);
+			background: var(--lattice-wm-chrome-hover);
 		}
 	}
 
 	/* a drawn cross, the pill's height, so it sits on the pill's centre line */
-	& .knitoutjs-close {
+	& .lattice-wm-close {
 		display: inline-flex;
 		flex: none;
 		align-items: center;
@@ -344,12 +363,12 @@
 
 		&:hover {
 			opacity: 1;
-			background: var(--knitoutjs-line-soft);
+			background: var(--lattice-wm-line-soft);
 		}
 	}
 
 	/* a drawn plus, on the pills' centre line like the cross */
-	& .knitoutjs-add {
+	& .lattice-wm-add {
 		display: inline-flex;
 		flex: none;
 		align-items: center;
@@ -370,27 +389,27 @@
 		}
 
 		&:hover {
-			background: var(--knitoutjs-highlighter);
-			color: var(--knitoutjs-ink);
+			background: var(--lattice-wm-highlighter);
+			color: var(--lattice-wm-ink);
 		}
 	}
 
-	& .knitoutjs-swatch {
+	& .lattice-wm-swatch {
 		flex: none;
 		width: 8px;
 		height: 8px;
-		border: 1px solid var(--knitoutjs-line);
-		background: var(--doc);
+		border: 1px solid var(--lattice-wm-line);
+		background: var(--lattice-wm-doc);
 		transition: box-shadow 0.15s;
 
 		[data-glow] > & {
-			box-shadow: 0 0 0 2px color-mix(in oklab, var(--doc) 35%, transparent);
+			box-shadow: 0 0 0 2px color-mix(in oklab, var(--lattice-wm-doc) 35%, transparent);
 		}
 	}
 
 	/* ── the line under the tabs: which doc, written by what, shown how ──── */
 
-	& .knitoutjs-bar {
+	& .lattice-wm-bar {
 		display: flex;
 		flex: none;
 		overflow: hidden;
@@ -398,11 +417,11 @@
 		gap: 10px;
 		height: 24px;
 		padding: 0 6px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
+		border-bottom: 1px solid var(--lattice-wm-line-soft);
 		font-size: 11px;
 	}
 
-	& .knitoutjs-url {
+	& .lattice-wm-url {
 		display: inline-flex;
 		flex: none;
 		align-items: center;
@@ -411,20 +430,20 @@
 		overflow: hidden;
 		border: none;
 		background: none;
-		color: var(--knitoutjs-muted);
-		font: 10.5px var(--knitoutjs-mono);
+		color: var(--lattice-wm-muted);
+		font: 10.5px var(--lattice-wm-mono);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		cursor: copy;
 
 		&:hover {
-			color: var(--knitoutjs-ink);
-			text-decoration: underline 2px var(--doc);
+			color: var(--lattice-wm-ink);
+			text-decoration: underline 2px var(--lattice-wm-doc);
 			text-underline-offset: 3px;
 		}
 	}
 
-	& .knitoutjs-link {
+	& .lattice-wm-link {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -433,13 +452,13 @@
 		padding: 0;
 		border: none;
 		background: none;
-		color: var(--knitoutjs-muted);
+		color: var(--lattice-wm-muted);
 		font: inherit;
 		white-space: nowrap;
 		cursor: pointer;
 
-		&:hover .knitoutjs-link-name {
-			text-decoration: underline 2px var(--doc);
+		&:hover .lattice-wm-link-name {
+			text-decoration: underline 2px var(--lattice-wm-doc);
 			text-underline-offset: 3px;
 		}
 
@@ -449,56 +468,44 @@
 		}
 	}
 
-	& .knitoutjs-link-name {
+	& .lattice-wm-link-name {
 		overflow: hidden;
-		color: var(--knitoutjs-ink);
-		font: italic 12px var(--knitoutjs-serif);
+		color: var(--lattice-wm-ink);
+		font: italic 12px var(--lattice-wm-aside-family);
 		text-overflow: ellipsis;
 	}
 
-	& .knitoutjs-spacer {
+	& .lattice-wm-spacer {
 		flex: 1;
 	}
 
 	/* a generated .k: built when, out of date, or its .js failed */
-	& .knitoutjs-build-status {
+	& .lattice-wm-status {
 		display: inline-flex;
 		flex: none;
 		align-items: center;
 		gap: 4px;
-		color: var(--knitoutjs-muted);
+		color: var(--lattice-wm-muted);
 		white-space: nowrap;
 
 		&[data-state="stale"] {
-			color: var(--knitoutjs-ink);
+			color: var(--lattice-wm-ink);
 		}
 		&[data-state="error"] {
-			color: var(--knitoutjs-danger);
+			color: var(--lattice-wm-danger);
 		}
-	}
-
-	& .knitoutjs-rebuild {
-		padding: 0;
-		border: none;
-		background: none;
-		color: inherit;
-		font: inherit;
-		font-weight: 600;
-		text-decoration: underline 2px var(--knitoutjs-accent);
-		text-underline-offset: 2px;
-		cursor: pointer;
 	}
 
 	/* ── panels, and what lights up ───────────────────────────────────────── */
 
-	& .knitoutjs-body {
+	& .lattice-wm-body {
 		position: relative;
 		display: flex;
 		flex: 1 1 0;
 		min-height: 0;
 	}
 
-	& .knitoutjs-panel {
+	& .lattice-wm-panel {
 		position: relative;
 		display: flex;
 		flex: 1 1 0;
@@ -523,13 +530,13 @@
 		/* showing the doc you're pointing at */
 		&[data-glow="same"]::after {
 			box-shadow:
-				inset 0 0 0 1.5px var(--doc),
-				inset 0 0 10px color-mix(in oklab, var(--doc) 14%, transparent);
+				inset 0 0 0 1.5px var(--lattice-wm-doc),
+				inset 0 0 10px color-mix(in oklab, var(--lattice-wm-doc) 14%, transparent);
 		}
 
 		/* showing a doc linked to it: the .js that writes it, the .k it writes */
 		&[data-glow="linked"]::after {
-			outline-color: color-mix(in oklab, var(--doc) 70%, transparent);
+			outline-color: color-mix(in oklab, var(--lattice-wm-doc) 70%, transparent);
 		}
 
 		&[data-shared]::before,
@@ -543,57 +550,57 @@
 
 		/* showing a doc that's open in another pane too */
 		&[data-shared]::before {
-			box-shadow: inset 0 0 0 2px var(--doc);
+			box-shadow: inset 0 0 0 2px var(--lattice-wm-doc);
 		}
 
 		/* a .k that isn't keeping up with its .js: it failed, or it's out of date */
 		&[data-stuck]::before {
-			background: color-mix(in oklab, var(--knitoutjs-danger) 16%, transparent);
+			background: color-mix(in oklab, var(--lattice-wm-danger) 16%, transparent);
 		}
 	}
 
 	/* tinted for a moment when a new build lands in it */
-	& .knitoutjs-flash {
+	& .lattice-wm-flash {
 		position: absolute;
 		inset: 0;
 		z-index: 6;
-		background: var(--doc);
+		background: var(--lattice-wm-doc);
 		opacity: 0;
 		pointer-events: none;
 	}
 
-	& .knitoutjs-slot,
-	& .knitoutjs-tool {
+	& .lattice-wm-slot,
+	& .lattice-wm-tool {
 		display: flex;
 		flex: 1 1 0;
 		min-width: 0;
 		min-height: 0;
 	}
 
-	& .knitoutjs-tool-broken {
+	& .lattice-wm-tool[data-state="broken"] {
 		padding: 12px;
-		color: var(--knitoutjs-danger);
+		color: var(--lattice-wm-danger);
 	}
 
-	& .knitoutjs-tool-waiting {
+	& .lattice-wm-tool[data-state="waiting"] {
 		padding: 12px;
-		color: var(--knitoutjs-muted);
+		color: var(--lattice-wm-muted);
 	}
 
 	/* ── dropping things in ───────────────────────────────────────────────── */
 
-	& .knitoutjs-dropzone {
+	& .lattice-wm-dropzone {
 		position: absolute;
 		inset: 0;
 		z-index: 10;
 	}
 
-	& .knitoutjs-drop-hint {
+	& .lattice-wm-drop-hint {
 		position: absolute;
 		inset: 4px;
-		border: 2px dashed var(--knitoutjs-accent);
+		border: 2px dashed var(--lattice-wm-accent);
 		border-radius: 3px;
-		background: color-mix(in oklab, var(--knitoutjs-accent) 12%, transparent);
+		background: color-mix(in oklab, var(--lattice-wm-accent) 12%, transparent);
 		transition: inset 0.08s;
 		pointer-events: none;
 
@@ -607,12 +614,12 @@
 		&[data-zone="bottom"] { inset: 50% 4px 4px 4px; }
 	}
 
-	& .knitoutjs-outer-hint {
+	& .lattice-wm-outer-hint {
 		position: absolute;
 		z-index: 20;
-		border: 2px dashed var(--knitoutjs-accent);
+		border: 2px dashed var(--lattice-wm-accent);
 		border-radius: 3px;
-		background: color-mix(in oklab, var(--knitoutjs-accent) 10%, transparent);
+		background: color-mix(in oklab, var(--lattice-wm-accent) 10%, transparent);
 		pointer-events: none;
 
 		&[data-zone="left"] { inset: 4px 66% 4px 4px; }
@@ -621,11 +628,11 @@
 		&[data-zone="bottom"] { inset: 66% 4px 4px 4px; }
 	}
 
-	& .knitoutjs-drop-line {
+	& .lattice-wm-drop-line {
 		position: absolute;
 		right: 0;
 		left: 0;
-		border-top: 2px solid var(--knitoutjs-accent);
+		border-top: 2px solid var(--lattice-wm-accent);
 		pointer-events: none;
 
 		& span {
@@ -633,32 +640,32 @@
 			top: -9px;
 			right: 8px;
 			padding: 0 5px;
-			border: 1px solid var(--knitoutjs-line);
-			background: var(--knitoutjs-highlighter);
-			color: var(--knitoutjs-ink);
-			font: 10px/14px var(--knitoutjs-mono);
+			border: 1px solid var(--lattice-wm-line);
+			background: var(--lattice-wm-highlighter);
+			color: var(--lattice-wm-ink);
+			font: 10px/14px var(--lattice-wm-mono);
 			transform: skewX(-10deg);
 		}
 	}
 
-	& .knitoutjs-notice {
+	& .lattice-wm-notice {
 		position: absolute;
 		right: 8px;
 		bottom: 8px;
 		left: 8px;
 		z-index: 12;
 		padding: 5px 9px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--lattice-wm-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-highlighter);
-		box-shadow: 1px 1px 0 var(--knitoutjs-line);
-		color: var(--knitoutjs-ink);
+		background: var(--lattice-wm-highlighter);
+		box-shadow: 1px 1px 0 var(--lattice-wm-line);
+		color: var(--lattice-wm-ink);
 	}
 
 	/* everyone else's pointers, over the doc they're pointing at: an arrow
 	   or a mouse in their colour, their point where theirs is, their name
 	   beside it. they glide the little way between one update and the next */
-	& .latticework-pointers {
+	& .lattice-wm-pointers {
 		position: absolute;
 		inset: 0;
 		z-index: 11;
@@ -666,7 +673,7 @@
 		pointer-events: none;
 	}
 
-	& .latticework-pointer {
+	& .lattice-wm-pointer {
 		position: absolute;
 		transition:
 			left 60ms linear,
@@ -679,39 +686,39 @@
 		}
 	}
 
-	& .latticework-pointer-name {
+	& .lattice-wm-pointer-name {
 		position: absolute;
 		top: 16px;
 		left: 10px;
 		padding: 1px 6px;
-		border-radius: var(--studio-radius-round, 999px);
-		background: var(--button-fill);
-		color: var(--button-ink, #fff);
-		font: 600 10.5px/1.4 var(--studio-family-ui, system-ui, sans-serif);
+		border-radius: var(--lattice-wm-round);
+		background: var(--lattice-wm-button-fill);
+		color: var(--lattice-wm-button-ink);
+		font: 600 10.5px/1.4 var(--lattice-wm-sans);
 		white-space: nowrap;
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		& .latticework-pointer {
+		& .lattice-wm-pointer {
 			transition: none;
 		}
 	}
 
 	/* ── buttons: a 1px line and a 1px shadow, lifting on hover ───────────── */
 
-	& .knitoutjs-button {
+	& .lattice-wm-button {
 		padding: 2px 10px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--lattice-wm-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet);
-		box-shadow: 1px 1px 0 var(--knitoutjs-line);
+		background: var(--lattice-wm-sheet);
+		box-shadow: 1px 1px 0 var(--lattice-wm-line);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
 
 		&:hover {
 			translate: -1px -1px;
-			box-shadow: 2px 2px 0 var(--knitoutjs-line);
+			box-shadow: 2px 2px 0 var(--lattice-wm-line);
 		}
 
 		&:active {
@@ -720,184 +727,25 @@
 		}
 	}
 
-	/* ── the editor's run bar ─────────────────────────────────────────────── */
-
-	& .knitoutjs-editor {
-		display: flex;
-		flex: 1 1 0;
-		flex-direction: column;
-		min-width: 0;
-		min-height: 0;
-	}
-
-	/* patchwork's own file editor, inside */
-	& .knitoutjs-file {
-		display: flex;
-		flex: 1 1 0;
-		min-height: 0;
-
-		& > patchwork-view {
-			display: flex;
-			flex: 1 1 0;
-			min-width: 0;
-			min-height: 0;
-			overflow: hidden;
-		}
-	}
-
-	& .knitoutjs-runbar {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: 8px;
-		padding: 4px 6px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
-		font-size: 11px;
-	}
-
 	/* what a box says before anything's in it: gentle, but readable */
 	& ::placeholder {
-		color: var(--knitoutjs-muted);
+		color: var(--lattice-wm-muted);
 		opacity: 1;
 	}
 
 	/* a filled button's text: offset black or white, whichever reads better
-	   on its fill. a button says what it's filled with as --button-fill and
-	   takes var(--button-ink, …) for its colour: the …, where browsers can't
+	   on its fill. a button says what it's filled with as --lattice-wm-button-fill and
+	   takes var(--lattice-wm-button-ink) for its colour: the …, where browsers can't
 	   tell (offset black is black with a fifth of the fill in it) */
 	@supports (color: contrast-color(red)) {
-		& :where(button, label, .latticework-pointer-name) {
-			--button-ink: oklch(from color-mix(in oklch, contrast-color(var(--button-fill)) 80%, var(--button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
+		& :where(button, label, .lattice-wm-pointer-name) {
+			--lattice-wm-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--lattice-wm-button-fill)) 80%, var(--lattice-wm-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 		}
 	}
-
-	/* doubled up to outrank a shell's `button { color: inherit }` */
-	& .knitoutjs-button.knitoutjs-run {
-		--button-fill: var(--knitoutjs-accent);
-		min-width: 5em;
-		padding: 1px 12px;
-		background: var(--button-fill);
-		color: var(--button-ink, var(--knitoutjs-accent-ink));
-		font-weight: 600;
-
-		&[data-running] {
-			--button-fill: var(--knitoutjs-ink);
-			color: var(--button-ink, var(--knitoutjs-sheet));
-		}
-	}
-
-	& .knitoutjs-auto {
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		cursor: pointer;
-
-		& input {
-			margin: 0;
-			accent-color: var(--studio-added, var(--knitoutjs-stem));
-		}
-	}
-
-	& .knitoutjs-status {
-		flex: 1;
-		min-width: 0;
-		overflow: hidden;
-		color: var(--knitoutjs-muted);
-		text-overflow: ellipsis;
-		white-space: nowrap;
-
-		&[data-state="ok"] {
-			color: var(--studio-added, var(--knitoutjs-stem));
-		}
-		&[data-state="error"],
-		&[data-state="ask"] {
-			color: var(--knitoutjs-danger);
-		}
-	}
-
-	& .knitoutjs-target {
-		display: inline-flex;
-		flex: none;
-		align-items: center;
-		gap: 5px;
-
-		& select {
-			max-width: 16ch;
-			padding: 1px 2px;
-			border: 1px solid var(--knitoutjs-line-soft);
-			border-radius: 2px;
-			background: var(--knitoutjs-sheet);
-			color: inherit;
-			font: inherit;
-		}
-	}
-
-	& .knitoutjs-open {
-		flex: none;
-		padding: 0 2px;
-		border: none;
-		background: none;
-		color: var(--knitoutjs-muted);
-		font: inherit;
-		cursor: pointer;
-
-		&:hover:not(:disabled) {
-			color: var(--knitoutjs-ink);
-			text-decoration: underline;
-		}
-	}
-
-	& .knitoutjs-ask {
-		display: inline-flex;
-		flex: none;
-		gap: 6px;
-
-		& .knitoutjs-button {
-			padding: 0 8px;
-		}
-	}
-
-	& .knitoutjs-error-line {
-		padding: 0;
-		border: none;
-		background: none;
-		color: inherit;
-		font: inherit;
-		font-weight: 600;
-		text-decoration: underline;
-		text-underline-offset: 2px;
-		cursor: pointer;
-	}
-
-	& .knitoutjs-readonly {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: 10px;
-		padding: 4px 8px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-highlighter);
-		font-size: 11px;
-
-		& span {
-			flex: 1;
-			min-width: 0;
-		}
-
-		& .knitoutjs-button {
-			flex: none;
-			padding: 0 8px;
-		}
-	}
-
-	& .knitoutjs-target-label {
-		color: var(--knitoutjs-muted);
-	}
-
 
 	/* ── nothing open ─────────────────────────────────────────────────────── */
 
-	& .knitoutjs-empty {
+	& .lattice-wm-empty {
 		display: grid;
 		flex: 1;
 		place-items: center;
@@ -905,194 +753,78 @@
 	}
 
 	/* a doc's datatype, on a "no tool for this" card */
-	& .knitoutjs-empty-type {
+	& .lattice-wm-empty-type {
 		padding: 1px 5px;
-		border-radius: var(--knitoutjs-radius);
-		background: var(--knitoutjs-highlighter);
-		color: var(--knitoutjs-ink);
-		font: 11px var(--knitoutjs-mono);
+		border-radius: var(--lattice-wm-radius);
+		background: var(--lattice-wm-highlighter);
+		color: var(--lattice-wm-ink);
+		font: 11px var(--lattice-wm-mono);
 	}
 
-	& .knitoutjs-empty-card {
+	& .lattice-wm-empty-card {
 		max-width: 320px;
 		padding: 24px 28px 20px;
-		border: 1px solid var(--knitoutjs-line);
+		border: 1px solid var(--lattice-wm-line);
 		border-radius: 0.5em;
-		background: var(--knitoutjs-sheet);
-		box-shadow: 0 0 10px 2px #66003322;
+		background: var(--lattice-wm-sheet);
+		box-shadow: var(--lattice-wm-card-shadow);
 		text-align: center;
 
 		& p {
 			margin: 0 0 12px;
-			color: var(--knitoutjs-muted);
+			color: var(--lattice-wm-muted);
 		}
 	}
 
-	& .knitoutjs-empty-actions {
+	& .lattice-wm-empty-actions {
 		display: flex;
 		justify-content: center;
 		gap: 8px;
 	}
 
-	& .knitoutjs-empty-notice {
+	& .lattice-wm-empty-notice {
 		margin: 12px 0 0 !important;
-		color: var(--knitoutjs-danger) !important;
+		color: var(--lattice-wm-danger) !important;
 	}
 
 	/* the serif is drawn by hand, a little; it wobbles while you're near */
-	& .knitoutjs-rough {
+	& .lattice-wm-heading {
 		margin: 0 0 6px;
-		font: 400 28px/1.1 var(--knitoutjs-serif);
-		filter: url(#knitoutjs-rough-1);
+		font: 400 28px/1.1 var(--lattice-wm-heading-family);
+		filter: var(--lattice-wm-heading-filter);
 
-		.knitoutjs-empty-card:hover & {
-			animation: knitoutjs-boil 0.6s steps(1) infinite;
+		.lattice-wm-empty-card:hover & {
+			animation: var(--lattice-wm-heading-wobble);
 		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		& .knitoutjs-empty-card:hover .knitoutjs-rough {
+		& .lattice-wm-empty-card:hover .lattice-wm-heading {
 			animation: none;
 		}
 	}
 
-	/* ── the open menu ────────────────────────────────────────────────────── */
-
-	& .knitoutjs-menu[popover] {
-		position: fixed;
-		inset: auto;
-		width: 260px;
-		margin: 0;
-		padding: 4px;
-		border: 1px solid var(--knitoutjs-line);
-		border-radius: 3px;
-		background: var(--knitoutjs-sheet);
-		box-shadow: 2px 2px 0 var(--knitoutjs-line);
-		color: var(--knitoutjs-ink);
-		font: 12px/1.4 var(--knitoutjs-sans);
-	}
-
-	& .knitoutjs-menu-heading {
-		padding: 6px 8px 2px;
-		color: var(--knitoutjs-muted);
-		font-size: 10px;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-	}
-
-	& .knitoutjs-menu-item {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-		padding: 4px 8px;
-		border: none;
-		border-radius: 2px;
-		background: none;
-		color: inherit;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-
-		& small {
-			color: var(--knitoutjs-muted);
-			font-size: 11px;
-		}
-
-		&:hover {
-			background: var(--knitoutjs-highlighter);
-			color: var(--knitoutjs-ink);
-		}
-	}
-
-	/* a tab's tool menu: each tool, and a way to open it in a new tab */
-	& .knitoutjs-tool-menu[popover] {
-		width: 200px;
-	}
-
-	& .knitoutjs-tool-option {
-		display: flex;
-		align-items: center;
-		gap: 2px;
-
-		& .knitoutjs-menu-item {
-			flex: 1;
-
-			&::before {
-				content: "";
-				width: 1em;
-			}
-			&[aria-checked="true"]::before {
-				content: "✓";
-			}
-		}
-	}
-
-	& .knitoutjs-open-new {
-		display: grid;
-		flex: none;
-		place-items: center;
-		width: 24px;
-		height: 24px;
-		padding: 0;
-		border: none;
-		border-radius: 2px;
-		background: none;
-		color: var(--knitoutjs-muted);
-		cursor: pointer;
-
-		&:hover {
-			background: var(--knitoutjs-highlighter);
-			color: var(--knitoutjs-ink);
-		}
-	}
-
-	& .knitoutjs-menu-empty {
-		padding: 4px 8px;
-		color: var(--knitoutjs-muted);
-	}
-
-	/* (border-box here too: a menu can be outside a frame, where that isn't
-	   everything's) */
-	& .knitoutjs-menu-url input {
-		box-sizing: border-box;
-		width: 100%;
-		margin: 6px 0 2px;
-		padding: 4px 6px;
-		border: 1px solid var(--knitoutjs-line-soft);
-		border-radius: 2px;
-		background: var(--knitoutjs-sheet);
-		color: inherit;
-		font: 11px var(--knitoutjs-mono);
-	}
-
-	& .knitoutjs-menu-hint {
-		margin: 2px 8px 4px;
-		color: var(--knitoutjs-muted);
-		font: italic 11.5px var(--knitoutjs-serif);
-	}
-
 	/* ── floating: a group or split over the tiles ────────────────────────── */
 
-	& .latticework-float {
+	& .lattice-wm-float {
 		position: absolute;
 		display: flex;
 		min-width: 0;
 		min-height: 0;
-		border: 1px solid var(--knitoutjs-line);
-		border-radius: var(--knitoutjs-radius);
-		background: var(--knitoutjs-paper);
-		box-shadow: 0 4px 18px 2px #33001833;
+		border: 1px solid var(--lattice-wm-line);
+		border-radius: var(--lattice-wm-radius);
+		background: var(--lattice-wm-paper);
+		box-shadow: var(--lattice-wm-float-shadow);
 		overflow: hidden;
 
 		/* held where there aren't tabs, the tab bar moves it */
-		& .knitoutjs-tabs {
+		& .lattice-wm-tabs {
 			cursor: grab;
 		}
 	}
 
 	/* its edges and corners size it. inside it, since it clips */
-	& .latticework-float-edge {
+	& .lattice-wm-float-edge {
 		position: absolute;
 		z-index: 3;
 		touch-action: none;
@@ -1129,22 +861,141 @@
 		&[data-edge="se"] { bottom: 0; right: 0; cursor: nwse-resize; }
 	}
 
-	& .latticework-menu-rule {
+}
+
+/* ── a menu: wm's, and any of the app's (lattice's frame has some) ────── */
+
+.lattice-wm-menu {
+	&[popover] {
+		position: fixed;
+		inset: auto;
+		width: 260px;
+		margin: 0;
+		padding: 4px;
+		border: 1px solid var(--lattice-wm-line);
+		border-radius: 3px;
+		background: var(--lattice-wm-sheet);
+		box-shadow: 2px 2px 0 var(--lattice-wm-line);
+		color: var(--lattice-wm-ink);
+		font: 12px/1.4 var(--lattice-wm-sans);
+	}
+
+	& .lattice-wm-menu-heading {
+		padding: 6px 8px 2px;
+		color: var(--lattice-wm-muted);
+		font-size: 10px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	& .lattice-wm-menu-item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
+		padding: 4px 8px;
+		border: none;
+		border-radius: 2px;
+		background: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+
+		& small {
+			color: var(--lattice-wm-muted);
+			font-size: 11px;
+		}
+
+		&:hover {
+			background: var(--lattice-wm-highlighter);
+			color: var(--lattice-wm-ink);
+		}
+	}
+
+	/* a tab's tool menu: each tool, and a way to open it in a new tab */
+	&.lattice-wm-tool-menu[popover] {
+		width: 200px;
+	}
+
+	& .lattice-wm-tool-option {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+
+		& .lattice-wm-menu-item {
+			flex: 1;
+
+			&::before {
+				content: "";
+				width: 1em;
+			}
+			&[aria-checked="true"]::before {
+				content: "✓";
+			}
+		}
+	}
+
+	& .lattice-wm-open-new {
+		display: grid;
+		flex: none;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: none;
+		border-radius: 2px;
+		background: none;
+		color: var(--lattice-wm-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--lattice-wm-highlighter);
+			color: var(--lattice-wm-ink);
+		}
+	}
+
+	& .lattice-wm-menu-empty {
+		padding: 4px 8px;
+		color: var(--lattice-wm-muted);
+	}
+
+	/* (border-box here too: a menu can be outside a frame, where that isn't
+	   everything's) */
+	& .lattice-wm-menu-url input {
+		box-sizing: border-box;
+		width: 100%;
+		margin: 6px 0 2px;
+		padding: 4px 6px;
+		border: 1px solid var(--lattice-wm-line-soft);
+		border-radius: 2px;
+		background: var(--lattice-wm-sheet);
+		color: inherit;
+		font: 11px var(--lattice-wm-mono);
+	}
+
+	& .lattice-wm-menu-hint {
+		margin: 2px 8px 4px;
+		color: var(--lattice-wm-muted);
+		font: italic 11.5px var(--lattice-wm-aside-family);
+	}
+
+	& .lattice-wm-menu-rule {
 		height: 1px;
 		margin: 4px 0;
-		background: var(--knitoutjs-line-soft);
+		background: var(--lattice-wm-line-soft);
+	}
+
+	/* what a box says before anything's in it: gentle, but readable */
+	& ::placeholder {
+		color: var(--lattice-wm-muted);
+		opacity: 1;
 	}
 }
 
 /* ── a project: its files beside its panes ──────────────────────────────── */
 
-.knitoutjs-editor-tool.lattice-project {
-	--lattice-rule: var(--studio-chrome-fill-offset-30, #0002);
-	--lattice-muted: var(--studio-chrome-line-offset-30, #888);
-	/* headings, and the names of things: the theme's code font, unless
-	   there's a heading font of its own */
-	--lattice-path-family: var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace));
-
+.lattice-wm.lattice-wm-project {
 	position: relative;
 	display: flex;
 	flex: 1;
@@ -1158,29 +1009,29 @@
 		color: inherit;
 	}
 
-	& > .knitoutjs-frame {
+	& > .lattice-wm-frame {
 		flex: 1;
 		width: auto;
 		min-width: 0;
 	}
 
 	/* its width is the user's (sidebars.js) */
-	& .lattice-files {
+	& .lattice-wm-files {
 		position: relative;
 		display: flex;
 		flex: none;
 		flex-direction: column;
 		box-sizing: border-box;
 		min-height: 0;
-		border-right: 1px solid var(--studio-fill-offset-30, #0002);
-		background: var(--studio-fill, #fafafa);
-		color: var(--studio-line, #383a42);
-		font-family: var(--lattice-path-family);
+		border-right: 1px solid var(--lattice-wm-edge);
+		background: var(--lattice-wm-fill);
+		color: var(--lattice-wm-ink);
+		font-family: var(--lattice-wm-path-family);
 		font-size: 12px;
 	}
 
 	/* what scrolls, so the resizer beside it doesn't */
-	& .lattice-sidebar-content {
+	& .lattice-wm-sidebar-content {
 		display: flex;
 		flex: 1;
 		flex-direction: column;
@@ -1189,30 +1040,30 @@
 		overflow: auto;
 	}
 
-	& .lattice-files-heading {
+	& .lattice-wm-files-heading {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 4px;
 		min-height: 32px;
 		padding: 0 6px 0 12px;
-		border-bottom: 1px solid var(--lattice-rule);
+		border-bottom: 1px solid var(--lattice-wm-rule);
 		font-weight: 600;
 	}
 
-	& .lattice-path {
+	& .lattice-wm-path {
 		flex: 1;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	& .lattice-files-empty {
+	& .lattice-wm-files-empty {
 		margin: 4px 12px 4px 24px;
-		color: var(--lattice-muted);
+		color: var(--lattice-wm-quiet);
 	}
 
-	& .lattice-icon-button {
+	& .lattice-wm-icon-button {
 		display: grid;
 		flex: none;
 		place-items: center;
@@ -1220,57 +1071,57 @@
 		height: 22px;
 		padding: 0;
 		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
+		border-radius: var(--lattice-wm-radius);
 		background: none;
-		color: var(--lattice-muted);
+		color: var(--lattice-wm-quiet);
 		font-size: 15px;
 		cursor: pointer;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-wm-chrome);
 			color: inherit;
 		}
 	}
 
 	/* who else is here, by the project's name. one's pressed while it's
 	   being followed */
-	& .latticework-faces {
+	& .lattice-wm-faces {
 		display: flex;
 		flex: none;
 		gap: 2px;
 	}
 
-	& .latticework-face {
+	& .lattice-wm-face {
 		display: grid;
 		place-items: center;
 		width: 20px;
 		height: 20px;
 		padding: 0;
-		border: 2px solid var(--face-colour, var(--lattice-muted));
+		border: 2px solid var(--lattice-wm-face);
 		border-radius: 50%;
-		background: var(--studio-chrome-fill-offset-20, #0001) center / cover;
+		background: var(--lattice-wm-chrome) center / cover;
 		color: inherit;
-		font: 600 9px/1 var(--knitoutjs-sans, system-ui, sans-serif);
+		font: 600 9px/1 var(--lattice-wm-sans);
 		cursor: pointer;
 
 		&[aria-pressed="true"] {
-			outline: 2px solid var(--face-colour, var(--lattice-muted));
+			outline: 2px solid var(--lattice-wm-face);
 			outline-offset: 1px;
 		}
 	}
 
 	/* the files, shut: a strip down the side to open them again */
-	& .latticework-files-shut {
+	& .lattice-wm-files-shut {
 		flex: none;
 		width: 22px;
 		padding: 8px 0 0;
 		border: none;
-		border-right: 1px solid var(--lattice-rule);
-		background: var(--studio-fill, #fafafa);
-		color: var(--lattice-muted);
+		border-right: 1px solid var(--lattice-wm-rule);
+		background: var(--lattice-wm-fill);
+		color: var(--lattice-wm-quiet);
 		cursor: pointer;
 		writing-mode: vertical-rl;
-		font-family: var(--lattice-path-family);
+		font-family: var(--lattice-wm-path-family);
 		font-size: 11px;
 
 		&:hover {
@@ -1278,19 +1129,19 @@
 		}
 	}
 
-	& .lattice-file {
+	& .lattice-wm-file {
 		position: relative;
 		display: flex;
 		align-items: center;
-		color: var(--studio-line-offset-30, currentColor);
+		color: var(--lattice-wm-ink-soft);
 
 		&[data-showing] {
-			color: var(--studio-line, #383a42);
+			color: var(--lattice-wm-ink);
 			font-weight: 600;
 		}
 	}
 
-	& .lattice-file-open {
+	& .lattice-wm-file-open {
 		display: flex;
 		flex: 1;
 		align-items: center;
@@ -1307,12 +1158,12 @@
 		text-overflow: ellipsis;
 
 		&:hover {
-			background: var(--studio-chrome-fill-offset-20, #0001);
+			background: var(--lattice-wm-chrome);
 		}
 	}
 
 	/* the name has the room first */
-	& .lattice-file-name {
+	& .lattice-wm-file-name {
 		flex: 0 1 auto;
 		min-width: 0;
 		overflow: hidden;
@@ -1322,7 +1173,7 @@
 	/* how long since it was last built or changed: in what room the name
 	   leaves, all of it or none (it's in the tooltip). what doesn't fit beside
 	   the empty ::before wraps onto a line that's out of sight */
-	& .lattice-file-when {
+	& .lattice-wm-file-when {
 		display: flex;
 		flex: 1 1 0;
 		flex-wrap: wrap;
@@ -1330,8 +1181,8 @@
 		min-width: 0;
 		height: 1.4em;
 		overflow: hidden;
-		color: var(--lattice-muted);
-		font-family: var(--studio-family-ui, system-ui, sans-serif);
+		color: var(--lattice-wm-quiet);
+		font-family: var(--lattice-wm-sans);
 		font-size: 10.5px;
 		line-height: 1.4em;
 		white-space: nowrap;
@@ -1345,7 +1196,7 @@
 
 	/* shown on hover, or while it's asking to be pressed again: over the end
 	   of the row, so it takes no room from the name when it's not there */
-	& .lattice-file-remove {
+	& .lattice-wm-file-remove {
 		position: absolute;
 		top: 50%;
 		right: 6px;
@@ -1354,89 +1205,83 @@
 		visibility: hidden;
 		padding: 0 5px;
 		border: none;
-		border-radius: var(--studio-radius-sm, 4px);
-		background: var(--studio-fill, #fafafa);
-		color: var(--studio-line-offset-30, currentColor);
-		font-family: var(--studio-family-ui, system-ui, sans-serif);
+		border-radius: var(--lattice-wm-radius);
+		background: var(--lattice-wm-fill);
+		color: var(--lattice-wm-ink-soft);
+		font-family: var(--lattice-wm-sans);
 		translate: 0 -50%;
 		cursor: pointer;
 
 		&:hover {
-			background: color-mix(in oklab, var(--studio-fill, #fafafa), var(--studio-line, #000) 8%);
-			color: var(--studio-danger-text, #e45649);
+			background: color-mix(in oklab, var(--lattice-wm-fill), var(--lattice-wm-ink) 8%);
+			color: var(--lattice-wm-danger);
 		}
 	}
-	& .lattice-file:hover .lattice-file-remove,
-	& .lattice-file:focus-within .lattice-file-remove,
-	& .lattice-file[data-removing] .lattice-file-remove {
+	& .lattice-wm-file:hover .lattice-wm-file-remove,
+	& .lattice-wm-file:focus-within .lattice-wm-file-remove,
+	& .lattice-wm-file[data-removing] .lattice-wm-file-remove {
 		visibility: visible;
 	}
-	& .lattice-file[data-removing] .lattice-file-remove {
-		background: var(--studio-danger-fill, #e45649);
-		color: var(--studio-danger-line, white);
-	}
-
-	/* along a sidebar's right edge, over its border */
-	& .lattice-resizer {
-		position: absolute;
-		top: 0;
-		right: -3px;
-		bottom: 0;
-		z-index: 1;
-		width: 6px;
-		cursor: col-resize;
-
-		&:hover,
-		&[data-dragging] {
-			background: color-mix(in oklch, var(--studio-primary, #007aff) 45%, transparent);
-		}
-
-		/* a sidebar down the right: its left edge */
-		&[data-side="left"] {
-			right: auto;
-			left: -3px;
-		}
+	& .lattice-wm-file[data-removing] .lattice-wm-file-remove {
+		background: var(--lattice-wm-danger-fill);
+		color: var(--lattice-wm-danger-ink);
 	}
 }
 
-@keyframes knitoutjs-boil {
-	0% { filter: url(#knitoutjs-rough-1); }
-	33% { filter: url(#knitoutjs-rough-2); }
-	66% { filter: url(#knitoutjs-rough-3); }
+/* along a sidebar's right edge, over its border */
+.lattice-wm-resizer {
+	position: absolute;
+	top: 0;
+	right: -3px;
+	bottom: 0;
+	z-index: 1;
+	width: 6px;
+	cursor: col-resize;
+
+	&:hover,
+	&[data-dragging] {
+		background: color-mix(in oklch, var(--lattice-wm-accent) 45%, transparent);
+	}
+
+	/* a sidebar down the right: its left edge */
+	&[data-side="left"] {
+		right: auto;
+		left: -3px;
+	}
 }
 
 /* ── a project from before: only a button to update it ───────────────────── */
 
-.knitoutjs-editor-tool.latticework-update {
+.lattice-wm-update {
 	display: flex;
 	box-sizing: border-box;
 	width: 100%;
 	height: 100%;
-	background: var(--knitoutjs-paper);
-	font: 14px/1.4 var(--knitoutjs-sans);
+	background: var(--lattice-wm-paper);
+	font: 14px/1.4 var(--lattice-wm-sans);
 
-	& .latticework-update-heading {
+	& .lattice-wm-update-heading {
 		margin: 0 0 8px;
-		color: var(--knitoutjs-ink);
-		font: 400 24px/1.1 var(--knitoutjs-serif);
+		color: var(--lattice-wm-ink);
+		font: 400 24px/1.1 var(--lattice-wm-heading-family);
 	}
 }
 
 /* a tooltip (tooltip.js): what something's title says, by it. in the top
    layer, so it's over menus too */
-.knitoutjs-tooltip[popover] {
+.lattice-wm-tooltip[popover] {
 	position: fixed;
 	inset: auto;
 	width: max-content;
 	max-width: 280px;
 	margin: 0;
 	padding: 4px 7px;
-	border: 1px solid var(--studio-chrome-line, #1c1a17);
+	border: 1px solid var(--lattice-wm-chrome-ink);
 	border-radius: 3px;
-	background: var(--studio-chrome-fill, #fffdf8);
-	box-shadow: 2px 2px 0 var(--studio-chrome-line, #1c1a17);
-	color: var(--studio-chrome-line, #1c1a17);
-	font: 11.5px/1.35 var(--studio-family-ui, system-ui, sans-serif);
+	background: var(--lattice-wm-paper);
+	box-shadow: 2px 2px 0 var(--lattice-wm-chrome-ink);
+	color: var(--lattice-wm-chrome-ink);
+	font: 11.5px/1.35 var(--lattice-wm-sans);
 	white-space: pre-line;
 	overflow-wrap: anywhere;
 	pointer-events: none;

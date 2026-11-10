@@ -89,7 +89,7 @@ export function Resizer(props) {
     handle.addEventListener("pointercancel", finish);
   }
   return html`<div
-    class="lattice-resizer"
+    class="lattice-wm-resizer"
     data-side=${side}
     role="separator"
     aria-orientation="vertical"

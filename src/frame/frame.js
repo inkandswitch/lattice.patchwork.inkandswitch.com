@@ -19,15 +19,16 @@ import { directoryTitle } from "../../packages/wm/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "../../packages/wm/ui/sidebars.js";
 import { icon } from "../../packages/wm/ui/icons.js";
 import { tooltips } from "../../packages/wm/ui/tooltip.js";
+import { roughFilters } from "../../packages/knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
 import { colourFor, pointerCursor } from "./pointer.js";
 import { useToolStorage } from "./storage.js";
 
-// latticework's, too, for its menus, before any project has brought it; and
-// the fonts lattice brings
-const STYLESHEETS = ["./fonts/fonts.css", "../../packages/wm/wm.css", "./shell.css"].map(
+// wm's, too, for its menus, before any project has brought it; knitout.js's
+// look, which lattice wears; and the fonts lattice brings
+const STYLESHEETS = ["./fonts/fonts.css", "../../packages/wm/wm.css", "../../packages/knitoutjs/look.css", "./shell.css"].map(
   (path) => new URL(path, import.meta.url).href,
 );
 
@@ -95,7 +96,8 @@ export default function LatticeFrameTool(handle, element) {
     return link;
   });
   element.append(...links);
-  tooltips();
+  roughFilters();
+  tooltips(".lattice-shell");
 
   // the frame is the account doc's tool, so its providers are the account's
   const providers = nestProviders(element, frameProviders(handle.url));
@@ -751,12 +753,12 @@ function Frame(props) {
 
   function ProjectMenu() {
     return html`<div
-      class="knitoutjs-menu lattice-context-menu"
+      class="lattice-wm-menu lattice-context-menu"
       popover="auto"
       ref=${(el) => (projectMenu = el)}
     >
       <button
-        class="knitoutjs-menu-item"
+        class="lattice-wm-menu-item"
         disabled=${() => !menuFiles()}
         onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
       >
@@ -765,7 +767,7 @@ function Frame(props) {
         <small>a link here · they get their own</small>
       </button>
       <button
-        class="knitoutjs-menu-item"
+        class="lattice-wm-menu-item"
         disabled=${() => packing() === "packing it…"}
         onClick=${downloadFromMenu}
       >
@@ -777,9 +779,9 @@ function Frame(props) {
   }
 
   function HomeMenu() {
-    return html`<div class="knitoutjs-menu" popover="auto" ref=${(el) => (homeMenu = el)}>
+    return html`<div class="lattice-wm-menu" popover="auto" ref=${(el) => (homeMenu = el)}>
       <button
-        class="knitoutjs-menu-item"
+        class="lattice-wm-menu-item"
         onClick=${() => {
           homeMenu.hidePopover();
           newProject();
@@ -789,8 +791,8 @@ function Frame(props) {
         new project
         <small>an empty one</small>
       </button>
-      <div class="knitoutjs-menu-heading">from anywhere</div>
-      <button class="knitoutjs-menu-item" disabled=${() => !!adding()} onClick=${() => archiveInput.click()}>
+      <div class="lattice-wm-menu-heading">from anywhere</div>
+      <button class="lattice-wm-menu-item" disabled=${() => !!adding()} onClick=${() => archiveInput.click()}>
         ${icon("file")}
         .patchworkfolder
         <small>from a file</small>
@@ -807,7 +809,7 @@ function Frame(props) {
           if (files.length) takeArchives(files);
         }}
       />
-      <form class="knitoutjs-menu-url" onSubmit=${onAddFromUrl}>
+      <form class="lattice-wm-menu-url" onSubmit=${onAddFromUrl}>
         <input
           name="url"
           placeholder="automerge:… url"
@@ -817,7 +819,7 @@ function Frame(props) {
           onInput=${() => setAddProblem(null)}
         />
       </form>
-      <p class="knitoutjs-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
+      <p class="lattice-wm-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
         ${() => addProblem() ?? adding() ?? "a project, folder or directory · or drop or paste a .patchworkfolder"}
       </p>
     </div>`;
@@ -934,7 +936,7 @@ function Frame(props) {
 
   function Shell() {
     return html`<div
-        class="knitoutjs-editor-tool lattice-shell"
+        class="lattice-shell"
         data-inspector=${() => (inspector.open() ? "open" : "closed")}
         style=${() => ({ "--lattice-pointer": myPointer() ?? undefined })}
       >

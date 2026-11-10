@@ -248,7 +248,7 @@ export function mountWorkspace(
   let root;
   let menu;
 
-  tooltips();
+  tooltips(".lattice-wm");
   const filesSidebar = sidebar ?? sidebarState("lattice-wm:files", 200, "lattice:files");
 
   // a stylesheet added by script doesn't hold up painting, so stay hidden
@@ -746,7 +746,8 @@ export function mountWorkspace(
     },
     project: { files: projectFiles, createFile },
     hover: setHovered,
-    docColour,
+    // the colour a doc wears here, as a css colour, for a tool to draw in
+    docColour: (url) => `var(--lattice-wm-${docColour(url)})`,
   };
 
   const hosts = new Map();
@@ -759,7 +760,7 @@ export function mountWorkspace(
     }
     if (host) destroyHost(id, host);
     host = { id, url, tool, patchworkTool, el: document.createElement(PANE_TAG), cleanup: null };
-    host.el.className = "knitoutjs-tool";
+    host.el.className = "lattice-wm-tool";
     host.el.addEventListener("scroll", (event) => onScroll(host, event), { capture: true, passive: true });
     hosts.set(id, host);
     mountTool(host);
@@ -801,15 +802,15 @@ export function mountWorkspace(
           resolve,
           () => {
             if (host.dead) return;
-            host.el.classList.add("knitoutjs-tool-waiting");
+            host.el.dataset.state = "waiting";
             host.el.textContent = "still looking for this";
           },
         );
       });
       const [docHandle, module] = await Promise.all([found, tool.load()]);
       if (host.dead) return;
-      if (host.el.classList.contains("knitoutjs-tool-waiting")) {
-        host.el.classList.remove("knitoutjs-tool-waiting");
+      if (host.el.dataset.state === "waiting") {
+        delete host.el.dataset.state;
         host.el.replaceChildren();
       }
       host.cleanup = module.default(docHandle, host.el, {
@@ -822,7 +823,7 @@ export function mountWorkspace(
       if (following()) showTheirViews();
     } catch (error) {
       if (host.dead) return;
-      host.el.classList.add("knitoutjs-tool-broken");
+      host.el.dataset.state = "broken";
       host.el.textContent = `couldn't open this: ${error.message ?? error}`;
     }
   }
@@ -858,7 +859,7 @@ export function mountWorkspace(
         }),
       );
     });
-    return html`<div class="knitoutjs-slot" ref=${(el) => (slot = el)}></div>`;
+    return html`<div class="lattice-wm-slot" ref=${(el) => (slot = el)}></div>`;
   }
 
   // ── opening things ─────────────────────────────────────────────────────
@@ -1120,7 +1121,7 @@ export function mountWorkspace(
   function dropTargetAt(event) {
     const outer = outerEdgeAt(event);
     if (outer) return { groupId: layout.root.id, zone: outer, outer: true };
-    const section = event.target.closest?.(".knitoutjs-group");
+    const section = event.target.closest?.(".lattice-wm-group");
     const zoneFor = section && dropTargets.get(section.dataset.group);
     if (zoneFor) return { groupId: section.dataset.group, ...zoneFor(event) };
     if (!layout.root) return { groupId: null, zone: "center" };
@@ -1421,18 +1422,18 @@ export function mountWorkspace(
 
   function Split(props) {
     const split = props.node;
-    return html`<div class="knitoutjs-split" data-direction=${() => split.direction}>
+    return html`<div class="lattice-wm-split" data-direction=${() => split.direction}>
       <${For} each=${() => split.children}>
         ${(child, index) => [
           () =>
             index() > 0 &&
             html`<div
-              class="knitoutjs-resizer"
+              class="lattice-wm-divider"
               role="separator"
               aria-orientation=${() => (split.direction === "row" ? "vertical" : "horizontal")}
               onPointerDown=${(event) => startResize(event, split, index() - 1)}
             ></div>`,
-          html`<div class="knitoutjs-cell" style=${() => cellStyle(child, split.direction)}>
+          html`<div class="lattice-wm-cell" style=${() => cellStyle(child, split.direction)}>
             <${Node} node=${child} />
           </div>`,
         ]}
@@ -1445,7 +1446,7 @@ export function mountWorkspace(
   function Float(props) {
     const node = props.node;
     return html`<div
-      class="latticework-float"
+      class="lattice-wm-float"
       data-float=${node.id}
       style=${() => {
         const box = floatBox(node.float);
@@ -1462,13 +1463,13 @@ export function mountWorkspace(
         el.addEventListener("pointerdown", () => raise(node), true);
       }}
       onPointerDown=${(event) => {
-        if (event.target.classList?.contains("knitoutjs-tabs")) startFloat(event, node, "move");
+        if (event.target.classList?.contains("lattice-wm-tabs")) startFloat(event, node, "move");
       }}
     >
       <${Node} node=${node} />
       ${FLOAT_EDGES.map(
         (edge) => html`<div
-          class="latticework-float-edge"
+          class="lattice-wm-float-edge"
           data-edge=${edge}
           onPointerDown=${(event) => startFloat(event, node, edge)}
         ></div>`,
@@ -1510,7 +1511,7 @@ export function mountWorkspace(
     const codeLine = () => target()?.lineTop ?? null;
 
     return html`<section
-      class="knitoutjs-group"
+      class="lattice-wm-group"
       data-group=${group.id}
       onPointerDown=${() => setLastGroupId(group.id)}
       onFocusIn=${() => setLastGroupId(group.id)}
@@ -1529,12 +1530,12 @@ export function mountWorkspace(
       }}
       onPointerLeave=${offPanes}
     >
-      <header class="knitoutjs-tabs" role="tablist" ref=${(el) => (tabs = el)}>
+      <header class="lattice-wm-tabs" role="tablist" ref=${(el) => (tabs = el)}>
         <${For} each=${() => group.panels}>
           ${(panel) => html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`}
         <//>
         <button
-          class="knitoutjs-add"
+          class="lattice-wm-add"
           title="open a file here, or start a new one"
           aria-label="open a file here, or start a new one"
           onClick=${(event) => openMenu(event, group.id)}
@@ -1548,34 +1549,34 @@ export function mountWorkspace(
         const panel = active();
         return panel && html`<${Bar} panel=${panel} />`;
       }}
-      <div class="knitoutjs-body" ref=${(el) => (body = el)}>
+      <div class="lattice-wm-body" ref=${(el) => (body = el)}>
         <${For} each=${() => group.panels}>
           ${(panel) => html`<${Panel} panel=${panel} active=${() => active() === panel} />`}
         <//>
         <${Show} when=${dragging}>
-          <div class="knitoutjs-dropzone">
-            <div class="knitoutjs-drop-hint" data-zone=${zone}></div>
+          <div class="lattice-wm-dropzone">
+            <div class="lattice-wm-drop-hint" data-zone=${zone}></div>
             <${Show} when=${() => zone() === "code"}>
-              <div class="knitoutjs-drop-line" style=${() => ({ top: `${codeLine()}px` })}>
+              <div class="lattice-wm-drop-line" style=${() => ({ top: `${codeLine()}px` })}>
                 <${Show} when=${dropLabel}><span>${dropLabel}</span><//>
               </div>
             <//>
           </div>
         <//>
         <${Show} when=${() => notice()?.groupId === group.id}>
-          <div class="knitoutjs-notice">${() => notice()?.text}</div>
+          <div class="lattice-wm-notice">${() => notice()?.text}</div>
         <//>
-        <div class="latticework-pointers" aria-hidden="true">
+        <div class="lattice-wm-pointers" aria-hidden="true">
           <${For} each=${() => pointersOver(active())}>
             ${(person) => {
               const image = () => pointerImage(person.colour, person.look);
               return html`<div
-                class="latticework-pointer"
+                class="lattice-wm-pointer"
                 data-look=${() => person.look}
                 style=${() => ({
                   left: `${(person.pointer?.x ?? 0) * 100}%`,
                   top: `${(person.pointer?.y ?? 0) * 100}%`,
-                  "--button-fill": person.colour,
+                  "--lattice-wm-button-fill": person.colour,
                 })}
               >
                 <img
@@ -1585,7 +1586,7 @@ export function mountWorkspace(
                   style=${() => ({ translate: `${-(image()?.x ?? 0)}px ${-(image()?.y ?? 0)}px` })}
                   alt=""
                 />
-                <span class="latticework-pointer-name">${() => person.name}</span>
+                <span class="lattice-wm-pointer-name">${() => person.name}</span>
               </div>`;
             }}
           <//>
@@ -1619,7 +1620,7 @@ export function mountWorkspace(
     );
 
     return html`<div
-      class="knitoutjs-panel"
+      class="lattice-wm-panel"
       hidden=${() => !props.active}
       data-colour=${() => docColour(panel.url)}
       data-glow=${() => glow(panel.url)}
@@ -1629,7 +1630,7 @@ export function mountWorkspace(
       onPointerLeave=${unhover}
     >
       <${Slot} panel=${panel} />
-      <div class="knitoutjs-flash" ref=${(el) => (flash = el)}></div>
+      <div class="lattice-wm-flash" ref=${(el) => (flash = el)}></div>
     </div>`;
   }
 
@@ -1655,7 +1656,7 @@ export function mountWorkspace(
     }
 
     return html`<div
-      class="knitoutjs-tab"
+      class="lattice-wm-tab"
       role="tab"
       draggable="true"
       aria-selected=${() => String(props.active)}
@@ -1671,13 +1672,13 @@ export function mountWorkspace(
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}
     >
-      <span class="knitoutjs-tab-pill">
-        <span class="knitoutjs-tab-title">
-          <span class="knitoutjs-swatch"></span>
+      <span class="lattice-wm-tab-pill">
+        <span class="lattice-wm-tab-title">
+          <span class="lattice-wm-swatch"></span>
           ${() =>
             renaming()
               ? html`<input
-                  class="knitoutjs-rename"
+                  class="lattice-wm-rename"
                   value=${info.name}
                   ref=${(el) => queueMicrotask(() => (el.focus(), el.select()))}
                   onKeyDown=${onKeyDown}
@@ -1685,7 +1686,7 @@ export function mountWorkspace(
                   onClick=${(event) => event.stopPropagation()}
                 />`
               : html`<span
-                  class="knitoutjs-tab-name"
+                  class="lattice-wm-tab-name"
                   title="double click to rename"
                   onDblClick=${() => setRenaming(true)}
                 >
@@ -1693,7 +1694,7 @@ export function mountWorkspace(
                 </span>`}
         </span>
         <button
-          class="knitoutjs-tab-tool"
+          class="lattice-wm-tab-tool"
           aria-haspopup="menu"
           title="what it's shown with: change it here, or open it with something else in a new tab"
           onClick=${(event) => {
@@ -1702,14 +1703,14 @@ export function mountWorkspace(
             openToolMenu(event, panel, group.id);
           }}
         >
-          <span class="knitoutjs-tab-tool-name">${() => toolName(panel)}</span>
-          <svg class="knitoutjs-tab-tool-arrow" aria-hidden="true" viewBox="0 0 10 6" width="10" height="6">
+          <span class="lattice-wm-tab-tool-name">${() => toolName(panel)}</span>
+          <svg class="lattice-wm-tab-tool-arrow" aria-hidden="true" viewBox="0 0 10 6" width="10" height="6">
             <path d="M0 0h10L5 6z" fill="currentColor" />
           </svg>
         </button>
       </span>
       <button
-        class="knitoutjs-close"
+        class="lattice-wm-close"
         title="close"
         aria-label="close"
         onClick=${(event) => {
@@ -1740,21 +1741,21 @@ export function mountWorkspace(
       setTimeout(() => setCopied(false), 1200);
     }
 
-    return html`<div class="knitoutjs-bar">
+    return html`<div class="lattice-wm-bar">
       <button
-        class="knitoutjs-url"
+        class="lattice-wm-url"
         data-colour=${() => docColour(panel.url)}
         title=${() => `${panel.url} (click to copy)`}
         onClick=${copy}
         onPointerEnter=${() => setHovered(panel.url)}
         onPointerLeave=${unhover}
       >
-        <span class="knitoutjs-swatch"></span>
+        <span class="lattice-wm-swatch"></span>
         ${() => (copied() ? [icon("check"), " copied"] : shortUrl(panel.url))}
       </button>
       <${For} each=${chips}>
         ${(link) => html`<button
-          class="knitoutjs-link"
+          class="lattice-wm-link"
           title=${link.title ?? ""}
           onClick=${() => reveal(link.url, panel.id, "left")}
           data-colour=${docColour(link.url)}
@@ -1763,11 +1764,11 @@ export function mountWorkspace(
           onPointerLeave=${unhover}
         >
           ${link.label}
-          <span class="knitoutjs-swatch"></span>
-          <span class="knitoutjs-link-name">${() => docInfo(link.url).name}</span>
+          <span class="lattice-wm-swatch"></span>
+          <span class="lattice-wm-link-name">${() => docInfo(link.url).name}</span>
         </button>`}
       <//>
-      <span class="knitoutjs-spacer"></span>
+      <span class="lattice-wm-spacer"></span>
       <${Status} panel=${panel} />
     </div>`;
   }
@@ -1777,14 +1778,14 @@ export function mountWorkspace(
     const panel = props.panel;
     const status = () => statusOf(panel.url);
     return html`<${Show} when=${status}>
-      <span class="knitoutjs-build-status" data-state=${() => status()?.state}>
+      <span class="lattice-wm-status" data-state=${() => status()?.state}>
         ${() => status()?.text ?? ""}
         ${() => {
           const action = status()?.action;
           return (
             action &&
             html`<button
-              class="knitoutjs-status-action"
+              class="lattice-wm-status-action"
               title=${action.title ?? ""}
               onClick=${() => action.run(panel.id)}
             >
@@ -1797,21 +1798,21 @@ export function mountWorkspace(
   }
 
   function Empty() {
-    return html`<div class="knitoutjs-empty">
-      <div class="knitoutjs-empty-card">
-        <h2 class="knitoutjs-rough">nothing's open</h2>
+    return html`<div class="lattice-wm-empty">
+      <div class="lattice-wm-empty-card">
+        <h2 class="lattice-wm-heading">nothing's open</h2>
         <p>drag anything in from the files, or</p>
-        <div class="knitoutjs-empty-actions">
+        <div class="lattice-wm-empty-actions">
           ${primaryItem &&
-          html`<button class="knitoutjs-button" onClick=${() => create(null, primaryItem)}>
+          html`<button class="lattice-wm-button" onClick=${() => create(null, primaryItem)}>
             ${icon(primaryItem.icon)} ${primaryItem.primary === true ? primaryItem.label : primaryItem.primary}
           </button>`}
-          <button class="knitoutjs-button" onClick=${(event) => openMenu(event, null)}>
+          <button class="lattice-wm-button" onClick=${(event) => openMenu(event, null)}>
             ${icon("folder")} open…
           </button>
         </div>
         <${Show} when=${() => notice() && !notice().groupId}>
-          <p class="knitoutjs-empty-notice">${() => notice()?.text}</p>
+          <p class="lattice-wm-empty-notice">${() => notice()?.text}</p>
         <//>
       </div>
     </div>`;
@@ -1819,7 +1820,7 @@ export function mountWorkspace(
 
   function Menu() {
     const item = (name, label, detail, onClick) => html`<button
-      class="knitoutjs-menu-item"
+      class="lattice-wm-menu-item"
       onClick=${onClick}
     >
       ${icon(name)}
@@ -1828,36 +1829,36 @@ export function mountWorkspace(
     </button>`;
 
     return html`<div
-      class="knitoutjs-menu"
+      class="lattice-wm-menu"
       popover="auto"
       ref=${(el) => (menu = el)}
       onToggle=${(event) => event.newState === "closed" && setMenuFor(null)}
     >
       <${Show} when=${menuItems.length}>
-        <div class="knitoutjs-menu-heading">new</div>
+        <div class="lattice-wm-menu-heading">new</div>
       <//>
       ${menuItems.map(
         (made) => html`<${Show} when=${() => !made.alt || altHeld()}>
           ${item(made.icon, made.label, made.detail ?? "", fromMenu((groupId) => create(groupId, made)))}
         <//>`,
       )}
-      <div class="knitoutjs-menu-heading">in this project</div>
+      <div class="lattice-wm-menu-heading">in this project</div>
       <${For}
         each=${() => projectFiles()}
-        fallback=${html`<div class="knitoutjs-menu-empty">nothing yet</div>`}
+        fallback=${html`<div class="lattice-wm-menu-empty">nothing yet</div>`}
       >
         ${(file) => html`<button
-          class="knitoutjs-menu-item knitoutjs-menu-file"
+          class="lattice-wm-menu-item lattice-wm-menu-file"
           data-colour=${docColour(file.url)}
           onClick=${fromMenu((groupId) => openDocs([file.url], groupId))}
           onPointerEnter=${() => setHovered(file.url)}
           onPointerLeave=${unhover}
         >
-          <span class="knitoutjs-swatch"></span>
+          <span class="lattice-wm-swatch"></span>
           ${file.name}
         </button>`}
       <//>
-      <form class="knitoutjs-menu-url" onSubmit=${onOpenUrl}>
+      <form class="lattice-wm-menu-url" onSubmit=${onOpenUrl}>
         <input
           name="url"
           placeholder="automerge:… url"
@@ -1865,7 +1866,7 @@ export function mountWorkspace(
           onInput=${(event) => event.currentTarget.setCustomValidity("")}
         />
       </form>
-      <p class="knitoutjs-menu-hint">or drag anything in from the files</p>
+      <p class="lattice-wm-menu-hint">or drag anything in from the files</p>
     </div>`;
   }
 
@@ -1898,17 +1899,17 @@ export function mountWorkspace(
     }
 
     return html`<div
-      class="knitoutjs-menu knitoutjs-tool-menu"
+      class="lattice-wm-menu lattice-wm-tool-menu"
       popover="auto"
       role="menu"
       ref=${(el) => (toolMenu = el)}
       onToggle=${(event) => event.newState === "closed" && setToolMenuFor(null)}
     >
-      <div class="knitoutjs-menu-heading">show with</div>
+      <div class="lattice-wm-menu-heading">show with</div>
       <${For} each=${tools}>
-        ${(tool) => html`<div class="knitoutjs-tool-option">
+        ${(tool) => html`<div class="lattice-wm-tool-option">
           <button
-            class="knitoutjs-menu-item"
+            class="lattice-wm-menu-item"
             role="menuitemradio"
             aria-checked=${() => String(isChosen(tool))}
             title=${`${tool.title}\nclick to show it with this here, or drag it to a tab bar or a pane's edge to open it there too`}
@@ -1929,7 +1930,7 @@ export function mountWorkspace(
             ${tool.name}
           </button>
           <button
-            class="knitoutjs-open-new"
+            class="lattice-wm-open-new"
             title=${`open it with ${tool.name} in a new tab`}
             aria-label=${`open it with ${tool.name} in a new tab`}
             onClick=${() => openInNewTab(tool)}
@@ -1938,9 +1939,9 @@ export function mountWorkspace(
           </button>
         </div>`}
       <//>
-      <div class="latticework-menu-rule" role="separator"></div>
+      <div class="lattice-wm-menu-rule" role="separator"></div>
       <button
-        class="knitoutjs-menu-item"
+        class="lattice-wm-menu-item"
         role="menuitem"
         onClick=${() => {
           const { panel, groupId } = toolMenuFor();
@@ -2023,17 +2024,17 @@ export function mountWorkspace(
   // the project's files, down the side of its panes
   function Files() {
     return html`<nav
-      class="lattice-files"
+      class="lattice-wm-files"
       aria-label="files"
       style=${() => ({ width: `${filesSidebar.width()}px` })}
     >
       <${Resizer} sidebar=${filesSidebar} />
-      <div class="lattice-sidebar-content">
-        <header class="lattice-files-heading">
-          <span class="lattice-path" title=${() => projectName()}>${projectName}</span>
+      <div class="lattice-wm-sidebar-content">
+        <header class="lattice-wm-files-heading">
+          <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
           <button
-            class="lattice-icon-button"
+            class="lattice-wm-icon-button"
             title="a new file, or open one"
             aria-label="a new file, or open one"
             onClick=${(event) => openMenu(event, null)}
@@ -2043,10 +2044,10 @@ export function mountWorkspace(
         </header>
         <${For}
           each=${projectFiles}
-          fallback=${html`<p class="lattice-files-empty">no files yet</p>`}
+          fallback=${html`<p class="lattice-wm-files-empty">no files yet</p>`}
         >
           ${(file) => html`<div
-            class="lattice-file"
+            class="lattice-wm-file"
             data-colour=${docColour(file.url)}
             data-showing=${() => (findShowing(file.url) ? "" : undefined)}
             data-removing=${() => (removing() === file.url ? "" : undefined)}
@@ -2062,7 +2063,7 @@ export function mountWorkspace(
             onPointerLeave=${unhover}
           >
             <button
-              class="lattice-file-open"
+              class="lattice-wm-file-open"
               title=${() =>
                 [file.name, touchedWhen(file.url), "click to open it, or drag it onto a pane"]
                   .filter(Boolean)
@@ -2072,14 +2073,14 @@ export function mountWorkspace(
                 if (event.key === "Delete" || event.key === "Backspace") askToRemove(file.url);
               }}
             >
-              <span class="knitoutjs-swatch"></span>
-              <span class="lattice-file-name">${() => file.name}</span>
-              <span class="lattice-file-when" title=${() => touchedWhen(file.url)}>
+              <span class="lattice-wm-swatch"></span>
+              <span class="lattice-wm-file-name">${() => file.name}</span>
+              <span class="lattice-wm-file-when" title=${() => touchedWhen(file.url)}>
                 <span>${() => lastTouched(file.url)}</span>
               </span>
             </button>
             <button
-                class="lattice-file-remove"
+                class="lattice-wm-file-remove"
                 aria-label=${() => `remove ${file.name} from ${projectName()}`}
                 title=${() =>
                   removing() === file.url
@@ -2099,14 +2100,14 @@ export function mountWorkspace(
   // again (or escape) stops
   function Faces() {
     return html`<${Show} when=${() => people.length}>
-      <span class="latticework-faces" role="group" aria-label="who's here">
+      <span class="lattice-wm-faces" role="group" aria-label="who's here">
         <${For} each=${() => people}>
           ${(person) => {
             const image = () => faceImage(person.avatar);
             return html`<button
-              class="latticework-face"
+              class="lattice-wm-face"
               style=${() => ({
-                "--face-colour": person.colour || null,
+                "--lattice-wm-face": person.colour || null,
                 "background-image": image() ? `url("${image()}")` : null,
               })}
               aria-pressed=${() => String(following() === person.peer)}
@@ -2128,7 +2129,7 @@ export function mountWorkspace(
   // the files, shut, when nothing else opens them: a strip to open them
   function FilesShut() {
     return html`<button
-      class="latticework-files-shut"
+      class="lattice-wm-files-shut"
       title="show the files"
       onClick=${() => filesSidebar.setOpen(true)}
     >
@@ -2179,14 +2180,14 @@ export function mountWorkspace(
         onError=${() => setStyled(true)}
       />
       <div
-        class="knitoutjs-editor-tool lattice-project"
+        class="lattice-wm lattice-wm-project"
         style=${() => (styled() ? {} : { visibility: "hidden" })}
       >
         <${Show} when=${filesSidebar.open} fallback=${sidebar ? null : html`<${FilesShut} />`}>
           <${Files} />
         <//>
         <div
-          class="knitoutjs-editor-tool knitoutjs-frame"
+          class="lattice-wm-frame"
           ref=${(el) => {
             root = el;
             listenForDrops(el);
@@ -2195,26 +2196,12 @@ export function mountWorkspace(
           data-resizing=${resizing}
           data-following=${() => (following() ? "" : undefined)}
           inert=${() => !!following()}
-          style=${() => ({ "--following-colour": followingColour() })}
+          style=${() => ({ "--lattice-wm-following": followingColour() })}
         >
-          <svg class="knitoutjs-defs" aria-hidden="true">
-            <filter id="knitoutjs-rough-1">
-              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="1" />
-              <feDisplacementMap in="SourceGraphic" scale="1.4" />
-            </filter>
-            <filter id="knitoutjs-rough-2">
-              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="2" />
-              <feDisplacementMap in="SourceGraphic" scale="1.4" />
-            </filter>
-            <filter id="knitoutjs-rough-3">
-              <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="3" />
-              <feDisplacementMap in="SourceGraphic" scale="1.4" />
-            </filter>
-          </svg>
           ${() => (layout.root ? html`<${Node} node=${layout.root} />` : html`<${Empty} />`)}
           <${For} each=${() => layout.floats}>${(node) => html`<${Float} node=${node} />`}<//>
           <${Show} when=${outerZone}>
-            <div class="knitoutjs-outer-hint" data-zone=${outerZone}></div>
+            <div class="lattice-wm-outer-hint" data-zone=${outerZone}></div>
           <//>
           <${Menu} />
           <${ToolMenu} />

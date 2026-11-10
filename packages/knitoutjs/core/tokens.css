@@ -1,0 +1,32 @@
+/* what knitoutjs's tools are drawn in: the patchwork theme's editor
+   colours, with its accents for what stands out. each of knitoutjs's
+   stylesheets brings these in (@import) */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--knitoutjs-ink: var(--editor-line);
+		--knitoutjs-sheet: var(--editor-fill);
+		/* gentle text: the sheet's own colour, moved half oklch's lightness
+		   from it (towards black on a light sheet, white on a dark one): 4.5:1
+		   or more in any theme, and it keeps the sheet's hue */
+		--knitoutjs-muted: oklch(from var(--knitoutjs-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--knitoutjs-line: var(--editor-line);
+		--knitoutjs-line-soft: var(--editor-fill-offset-20);
+		--knitoutjs-highlighter: var(--editor-selection-fill);
+		--knitoutjs-danger: var(--editor-danger-text);
+		/* the line a build failed on, in the code: the theme's danger itself */
+		--knitoutjs-error: var(--studio-danger);
+		--knitoutjs-accent: var(--studio-primary-fill);
+		--knitoutjs-accent-ink: var(--studio-primary-line);
+		--knitoutjs-ok: var(--studio-added);
+		/* the strip a tool's controls sit on, like the panes' tab bars */
+		--knitoutjs-chrome: var(--studio-chrome-fill-offset-20);
+		--knitoutjs-chrome-hover: var(--studio-chrome-fill-offset-30);
+		--knitoutjs-chrome-ink: var(--studio-chrome-line);
+		--knitoutjs-radius: var(--studio-radius-sm);
+		--knitoutjs-sans: var(--studio-family-ui);
+		--knitoutjs-mono: var(--studio-family-code);
+		--knitoutjs-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+	}
+}

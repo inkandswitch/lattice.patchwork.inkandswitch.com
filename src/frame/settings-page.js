@@ -240,7 +240,7 @@ export function SettingsPage(props) {
             ${([name, value]) => html`<button
               class="lattice-mouse-button"
               role="radio"
-              style=${{ "--mouse": value }}
+              style=${{ "--lattice-mouse": value }}
               aria-checked=${() => String(myColour() === value)}
               aria-label=${name}
               title=${() => `${name}${alt() ? " · a mouse" : ""}`}

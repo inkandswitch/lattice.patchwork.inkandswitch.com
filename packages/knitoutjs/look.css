@@ -1,0 +1,29 @@
+/* knitout.js's look, for a wm workspace: chee rabbits (cherry on a mint
+   stem, blue, lilac, peach and butter, a doc each, leaning a quarter
+   towards the theme's colour for the same job) with a touch of Mimi Reyburn
+   (a serif drawn a little by hand, that wobbles while you're near, and a
+   blush in the shadows). lattice and the Knitout JS app both wear it. it
+   only sets wm's tokens; the hand-drawn wobble is look.js's filters */
+:root,
+:host,
+[theme] {
+	--lattice-wm-cherry: color-mix(in oklab, #ff2284 75%, var(--studio-primary));
+	--lattice-wm-stem: color-mix(in oklab, #40dcba 75%, var(--studio-added));
+	--lattice-wm-blue: color-mix(in oklab, #2269ff 75%, var(--studio-link));
+	--lattice-wm-lilac: color-mix(in oklab, #9879e8 75%, var(--studio-secondary));
+	--lattice-wm-peach: color-mix(in oklab, #ff9a6a 75%, var(--studio-warning));
+	--lattice-wm-butter: color-mix(in oklab, #fdca40 75%, var(--studio-warning));
+
+	--lattice-wm-heading-family: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+	--lattice-wm-aside-family: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+	--lattice-wm-heading-filter: url(#knitoutjs-rough-1);
+	--lattice-wm-heading-wobble: knitoutjs-boil 0.6s steps(1) infinite;
+	--lattice-wm-card-shadow: 0 0 10px 2px #66003322;
+	--lattice-wm-float-shadow: 0 4px 18px 2px #33001833;
+}
+
+@keyframes knitoutjs-boil {
+	0% { filter: url(#knitoutjs-rough-1); }
+	33% { filter: url(#knitoutjs-rough-2); }
+	66% { filter: url(#knitoutjs-rough-3); }
+}

@@ -4,21 +4,32 @@
    tools' colours where there are any (in lattice), and the page's where
    there aren't (in patchwork's own view). the one loud thing is what a
    swatch's numbers come to */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--profile-ink: var(--editor-line);
+		--profile-sheet: var(--editor-fill);
+		/* gentle text: the sheet's own colour, half oklch's lightness from it
+		   (as knitoutjs's --knitoutjs-muted is) */
+		--profile-muted: oklch(from var(--profile-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--profile-line: var(--editor-fill-offset-20);
+		--profile-rule: var(--studio-fill-offset-30);
+		--profile-fill: var(--studio-fill);
+		--profile-accent: var(--studio-primary-fill);
+		--profile-accent-ink: var(--studio-primary-line);
+		--profile-focus: var(--studio-primary);
+		--profile-danger: var(--editor-danger-text);
+		/* lattice's heading font, if its theme has one */
+		--profile-heading: var(--lattice-heading-family, var(--studio-family-code));
+		--profile-sans: var(--studio-family-ui);
+		--profile-radius: var(--studio-radius-sm);
+		--profile-radius-large: var(--studio-radius);
+		--profile-label: 96px;
+	}
+}
+
 .profile-editor {
-	--profile-ink: var(--knitoutjs-ink, CanvasText);
-	/* gentle text: the sheet's own colour, half oklch's lightness from it
-	   (see latticework.css's --knitoutjs-muted) */
-	--profile-muted: oklch(from var(--profile-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
-	--profile-line: var(--knitoutjs-line-soft, color-mix(in oklab, CanvasText 15%, transparent));
-	--profile-rule: var(--studio-fill-offset-30, color-mix(in oklab, var(--profile-ink) 22%, transparent));
-	--profile-sheet: var(--knitoutjs-sheet, Canvas);
-	--profile-fill: var(--studio-fill, Canvas);
-	--profile-accent: var(--knitoutjs-accent, #ff2284);
-	--profile-focus: var(--studio-primary, #007aff);
-	--profile-danger: var(--knitoutjs-danger, #c0392b);
-	--profile-heading: var(--lattice-path-family, var(--lattice-heading-family, var(--studio-family-code, ui-monospace, monospace)));
-	--profile-radius: var(--studio-radius-sm, 4px);
-	--profile-label: 96px;
 
 	box-sizing: border-box;
 	width: 100%;
@@ -27,7 +38,7 @@
 	padding: 16px 20px 40px;
 	background: var(--profile-sheet);
 	color: var(--profile-ink);
-	font: 13px/1.45 var(--studio-family-ui, var(--knitoutjs-sans, system-ui, sans-serif));
+	font: 13px/1.45 var(--profile-sans);
 	container-type: inline-size;
 
 	& > * {
@@ -126,7 +137,7 @@
 	& .profile-button {
 		padding: 3px 10px;
 		border: 1px solid var(--profile-rule);
-		border-radius: var(--studio-radius, 6px);
+		border-radius: var(--profile-radius-large);
 		background: var(--profile-fill);
 		cursor: pointer;
 		transition: transform 120ms ease-out;
@@ -345,9 +356,9 @@
 		border-left: 1px solid var(--profile-rule);
 	}
 	& label:has(input:checked) {
-		--button-fill: var(--profile-accent);
-		background: var(--button-fill);
-		color: var(--button-ink, var(--knitoutjs-accent-ink, #fff));
+		--profile-button-fill: var(--profile-accent);
+		background: var(--profile-button-fill);
+		color: var(--profile-button-ink, var(--profile-accent-ink));
 	}
 	& input {
 		position: absolute;
@@ -439,7 +450,7 @@
 	align-content: start;
 	padding: 10px 12px 9px;
 	border: 1px solid var(--profile-rule);
-	border-radius: var(--studio-radius, 6px);
+	border-radius: var(--profile-radius-large);
 	background: var(--profile-fill);
 }
 .profile-follow-value {
@@ -489,5 +500,15 @@
 	& .profile-link-summary {
 		color: var(--profile-muted);
 		font-size: 12px;
+	}
+}
+
+/* a filled button's text: offset black or white, whichever reads better on
+   its fill. a button says what it's filled with as --profile-button-fill and
+   takes var(--profile-button-ink, …) for its colour: the …, where browsers
+   can't tell (offset black is black with a fifth of the fill in it) */
+@supports (color: contrast-color(red)) {
+	.profile-editor :where(button, label) {
+		--profile-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--profile-button-fill)) 80%, var(--profile-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 	}
 }

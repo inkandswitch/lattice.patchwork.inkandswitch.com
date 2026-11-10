@@ -1,5 +1,27 @@
-.knitoutjs-editor-tool {
-	&.kniterate {
+/* the kniterate tool: a .k's passes, the way the kniterate's editor draws them */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--kniterate-sheet: var(--editor-fill);
+		--kniterate-ink: var(--editor-line);
+		--kniterate-sans: var(--studio-family-ui);
+		--kniterate-line-soft: var(--editor-fill-offset-20);
+		--kniterate-chrome: var(--studio-chrome-fill-offset-20);
+		--kniterate-chrome-ink: var(--studio-chrome-line);
+		--kniterate-muted: oklch(from var(--kniterate-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--kniterate-line: var(--editor-line);
+		--kniterate-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+		--kniterate-danger: var(--editor-danger-text);
+		--kniterate-mono: var(--studio-family-code);
+		/* for its canvas (kniterate.js reads them) */
+		--kniterate-highlighter: var(--editor-selection-fill);
+		--kniterate-accent: var(--studio-primary-fill);
+	}
+}
+
+.kniterate {
+	& {
 		position: relative;
 		display: flex;
 		flex-direction: column;
@@ -9,9 +31,9 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-		background: var(--knitoutjs-sheet);
-		color: var(--knitoutjs-ink);
-		font: 12px var(--knitoutjs-sans, system-ui, sans-serif);
+		background: var(--kniterate-sheet);
+		color: var(--kniterate-ink);
+		font: 12px var(--kniterate-sans);
 	}
 
 	/* the editor's toolbar: which side, the yarns, the buttons */
@@ -22,9 +44,9 @@
 		align-items: center;
 		gap: 6px 10px;
 		padding: 5px 6px;
-		border-bottom: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
+		border-bottom: 1px solid var(--kniterate-line-soft);
+		background: var(--kniterate-chrome);
+		color: var(--kniterate-chrome-ink);
 	}
 
 	& .kniterate-spacer {
@@ -38,14 +60,14 @@
 			margin-left: -1px;
 		}
 
-		& .knitout-button.is-on {
-			background: var(--knitoutjs-ink);
-			color: var(--knitoutjs-sheet);
+		& .knitout-button[data-on] {
+			background: var(--kniterate-ink);
+			color: var(--kniterate-sheet);
 		}
 	}
 
 	& .kniterate-warnings {
-		color: var(--knitoutjs-muted);
+		color: var(--kniterate-muted);
 		font-size: 11px;
 		cursor: help;
 	}
@@ -53,17 +75,17 @@
 	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
 	& .knitout-button {
 		padding: 2px 8px;
-		border: 1px solid var(--knitoutjs-line, currentColor);
+		border: 1px solid var(--kniterate-line);
 		border-radius: 2px;
-		background: var(--knitoutjs-sheet, var(--studio-fill, #fff));
-		box-shadow: 1px 1px 0 var(--knitoutjs-line, currentColor);
+		background: var(--kniterate-sheet);
+		box-shadow: 1px 1px 0 var(--kniterate-line);
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
 
 		&:hover {
 			translate: -1px -1px;
-			box-shadow: 2px 2px 0 var(--knitoutjs-line, currentColor);
+			box-shadow: 2px 2px 0 var(--kniterate-line);
 		}
 
 		&:active {
@@ -92,8 +114,8 @@
 		inset: 0;
 		display: grid;
 		place-items: center;
-		color: var(--knitoutjs-muted);
-		font: italic 15px var(--knitoutjs-serif, Georgia, serif);
+		color: var(--kniterate-muted);
+		font: italic 15px var(--kniterate-serif);
 		pointer-events: none;
 	}
 
@@ -102,24 +124,24 @@
 		flex: none;
 		padding: 3px 8px;
 		overflow: hidden;
-		border-top: 1px solid var(--knitoutjs-line-soft);
-		background: var(--knitoutjs-chrome);
-		color: var(--knitoutjs-chrome-ink);
+		border-top: 1px solid var(--kniterate-line-soft);
+		background: var(--kniterate-chrome);
+		color: var(--kniterate-chrome-ink);
 		font-size: 11px;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 
-		&.is-hint {
-			color: var(--knitoutjs-muted);
+		&[data-hint] {
+			color: var(--kniterate-muted);
 		}
 	}
 
 	& .kniterate-error {
 		flex: none;
 		padding: 4px 8px;
-		border-top: 1px solid var(--knitoutjs-danger);
-		background: color-mix(in oklab, var(--knitoutjs-danger) 12%, var(--knitoutjs-sheet));
-		font: 11px var(--knitoutjs-mono, ui-monospace, monospace);
+		border-top: 1px solid var(--kniterate-danger);
+		background: color-mix(in oklab, var(--kniterate-danger) 12%, var(--kniterate-sheet));
+		font: 11px var(--kniterate-mono);
 		white-space: pre-wrap;
 		cursor: pointer;
 	}

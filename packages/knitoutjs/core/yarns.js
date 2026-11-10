@@ -74,13 +74,13 @@ const KEEP_DELAY = 120
  */
 export function yarnPicker({handle, strands = false}) {
 	const element = document.createElement("div")
-	element.className = "yarn-picker"
+	element.className = "knitoutjs-yarn-picker"
 
 	const link = stylesheet(STYLESHEET)
 
 	const chips = YARNS.map((_, index) => {
 		const chip = document.createElement("button")
-		chip.className = "yarn-chip"
+		chip.className = "knitoutjs-yarn-chip"
 		chip.textContent = String(index + 1)
 		chip.setAttribute("aria-haspopup", "dialog")
 		chip.addEventListener("click", () => toggle(index))
@@ -90,22 +90,22 @@ export function yarnPicker({handle, strands = false}) {
 	// ── the carrier's popover: its strand (or strands), and how they're fed
 
 	const popover = document.createElement("div")
-	popover.className = "yarn-popover"
+	popover.className = "knitoutjs-yarn-popover"
 	popover.popover = "auto"
 	popover.setAttribute("role", "dialog")
 	const heading = document.createElement("div")
-	heading.className = "yarn-heading"
+	heading.className = "knitoutjs-yarn-heading"
 
 	function swatch() {
 		const row = document.createElement("div")
-		row.className = "yarn-row"
+		row.className = "knitoutjs-yarn-row"
 		const label = document.createElement("label")
 		const input = document.createElement("input")
 		input.type = "color"
-		input.className = "yarn-swatch"
+		input.className = "knitoutjs-yarn-swatch"
 		const text = document.createElement("span")
 		const hex = document.createElement("code")
-		hex.className = "yarn-hex"
+		hex.className = "knitoutjs-yarn-hex"
 		label.append(input, text, hex)
 		row.append(label)
 		return {row, input, text, hex}
@@ -114,22 +114,22 @@ export function yarnPicker({handle, strands = false}) {
 	const second = swatch()
 	second.text.textContent = "second strand"
 	const removeSecond = document.createElement("button")
-	removeSecond.className = "yarn-button yarn-remove"
+	removeSecond.className = "knitoutjs-yarn-button knitoutjs-yarn-remove"
 	removeSecond.textContent = "×"
 	removeSecond.title = "back to one strand"
 	second.row.append(removeSecond)
 	const addSecond = document.createElement("button")
-	addSecond.className = "yarn-button yarn-add"
+	addSecond.className = "knitoutjs-yarn-button knitoutjs-yarn-add"
 	addSecond.textContent = "+ second strand"
 	addSecond.title = "feed a second strand, of another colour, through this carrier with it (2-ply)"
 
 	const feed = document.createElement("div")
-	feed.className = "yarn-feed"
+	feed.className = "knitoutjs-yarn-feed"
 	feed.setAttribute("role", "radiogroup")
 	feed.setAttribute("aria-label", "how the two strands are fed")
 	const feedOption = (plated, label, title) => {
 		const button = document.createElement("button")
-		button.className = "yarn-button"
+		button.className = "knitoutjs-yarn-button"
 		button.textContent = label
 		button.title = title
 		button.setAttribute("role", "radio")
@@ -144,7 +144,7 @@ export function yarnPicker({handle, strands = false}) {
 	feed.append(held, plated)
 
 	const reset = document.createElement("button")
-	reset.className = "yarn-button yarn-reset"
+	reset.className = "knitoutjs-yarn-button knitoutjs-yarn-reset"
 	reset.textContent = "usual colour"
 	reset.title = "one strand, in this carrier's usual colour"
 	reset.addEventListener("click", () => keep(null))
@@ -239,11 +239,11 @@ export function yarnPicker({handle, strands = false}) {
 		if (pending) yarns[pending.index] = pending.yarn
 		yarns.forEach(({colours, plated}, index) => {
 			const chip = chips[index]
-			chip.style.setProperty("--yarn", colours[0])
+			chip.style.setProperty("--knitoutjs-yarn", colours[0])
 			const two = strands && colours.length > 1
-			chip.classList.toggle("two", two)
-			chip.classList.toggle("plated", two && plated)
-			if (two) chip.style.setProperty("--yarn-2", colours[1])
+			chip.toggleAttribute("data-two", two)
+			chip.toggleAttribute("data-plated", two && plated)
+			if (two) chip.style.setProperty("--knitoutjs-yarn-2", colours[1])
 			chip.setAttribute("aria-expanded", String(open === index))
 			chip.title = `carrier ${index + 1}: ${two ? `two strands, ${plated ? "plated" : "held together"}` : "one strand"}. click to change`
 		})
