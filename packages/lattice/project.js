@@ -22,8 +22,8 @@ const PROFILES = [
   { icon: "fit", label: "swatch", detail: "a swatch: how it was knit, and what it measures", make: newSwatch },
 ];
 
-// what lattice adds to the + menu, after knitoutjs's: markdown, a machine,
-// a yarn and a swatch, and a terminal while alt is held. `baseRepo` is the
+// what lattice adds to the + menu, after knitoutjs's: markdown, and while
+// alt is held, a machine, a yarn, a swatch and a terminal. `baseRepo` is the
 // repo under any draft overlay: latticex shares on the doc itself, never on
 // a draft's copy of it
 function lattice(baseRepo, hive) {
@@ -35,6 +35,7 @@ function lattice(baseRepo, hive) {
         icon,
         label,
         detail,
+        alt: true,
         async create(api) {
           return (await api.repo.create2(make())).url;
         },
