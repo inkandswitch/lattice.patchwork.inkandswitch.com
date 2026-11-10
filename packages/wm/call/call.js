@@ -16,6 +16,7 @@ import { createRoot, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { HELLO } from "../presence.js";
+import { faceFrom, watchFace } from "./face.js";
 
 const KEY = "lattice-wm:call";
 const ICE_SERVERS = [
@@ -253,6 +254,7 @@ function useTrack(kind, track) {
     old.stop();
   }
   if (track) session.local.addTrack(track);
+  if (kind === "video") watchMine(track);
   for (const peer of session.peers.values()) {
     for (const transceiver of peer.pc.getTransceivers()) {
       if (transceiver.receiver.track?.kind === kind && !transceiver.stopped) {
@@ -261,6 +263,20 @@ function useTrack(kind, track) {
     }
   }
   bump();
+}
+
+// your face, in your camera's pictures (face.js), while it's on: said to
+// everyone as it moves
+function watchMine(track) {
+  session.stopFace?.();
+  session.stopFace = null;
+  setState("call", "face", null);
+  if (!track) return;
+  session.stopFace = watchFace(new MediaStream([track]), (face) => {
+    if (!session) return;
+    setState("call", "face", face);
+    send({ [KEY]: "face", face });
+  });
 }
 
 // ── joining, and hanging up ─────────────────────────────────────────────
@@ -307,6 +323,7 @@ export async function join({ room, repo, name = "" }, { video = false } = {}) {
   }
   if (audio) now.local.addTrack(audio);
   if (camera) now.local.addTrack(camera);
+  if (camera) watchMine(camera);
   const problem = !audio ? (video && !camera ? "no mic or camera" : "no mic") : video && !camera ? "no camera" : null;
   setState("call", { joining: false, camera: !!camera, mic: !!audio, problem });
   bump();
@@ -333,6 +350,7 @@ export function hangUp() {
     now.room.broadcast({ [KEY]: "bye", from: now.id });
   } catch {}
   for (const id of [...now.peers.keys()]) drop(id, now);
+  now.stopFace?.();
   for (const track of now.local.getTracks()) track.stop();
   setState({ call: null, peers: {} });
   bump();
@@ -412,9 +430,9 @@ export function setFloating(key, at) {
 // ── reading it ──────────────────────────────────────────────────────────
 
 export const call = {
-  /** the call you're in, or null: {room, name, id, mic, camera, joining, problem} */
+  /** the call you're in, or null: {room, name, id, mic, camera, face, joining, problem} */
   get: () => state.call,
-  /** everyone else in it: [{id, peer, contact, name, colour, avatar, mic, camera, connection}] */
+  /** everyone else in it: [{id, peer, contact, name, colour, avatar, mic, camera, face, connection}] */
   peers: () => Object.values(state.peers).filter(Boolean),
   /** someone's pictures and sound (read in an effect: it says when they change) */
   stream(id) {
@@ -458,7 +476,12 @@ function send(message) {
 }
 
 // who you are, and your mic and camera: in what you say
-const about = () => ({ who: session.who, mic: !!state.call?.mic, camera: !!state.call?.camera });
+const about = () => ({
+  who: session.who,
+  mic: !!state.call?.mic,
+  camera: !!state.call?.camera,
+  face: state.call?.camera ? (state.call.face ?? null) : null,
+});
 
 function sayHere() {
   if (!session || state.call?.joining) return;
@@ -491,6 +514,8 @@ function onMessage(event) {
       return onHere(from, peer, message);
     case "bye":
       return drop(from);
+    case "face":
+      return showPeer(from, { face: faceFrom(message.face) });
     case "again":
       // they lost us: start again
       drop(from);
@@ -522,11 +547,11 @@ function onHere(from, tab, message) {
   if (!peer && offers(from)) peer = connect(from, crypto.randomUUID());
   if (peer) {
     peer.heard = Date.now();
-    showPeer(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera });
+    showPeer(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
   } else {
     // they'll offer: until they do, they're on the call, connecting
     session.waiting ??= new Map();
-    session.waiting.set(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera });
+    session.waiting.set(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
   }
 }
 

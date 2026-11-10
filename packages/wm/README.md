@@ -11,10 +11,20 @@ built on, and Knitout JS too.
 - `ui/`: icons, tooltips, sidebars, and the stylesheet helper. and
   `secret.js`: what's hidden till ctrl, alt and command are tapped together
   twice, with nothing else in between (the same again hides it).
+- `ink.js`: following someone, you draw on their panes, they see it, and it
+  fades a moment after. it's pinned to what it's drawn on: a character in a
+  codemirror editor, a point in a tool's own space (a tool that says what's
+  where sets `inkSpace` on its element: see the top of `ink.js`), or else a
+  place in the pane. perfect-freehand draws it, as tldraw draws.
+- `vendor/perfect-freehand.js`: Steve Ruiz's perfect-freehand (MIT), in
+  chee's readable port from aftersun.
 - `call/`: calls. `call.js` is the call itself (one in a tab, over webrtc,
   connecting over the project's room, the one presence is in), and `ui.js`
   its faces, the question before you join, and faces floating or down a
-  sidebar. made from patchwork's `call` experiment. the phone's beside the
+  sidebar. `face.js` finds your face in your own camera, so everyone's faces
+  can be shown centred on it: the browser's FaceDetector if there is one,
+  else google's mediapipe face detector, fetched from jsdelivr when it's
+  first wanted. made from patchwork's `call` experiment. the phone's beside the
   files' +, while a call's on, or while it's not a secret.
 - `patchwork/`: finding and making docs, and a + menu item for a new doc of
   one of patchwork's datatypes.

@@ -185,6 +185,9 @@ class Mesh {
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+// how wide the camera sees, up and down (radians)
+const FOV = 0.6
 function normalize(v) {
 	const length = Math.hypot(v[0], v[1], v[2]) || 1
 	return [v[0] / length, v[1] / length, v[2] / length]
@@ -837,6 +840,56 @@ export default function Knit3dTool(handle, element, context = {}) {
 		camera.distance = Math.max(8, size * 1.55)
 	}
 
+	// where the camera is: turned round what it looks at, `distance` from it
+	function eyeOf({yaw, pitch, distance, target}) {
+		return [
+			target[0] + distance * Math.sin(yaw) * Math.cos(pitch),
+			target[1] + distance * Math.sin(pitch),
+			target[2] + distance * Math.cos(yaw) * Math.cos(pitch),
+		]
+	}
+
+	// for wm's ink: a point on the page is the point under it on the plane
+	// through what the camera turns round, facing it; and back again, as
+	// the camera turns and moves (and how big a unit is there, on the page)
+	function lens() {
+		const rect = canvas.getBoundingClientRect()
+		if (!rect.width || !rect.height) return null
+		const eye = eyeOf(camera)
+		const forward = normalize(sub(camera.target, eye))
+		const right = normalize(cross(forward, [0, 1, 0]))
+		const up = cross(right, forward)
+		return {rect, eye, forward, right, up, t: Math.tan(FOV / 2), aspect: rect.width / rect.height}
+	}
+	element.inkSpace = {
+		at(x, y) {
+			const view = lens()
+			if (!view) return null
+			const {rect, eye, forward, right, up, t, aspect} = view
+			const nx = ((x - rect.left) / rect.width) * 2 - 1
+			const ny = 1 - ((y - rect.top) / rect.height) * 2
+			const ray = [0, 1, 2].map(k => forward[k] + right[k] * nx * t * aspect + up[k] * ny * t)
+			const along = dot(sub(camera.target, eye), forward) / dot(ray, forward)
+			const [px, py, pz] = [0, 1, 2].map(k => eye[k] + ray[k] * along)
+			return {x: px, y: py, z: pz}
+		},
+		place({x, y, z}) {
+			const view = lens()
+			if (!view || ![x, y, z].every(Number.isFinite)) return null
+			const {rect, eye, forward, right, up, t, aspect} = view
+			const from = sub([x, y, z], eye)
+			const depth = dot(from, forward)
+			if (depth <= 0.1) return null
+			const nx = dot(from, right) / (depth * t * aspect)
+			const ny = dot(from, up) / (depth * t)
+			return {
+				x: rect.left + ((nx + 1) / 2) * rect.width,
+				y: rect.top + ((1 - ny) / 2) * rect.height,
+				scale: rect.height / (2 * t * depth),
+			}
+		},
+	}
+
 	function draw() {
 		const width = canvas.clientWidth
 		const height = canvas.clientHeight
@@ -851,13 +904,9 @@ export default function Knit3dTool(handle, element, context = {}) {
 		gl.clearColor(0, 0, 0, 0)
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 		gl.enable(gl.DEPTH_TEST)
-		const {yaw, pitch, distance, target} = camera
-		const eye = [
-			target[0] + distance * Math.sin(yaw) * Math.cos(pitch),
-			target[1] + distance * Math.sin(pitch),
-			target[2] + distance * Math.cos(yaw) * Math.cos(pitch),
-		]
-		const projection = perspective(0.6, width / height, 0.1, distance * 10)
+		const {distance, target} = camera
+		const eye = eyeOf(camera)
+		const projection = perspective(FOV, width / height, 0.1, distance * 10)
 		const viewProjection = multiply(projection, lookAt(eye, target, [0, 1, 0]))
 		gl.useProgram(loopProgram)
 		gl.uniformMatrix4fv(loopUniforms.viewProjection, false, viewProjection)
@@ -1072,6 +1121,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 	reread()
 
 	return () => {
+		delete element.inkSpace
 		playing = false
 		clearTimeout(timer)
 		cancelAnimationFrame(frame)

@@ -57,6 +57,13 @@ and the patchwork side:
 - **versions** is by Mimi Reyburn, made from `drafts` in
   [patchwork-pkg-base](https://github.com/inkandswitch/patchwork-pkg-base).
 - **calls** are made from chee's `call` experiment in patchwork.
+- **ink** (drawing on someone's screen while you follow them) is drawn by
+  [perfect-freehand](https://github.com/steveruizok/perfect-freehand), Steve
+  Ruiz's (MIT), set as [tldraw](https://tldraw.dev) sets it, in chee's port
+  from aftersun, whose way of pinning ink to the words it's on it takes too.
+- **faces** in a call are found by google's
+  [mediapipe](https://ai.google.dev/edge/mediapipe) face detector (Apache
+  2.0), fetched from jsdelivr, not kept here.
 - **patchwork** and **automerge** are ink & switch's.
 - **solid-automerge** (`packages/lattice/vendor/solid-automerge.js`) is
   chee's, and **amtext** (`packages/lattice/vendor/amtext`), the
@@ -78,4 +85,6 @@ knitoutjs and wm are [AGPL-3.0-or-later](packages/knitoutjs/LICENSE).
 the code carried over keeps its own: the visualiser, the kniterate backend and
 lezer are MIT (their notices are in
 [`packages/knitoutjs/core/vendor/LICENSE.md`](packages/knitoutjs/core/vendor/LICENSE.md)),
-and the fonts are OFL (each folder has its LICENSE).
+as is perfect-freehand (its notice is in
+[`packages/wm/vendor/LICENSE.md`](packages/wm/vendor/LICENSE.md)), and the fonts
+are OFL (each folder has its LICENSE).

@@ -23,6 +23,7 @@ import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
 import { secret } from "./ui/secret.js";
+import { createInk } from "./ink.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
 import { CallPrompt, CallFloating, Face } from "./call/ui.js";
 
@@ -474,17 +475,27 @@ export function mountWorkspace(
     }
   }
 
-  // scrolling or clicking over their panes stops following. they're inert
-  // while you follow, so it's where it is that says so, not what it's on
-  function onPaneInput(event) {
-    if (!following() || !root) return;
-    const box = root.getBoundingClientRect();
-    const { clientX: x, clientY: y } = event;
-    if (x >= box.left && x <= box.right && y >= box.top && y <= box.bottom) follow(null);
-  }
-  for (const type of ["wheel", "pointerdown"]) {
-    element.addEventListener(type, onPaneInput, { capture: true, passive: true });
-  }
+  // ── ink (ink.js): following someone, pressing and dragging over their
+  //    panes draws, for them to see too. their panes are inert while you
+  //    follow, so it's drawn on a sheet over them (InkSheet). following
+  //    goes on till you press their face again
+  const inkPanes = new Map();
+  const ink = createInk({
+    panes: () =>
+      [...inkPanes.values()].map(({ body, svg, active }) => {
+        const panel = active();
+        return {
+          body,
+          svg,
+          panel: panel ? { url: panel.url, tool: panel.tool } : null,
+          el: panel ? (hosts.get(panel.id)?.el ?? null) : null,
+        };
+      }),
+    send: (message) => roomHandle?.broadcast(message),
+    me: () => room?.me() ?? { colour: "" },
+  });
+  const onInkMessage = (event) => ink.receive(event.message);
+  roomHandle?.on("ephemeral-message", onInkMessage);
 
   // your pointer, for everyone else: over which doc, in which tool, and
   // where in its pane (fractions of it, since their panes aren't the size
@@ -522,10 +533,6 @@ export function mountWorkspace(
     readLayout();
     showTheirViews();
   }
-  const onEscape = (event) => {
-    if (event.key === "Escape" && following()) follow(null);
-  };
-  document.addEventListener("keydown", onEscape);
 
   readLayout();
   readFiles();
@@ -1583,6 +1590,18 @@ export function mountWorkspace(
       if (ringFrame == null) ringFrame = requestAnimationFrame(() => ((ringFrame = null), measureRing()));
     };
     const ringResized = new ResizeObserver(remeasure);
+    // where ink's drawn on this pane (ink.js)
+    let inkSvg;
+    inkPanes.set(group.id, {
+      get body() {
+        return body;
+      },
+      get svg() {
+        return inkSvg;
+      },
+      active,
+    });
+    onCleanup(() => inkPanes.delete(group.id));
     const ringChanged = new MutationObserver(remeasure);
     onCleanup(() => {
       ringResized.disconnect();
@@ -1695,6 +1714,7 @@ export function mountWorkspace(
         <${Show} when=${() => notice()?.groupId === group.id}>
           <div class="lattice-wm-notice">${() => notice()?.text}</div>
         <//>
+        <svg class="lattice-wm-ink" aria-hidden="true" ref=${(el) => (inkSvg = el)}></svg>
         <div class="lattice-wm-pointers" aria-hidden="true">
           <${For} each=${() => pointersOver(active())}>
             ${(person) => {
@@ -2387,6 +2407,46 @@ export function mountWorkspace(
     <//>`;
   }
 
+  // following, a sheet over their panes to draw on (ink.js), the size of
+  // the frame. your pointer goes to everyone from here too, as the panes
+  // under it are inert
+  function InkSheet() {
+    const box = () => {
+      frameSize();
+      const rect = root?.getBoundingClientRect();
+      return rect
+        ? { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` }
+        : { display: "none" };
+    };
+    function pointAt(event) {
+      for (const { body, active } of inkPanes.values()) {
+        const panel = active();
+        const rect = body?.getBoundingClientRect();
+        if (!panel || !rect?.width || !rect.height) continue;
+        const { clientX: x, clientY: y } = event;
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
+        const fraction = (n) => Math.round(Math.min(2, Math.max(-1, n)) * 10000) / 10000;
+        return { url: panel.url, tool: panel.tool, x: fraction((x - rect.left) / rect.width), y: fraction((y - rect.top) / rect.height) };
+      }
+      return null;
+    }
+    return html`<div
+      class="lattice-wm-ink-sheet"
+      style=${box}
+      onPointerDown=${(event) => {
+        if (ink.start(event)) event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove=${(event) => {
+        ink.move(event);
+        sharePointer(pointAt(event));
+      }}
+      onPointerUp=${() => ink.end()}
+      onPointerCancel=${() => ink.end()}
+      onLostPointerCapture=${() => ink.end()}
+      onPointerLeave=${offPanes}
+    ></div>`;
+  }
+
   // the colour round the panes while they're someone else's
   const followingColour = () => people.find((person) => person.peer === following())?.colour || null;
 
@@ -2470,6 +2530,7 @@ export function mountWorkspace(
           <${Menu} />
           <${ToolMenu} />
         </div>
+        <${Show} when=${following}><${InkSheet} /><//>
         <${Show} when=${() => callProject}>
           <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
           <${CallFloating} />
@@ -2486,10 +2547,8 @@ export function mountWorkspace(
     room?.stop();
     clearTimeout(shareTimer);
     clearTimeout(viewTimer);
-    for (const type of ["wheel", "pointerdown"]) {
-      element.removeEventListener(type, onPaneInput, { capture: true });
-    }
-    document.removeEventListener("keydown", onEscape);
+    roomHandle?.off("ephemeral-message", onInkMessage);
+    ink.stop();
     tabChannel.close();
     frameObserver.disconnect();
     clearTimeout(lapse);

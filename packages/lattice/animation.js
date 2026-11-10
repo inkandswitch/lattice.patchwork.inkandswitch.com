@@ -189,6 +189,22 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// the machine, in its own coordinates: turned round, seen from behind, it's
 	// mirrored about the middle of the view
 	const world = svg("g", {class: "world"}, picture)
+	// for wm's ink: a point on the page is one in the world, and back again,
+	// as it's zoomed, moved and turned round (and how big a unit is there)
+	element.inkSpace = {
+		at(x, y) {
+			const m = world.getScreenCTM()
+			if (!m) return null
+			const at = new DOMPoint(x, y).matrixTransform(m.inverse())
+			return {x: at.x, y: at.y}
+		},
+		place({x, y}) {
+			const m = world.getScreenCTM()
+			if (!m || !Number.isFinite(x) || !Number.isFinite(y)) return null
+			const at = new DOMPoint(x, y).matrixTransform(m)
+			return {x: at.x, y: at.y, scale: Math.hypot(m.a, m.b)}
+		},
+	}
 	// back to front, from the front; from behind, the beds go the other way
 	const FROM_FRONT = ["backBed", "backLoops", "frontLoops", "frontBed", "yarns", "carriage", "sprites"]
 	const FROM_BACK = ["frontBed", "frontLoops", "backLoops", "backBed", "yarns", "carriage", "sprites"]
@@ -1228,6 +1244,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	reread()
 
 	return () => {
+		delete element.inkSpace
 		playing = false
 		clearTimeout(timer)
 		cancelAnimationFrame(frame)

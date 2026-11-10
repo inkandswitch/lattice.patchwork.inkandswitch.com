@@ -5,6 +5,7 @@ import { createEffect, createMemo, For, Show, onCleanup } from "solid-js";
 import html from "solid-js/html";
 import { call, onCallIn, join, setFloating } from "./call.js";
 import { faceImage } from "../presence.js";
+import { centreOn } from "./face.js";
 import { colourFor } from "../pointer.js";
 import { icon } from "../ui/icons.js";
 
@@ -17,12 +18,20 @@ export function names(list) {
 }
 
 // a <video> of `stream()` (null for none), always quiet: the sound is the
-// call's own to play, once
-function videoOf(stream) {
+// call's own to play, once. it's centred on `face()` (face.js), where that's
+// known, as its box and the picture change
+function videoOf(stream, face) {
   const video = document.createElement("video");
   video.autoplay = true;
   video.muted = true;
   video.playsInline = true;
+  const centre = () => centreOn(video, face());
+  video.addEventListener("loadedmetadata", centre);
+  video.addEventListener("resize", centre);
+  const resized = new ResizeObserver(centre);
+  resized.observe(video);
+  createEffect(centre);
+  onCleanup(() => resized.disconnect());
   let tracks = -1;
   createEffect(() => {
     const now = stream();
@@ -46,9 +55,12 @@ function videoOf(stream) {
  */
 export function Face(props) {
   const mine = () => props.id === "me";
-  const person = () => (mine() ? { ...call.me(), mic: call.get()?.mic, camera: call.get()?.camera } : call.peers().find((peer) => peer.id === props.id));
+  const person = () =>
+    mine()
+      ? { ...call.me(), mic: call.get()?.mic, camera: call.get()?.camera, face: call.get()?.face }
+      : call.peers().find((peer) => peer.id === props.id);
   const stream = () => (mine() ? call.local() : person()?.camera ? call.stream(props.id) : null);
-  const video = videoOf(stream);
+  const video = videoOf(stream, () => person()?.face ?? null);
   const image = () => faceImage(person()?.avatar);
   return html`<span
     class="lattice-wm-call-face"
@@ -153,31 +165,64 @@ export function CallPrompt(props) {
   </div>`;
 }
 
+// a floating face's width, to start with, and as small and big as it goes
+const FLOAT_WIDTH = 160;
+const FLOAT_MIN = 72;
+const FLOAT_MAX = 640;
 // where a floating face starts: down the right, one under another
-const startAt = (index) => ({ x: 1 - 108 / innerWidth, y: Math.min(0.8, (96 + index * 108) / innerHeight) });
+const startAt = (index) => ({
+  x: Math.max(0, 1 - (FLOAT_WIDTH + 16) / innerWidth),
+  y: Math.min(0.8, (96 + index * (FLOAT_WIDTH * 0.75 + 32)) / innerHeight),
+  width: FLOAT_WIDTH,
+});
 
-/** everyone's faces, floating over everything, each where you put it */
+// where a floating face goes: where it was put, but all of it in the window
+// (a face sized bigger near an edge moves away from it)
+function inWindow({ x, y, width }) {
+  const height = width * 0.75 + 24;
+  return {
+    left: `${Math.max(0, Math.min(x * innerWidth, innerWidth - width - 8))}px`,
+    top: `${Math.max(0, Math.min(y * innerHeight, innerHeight - height - 8))}px`,
+  };
+}
+
+/**
+ * everyone's faces, floating over everything, each where you put it and the
+ * size you made it: dragged to move, and by its corner to size. they're
+ * the picture's own shape (4:3), so none of it's cut off
+ */
 export function CallFloating() {
   return html`<${Show} when=${() => call.get() && call.settings.faces === "floating"}>
     <div class="lattice-wm-call-floating">
       <${For} each=${() => call.peers()}>
         ${(peer, index) => {
           const key = () => peer.contact || peer.id;
-          const at = () => call.settings.floating[key()] ?? startAt(index());
+          const at = () => ({ ...startAt(index()), ...call.settings.floating[key()] });
+          let float;
+          // what's being done to it: {sizing, dx, dy (or the width it was), at}
           let dragging = null;
           function onPointerDown(event) {
             if (event.button !== 0) return;
-            const box = event.currentTarget.getBoundingClientRect();
-            dragging = { dx: event.clientX - box.left, dy: event.clientY - box.top, at: at() };
-            event.currentTarget.setPointerCapture(event.pointerId);
+            const box = float.getBoundingClientRect();
+            const sizing = !!event.target.closest(".lattice-wm-call-size");
+            dragging = sizing
+              ? { sizing, x: event.clientX, width: at().width, at: at() }
+              : { sizing, dx: event.clientX - box.left, dy: event.clientY - box.top, at: at() };
+            float.setPointerCapture(event.pointerId);
+            event.preventDefault();
           }
           function onPointerMove(event) {
             if (!dragging) return;
+            if (dragging.sizing) {
+              const width = Math.round(Math.max(FLOAT_MIN, Math.min(FLOAT_MAX, dragging.width + event.clientX - dragging.x)));
+              dragging.at = { ...dragging.at, width };
+              Object.assign(float.style, { ...inWindow(dragging.at), width: `${width}px` });
+              return;
+            }
             const x = Math.max(0, Math.min(1, (event.clientX - dragging.dx) / innerWidth));
             const y = Math.max(0, Math.min(1, (event.clientY - dragging.dy) / innerHeight));
-            dragging.at = { x, y };
-            event.currentTarget.style.left = `${x * 100}%`;
-            event.currentTarget.style.top = `${y * 100}%`;
+            dragging.at = { ...dragging.at, x, y };
+            Object.assign(float.style, inWindow(dragging.at));
           }
           function onPointerUp() {
             if (dragging) setFloating(key(), dragging.at);
@@ -185,13 +230,17 @@ export function CallFloating() {
           }
           return html`<div
             class="lattice-wm-call-float"
-            style=${() => ({ left: `${at().x * 100}%`, top: `${at().y * 100}%` })}
+            ref=${(el) => (float = el)}
+            style=${() => ({ ...inWindow(at()), width: `${at().width}px` })}
             onPointerDown=${onPointerDown}
             onPointerMove=${onPointerMove}
             onPointerUp=${onPointerUp}
             onPointerCancel=${onPointerUp}
           >
-            <${Face} id=${peer.id} size=${88} />
+            <span class="lattice-wm-call-float-picture">
+              <${Face} id=${peer.id} shape="tile" />
+              <span class="lattice-wm-call-size" title="drag to size"></span>
+            </span>
             <span class="lattice-wm-call-float-name">${() => peer.name}</span>
           </div>`;
         }}

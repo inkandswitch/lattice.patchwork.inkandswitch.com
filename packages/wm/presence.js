@@ -108,7 +108,7 @@ const VIEW = "view:";
  * finds who you are (your account's contact). `reads` is any more channels
  * there are, each with a way to check what's sent on it ({[channel]:
  * read(value)}): what they've sent is shared[channel], read. returns
- * {share(channel, value), view(id, value), stop()}: share sends "nodes",
+ * {share(channel, value), view(id, value), me(), stop()}: share sends "nodes",
  * "active", "pointer" ({url, tool, x, y}, or null), "look" ("arrow" or
  * "mouse") or one of `reads`; view sends a pane's view ({url, tool, doc,
  * scroll}, or null once it's gone)
@@ -224,6 +224,9 @@ export function joinRoom(handle, repo, reads, onPeople) {
   return {
     share,
     view: (id, value) => share(VIEW + id, value),
+    // you, as everyone else sees you: your colour (your contact's, or one
+    // for you from the palette)
+    me: () => ({ colour: state.colour || colourFor(state.contact || "you") }),
     stop() {
       dead = true;
       clearInterval(again);

@@ -78,10 +78,12 @@ function workerRenderer(canvas, {onHover, onGoto, onFail}) {
 	const parsing = new Map()
 	let parses = 0
 	let ready = false
+	let transform = null
 
 	worker.postMessage({type: "init", canvas: offscreen, size: sizeOf(canvas)}, [offscreen])
 	worker.onmessage = ({data}) => {
 		if (data.type === "ready") ready = true
+		else if (data.type === "transform") transform = data.transform
 		else if (data.type === "hover") onHover(data.source, data.stitch)
 		else if (data.type === "goto") onGoto(data.source)
 		else if (data.type === "parsed" || data.type === "error") {
@@ -134,6 +136,7 @@ function workerRenderer(canvas, {onHover, onGoto, onFail}) {
 		highlight: lines => worker.postMessage({type: "highlight", lines}),
 		resetZoom: () => worker.postMessage({type: "resetZoom"}),
 		resize: () => worker.postMessage({type: "resize", size: sizeOf(canvas)}),
+		transform: () => transform,
 		destroy() {
 			worker.terminate()
 			for (const [type, listener] of Object.entries(listeners)) {
@@ -158,6 +161,7 @@ async function pageRenderer(canvas, {onHover, onGoto}) {
 		highlight: lines => show.setHighlightFn(highlighter(lines)),
 		resetZoom: () => show.resetZoom(),
 		resize: () => show.requestDraw(),
+		transform: () => show.currentTransform ?? null,
 		destroy() {},
 	}
 }
@@ -280,6 +284,25 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 	}
 
 	let renderer = null
+	// for wm's ink: a point on the page is one among the stitches, and back
+	// again, as it's zoomed and moved (and how big a unit is there). the
+	// drawing's in the canvas's own pixels, devicePixelRatio to a page px
+	element.inkSpace = {
+		at(x, y) {
+			const [a, , , d, e, f] = renderer?.transform() ?? []
+			if (!a || !d) return null
+			const rect = canvas.getBoundingClientRect()
+			const ratio = devicePixelRatio || 1
+			return {x: ((x - rect.left) * ratio - e) / a, y: ((y - rect.top) * ratio - f) / d}
+		},
+		place({x, y}) {
+			const [a, , , d, e, f] = renderer?.transform() ?? []
+			if (!a || !d || !Number.isFinite(x) || !Number.isFinite(y)) return null
+			const rect = canvas.getBoundingClientRect()
+			const ratio = devicePixelRatio || 1
+			return {x: rect.left + (a * x + e) / ratio, y: rect.top + (d * y + f) / ratio, scale: Math.abs(a) / ratio}
+		},
+	}
 	let lines = null
 	let firstDraw = true
 	let generation = 0
@@ -358,6 +381,7 @@ export default function KnitoutVisualizerTool(handle, element, context = {}) {
 
 	return () => {
 		destroyed = true
+		delete element.inkSpace
 		generation++
 		clearTimeout(timer)
 		handle.off("change", scheduleDraw)

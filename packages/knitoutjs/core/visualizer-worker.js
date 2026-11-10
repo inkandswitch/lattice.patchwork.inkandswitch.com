@@ -10,6 +10,8 @@ import {highlighter} from "./stitch-source.js"
 //      {type: "resetZoom"} · {type: "event", event: {type, ...fields}}
 // out: {type: "ready"} · {type: "parsed", id} · {type: "error", id, message}
 //      {type: "hover", source, stitch} · {type: "goto", source}
+//      {type: "transform", transform}: how the stitches are drawn on the
+//      canvas (show-knitout's currentTransform, in its pixels), as it changes
 
 let show
 let canvas
@@ -24,6 +26,17 @@ onmessage = async ({data}) => {
 		show.onHoverSource = (source, stitch) =>
 			postMessage({type: "hover", source: source ?? null, stitch: stitch ?? null})
 		show.onDoubleClickSource = source => postMessage({type: "goto", source: source ?? null})
+		const draw = show.draw.bind(show)
+		let told = ""
+		show.draw = () => {
+			const drawn = draw()
+			const transform = JSON.stringify(show.currentTransform ?? null)
+			if (transform !== told) {
+				told = transform
+				postMessage({type: "transform", transform: show.currentTransform ?? null})
+			}
+			return drawn
+		}
 		postMessage({type: "ready"})
 		return
 	}
