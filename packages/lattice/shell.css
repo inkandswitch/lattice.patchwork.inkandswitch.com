@@ -340,6 +340,97 @@
 		border-radius: 50%;
 	}
 
+	/* the call you're in, above you: where it is, everyone's faces, and
+	   your mic, camera and hanging up. or one on where you are, to join */
+	& .lattice-call {
+		display: grid;
+		flex: none;
+		gap: 6px;
+		padding: 8px 8px 8px 10px;
+		border-top: 1px solid var(--lattice-rule);
+		font: 12px/1.3 var(--lattice-wm-sans);
+	}
+	& .lattice-call-head {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+	}
+	& .lattice-call-phone {
+		display: grid;
+		color: var(--lattice-shell-primary);
+	}
+	& .lattice-call-where {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		font: 600 12px var(--lattice-path-family);
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	& .lattice-call-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 6px;
+	}
+	& .lattice-call-faces {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 3px;
+		min-width: 0;
+	}
+	& .lattice-call-buttons {
+		display: flex;
+		flex: none;
+		gap: 2px;
+	}
+	& .lattice-call-button {
+		display: grid;
+		place-items: center;
+		width: 26px;
+		height: 26px;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: none;
+		color: var(--lattice-muted);
+		cursor: pointer;
+
+		&:hover {
+			background: var(--lattice-shell-chrome-fill-offset-20);
+			color: inherit;
+		}
+		/* a mic that's muted, a camera that's off */
+		&[data-off] {
+			color: var(--lattice-wm-danger);
+		}
+	}
+	& .lattice-call-hang-up {
+		background: var(--lattice-wm-danger-fill);
+		color: var(--lattice-wm-danger-ink);
+
+		&:hover {
+			background: var(--lattice-wm-danger-fill);
+			color: var(--lattice-wm-danger-ink);
+			filter: brightness(1.08);
+		}
+	}
+	& .lattice-call-join {
+		padding: 2px 10px;
+		border: 1px solid var(--lattice-wm-line);
+		border-radius: 999px;
+		background: var(--lattice-shell-primary);
+		color: var(--lattice-shell-primary-line);
+		font: 600 11px/1.4 var(--lattice-wm-sans);
+		cursor: pointer;
+	}
+	& .lattice-call-problem {
+		margin: 0;
+		color: var(--lattice-wm-danger);
+		font-size: 11px;
+	}
+
 	/* base's contact-avatar, at whatever size its view is: it's 2rem, with its
 	   border outside that, and sits on the line, unless it's told otherwise */
 	& patchwork-view[tool-id="contact-avatar"] {

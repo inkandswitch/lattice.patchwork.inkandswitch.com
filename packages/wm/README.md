@@ -9,6 +9,11 @@ built on, and Knitout JS too.
 - `doc/`: the project's shape and its layout. nothing in it imports a
   package, so a datatype can use it in a worker.
 - `ui/`: icons, tooltips, sidebars, and the stylesheet helper.
+- `call/`: calls. `call.js` is the call itself (one in a tab, over webrtc,
+  connecting over the project's room, the one presence is in), and `ui.js`
+  its faces, the question before you join, and faces floating or down a
+  sidebar. made from patchwork's `call` experiment. the phone's beside the
+  files' +, while a call's on or ctrl, alt and command are held.
 - `patchwork/`: finding and making docs, and a + menu item for a new doc of
   one of patchwork's datatypes.
 - `wm.css`: how it all looks, in `--lattice-wm-*` tokens made from the

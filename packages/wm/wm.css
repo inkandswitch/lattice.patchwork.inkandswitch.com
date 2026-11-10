@@ -751,6 +751,14 @@
 		white-space: nowrap;
 	}
 
+	/* their face, under their name, while you're in a call with them */
+	& .lattice-wm-pointer-face {
+		position: absolute;
+		top: 36px;
+		left: 8px;
+		--lattice-wm-call-size: 44px;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		& .lattice-wm-pointer {
 			transition: none;
@@ -966,6 +974,18 @@
 		}
 	}
 
+	/* the call's menu (lattice's call-bar.js): a tick by what's chosen */
+	& .lattice-call-choice {
+		&::before {
+			content: "";
+			flex: none;
+			width: 1em;
+		}
+		&[aria-checked="true"]::before {
+			content: "✓";
+		}
+	}
+
 	/* a tab's tool menu: each tool, and a way to open it in a new tab */
 	&.lattice-wm-tool-menu[popover] {
 		width: 200px;
@@ -1043,6 +1063,243 @@
 	& ::placeholder {
 		color: var(--lattice-wm-muted);
 		opacity: 1;
+	}
+}
+
+/* ── a call (call/): faces, the question before you're in one, and faces
+      floating or down a sidebar. outside .lattice-wm, as an app shows them
+      too ─────────────────────────────────────────────────────────────────── */
+
+/* someone's face: their pictures while their camera's on, else their
+   avatar, or their initial. yours is as a mirror shows you */
+.lattice-wm-call-face {
+	--lattice-wm-call-size: 24px;
+	position: relative;
+	display: inline-grid;
+	flex: none;
+	place-items: center;
+	box-sizing: border-box;
+	width: var(--lattice-wm-call-size);
+	height: var(--lattice-wm-call-size);
+	border: 2px solid var(--lattice-wm-face, var(--lattice-wm-line));
+	border-radius: 50%;
+	background: var(--lattice-wm-chrome) center / cover;
+	color: var(--lattice-wm-ink);
+	font: 600 calc(var(--lattice-wm-call-size) * 0.42) / 1 var(--lattice-wm-sans);
+
+	& video {
+		width: 100%;
+		height: 100%;
+		border-radius: inherit;
+		object-fit: cover;
+	}
+
+	&[data-mine] video {
+		scale: -1 1;
+	}
+
+	&[data-connecting] {
+		opacity: 0.55;
+	}
+
+	&[data-shape="tile"] {
+		width: 100%;
+		height: auto;
+		aspect-ratio: 4 / 3;
+		border-radius: 6px;
+		font-size: 28px;
+	}
+
+	& .lattice-wm-call-muted {
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		display: grid;
+		place-items: center;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		background: var(--lattice-wm-danger-fill);
+		color: var(--lattice-wm-danger-ink);
+	}
+
+	&[data-shape="tile"] .lattice-wm-call-muted {
+		right: 6px;
+		bottom: 6px;
+		width: 18px;
+		height: 18px;
+	}
+}
+
+.lattice-wm-call-prompt {
+	&[popover] {
+		position: fixed;
+		inset: auto;
+		box-sizing: border-box;
+		width: 260px;
+		margin: 0;
+		padding: 10px 12px;
+		border: 1px solid var(--lattice-wm-line);
+		border-radius: 3px;
+		background: var(--lattice-wm-sheet);
+		box-shadow: 2px 2px 0 var(--lattice-wm-line);
+		color: var(--lattice-wm-ink);
+		font: 12px/1.4 var(--lattice-wm-sans);
+		transition:
+			opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+			scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
+		transform-origin: top left;
+
+		@starting-style {
+			opacity: 0;
+			scale: 0.97;
+		}
+	}
+
+	& p {
+		margin: 0;
+	}
+
+	& .lattice-wm-call-prompt-who {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	& .lattice-wm-call-prompt-faces {
+		display: flex;
+
+		& .lattice-wm-call-face + .lattice-wm-call-face {
+			margin-left: -6px;
+		}
+	}
+
+	& .lattice-wm-call-prompt-title {
+		font: 600 13px/1.3 var(--lattice-wm-heading-family);
+	}
+
+	& .lattice-wm-call-prompt-ask {
+		margin-top: 6px;
+		color: var(--lattice-wm-muted);
+	}
+
+	& .lattice-wm-call-prompt-buttons {
+		display: flex;
+		gap: 6px;
+		margin-top: 10px;
+	}
+
+	& .lattice-wm-call-go {
+		--lattice-wm-button-fill: var(--lattice-wm-accent);
+		display: inline-flex;
+		flex: 1;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		padding: 5px 8px;
+		border: 1px solid var(--lattice-wm-line);
+		border-radius: 3px;
+		background: var(--lattice-wm-button-fill);
+		color: var(--lattice-wm-accent-ink);
+		font: 600 12px/1.2 var(--lattice-wm-sans);
+		cursor: pointer;
+		transition: scale 120ms ease-out;
+
+		&[data-quiet] {
+			--lattice-wm-button-fill: var(--lattice-wm-sheet);
+			color: inherit;
+		}
+
+		&:active {
+			scale: 0.97;
+		}
+	}
+
+	& .lattice-wm-call-prompt-foot {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 8px;
+		margin-top: 8px;
+		color: var(--lattice-wm-muted);
+		font-size: 11px;
+	}
+
+	& .lattice-wm-call-not-now {
+		padding: 2px 4px;
+		border: none;
+		background: none;
+		color: var(--lattice-wm-muted);
+		font: inherit;
+		cursor: pointer;
+
+		&:hover {
+			color: var(--lattice-wm-ink);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		&[popover] {
+			transition: opacity 160ms ease-out;
+
+			@starting-style {
+				scale: 1;
+			}
+		}
+	}
+}
+
+/* faces floating over everything, each where it's put */
+.lattice-wm-call-floating {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	pointer-events: none;
+
+	& .lattice-wm-call-float {
+		position: absolute;
+		display: grid;
+		justify-items: center;
+		gap: 4px;
+		pointer-events: auto;
+		cursor: grab;
+		touch-action: none;
+		user-select: none;
+
+		&:active {
+			cursor: grabbing;
+		}
+
+		& .lattice-wm-call-face {
+			box-shadow: 2px 2px 0 var(--lattice-wm-line);
+		}
+	}
+
+	& .lattice-wm-call-float-name {
+		padding: 1px 6px;
+		border-radius: var(--lattice-wm-round);
+		background: var(--lattice-wm-sheet);
+		color: var(--lattice-wm-ink);
+		font: 600 10.5px/1.4 var(--lattice-wm-sans);
+		white-space: nowrap;
+	}
+}
+
+/* faces one under another, for a sidebar */
+.lattice-wm-call-tiles {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+	gap: 10px;
+	padding: 8px 12px 12px;
+
+	& figure {
+		margin: 0;
+	}
+
+	& figcaption {
+		margin-top: 3px;
+		color: var(--lattice-wm-muted);
+		font: 11px/1.3 var(--lattice-wm-sans);
 	}
 }
 
@@ -1128,6 +1385,19 @@
 		&:hover {
 			background: var(--lattice-wm-chrome);
 			color: inherit;
+		}
+	}
+
+	/* the phone: there while a call's on here (in their ink when you could
+	   join it, the danger's when it's yours to hang up), or while ctrl,
+	   alt and command are held */
+	& .lattice-wm-phone {
+		&[data-ringing] {
+			color: var(--lattice-wm-accent);
+		}
+
+		&[data-on] {
+			color: var(--lattice-wm-danger);
 		}
 	}
 

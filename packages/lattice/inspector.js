@@ -10,8 +10,9 @@ const ORDER_KEY = "lattice:inspector:order";
  * the inspectors down the right, like vscode's views: each folds away under
  * its heading, and moves above or below the others by dragging its heading
  * (or alt+up/down on it). which are open, and their order, are remembered.
- * `sections` is [{ id, name, render(), was? }], `was` the id it had before,
- * so where it was and whether it was open carry over
+ * `sections` is [{ id, name, render(), was?, when? }], `was` the id it had
+ * before, so where it was and whether it was open carry over, and `when`
+ * says whether it's there at all (read in an effect: it can be a signal)
  */
 export function Inspector(props) {
   const sections = new Map(props.sections.map((section) => [section.id, section]));
@@ -102,5 +103,6 @@ export function Inspector(props) {
     </section>`;
   }
 
-  return html`<${For} each=${order}>${(id) => html`<${Section} id=${id} />`}<//>`;
+  const shown = () => order().filter((id) => sections.get(id).when?.() ?? true);
+  return html`<${For} each=${shown}>${(id) => html`<${Section} id=${id} />`}<//>`;
 }

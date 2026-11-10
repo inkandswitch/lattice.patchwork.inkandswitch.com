@@ -25,7 +25,8 @@ const ARRIVING = [0, 1000, 3000, 8000];
 const ASK_EVERY = 2000;
 // many asking at once get one answer
 const ANSWER_AFTER = 100;
-const HELLO = "lattice-wm:hello?";
+// (a call, call/call.js, hears it too: whoever's in one says so)
+export const HELLO = "lattice-wm:hello?";
 
 const string = (value) => (value == null ? "" : String(value));
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
@@ -101,7 +102,7 @@ const VIEW = "view:";
 /**
  * join the room on `handle`: the project's files, from the repo under any
  * draft overlay. `onPeople` hears everyone else whenever that changes:
- * [{peer, name, colour, avatar, nodes, active, pointer, look, views,
+ * [{peer, contact, name, colour, avatar, nodes, active, pointer, look, views,
  * shared}], one each (their tab that did something last). colour is their
  * pointer's: their contact's, or else one for them from the palette. `repo`
  * finds who you are (your account's contact). `reads` is any more channels
@@ -137,6 +138,7 @@ export function joinRoom(handle, repo, reads, onPeople) {
     }
     return [...byWho.entries()].map(([who, { peerId, value = {} }]) => ({
       peer: string(peerId),
+      contact: string(value.contact),
       name: string(value.name) || "anonymous",
       colour: string(value.colour) || colourFor(who),
       avatar: string(value.avatar),

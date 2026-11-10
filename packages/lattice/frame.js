@@ -27,6 +27,9 @@ import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid
 import { colourFor, pointerCursor } from "./pointer.js";
 import { parsePath, projectByShort, projectPath } from "./paths.js";
 import { useToolStorage } from "./storage.js";
+import { CallBar } from "./call-bar.js";
+import { call } from "../wm/call/call.js";
+import { CallTiles } from "../wm/call/ui.js";
 
 // wm's, too, for its menus, before any project has brought it; knitout.js's
 // look, which lattice wears; and the fonts lattice brings
@@ -564,6 +567,12 @@ function Frame(props) {
         createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));
         return html`<${Resizer} sidebar=${inspector} side="left" /><${Inspector}
           sections=${[
+            {
+              id: "call",
+              name: "call",
+              when: () => !!call.get() && call.settings.faces === "sidebar",
+              render: () => html`<${CallTiles} />`,
+            },
             { id: "versions", was: "drafts", name: "versions", render: () => html`<${Versions} />` },
             {
               id: "comments",
@@ -951,6 +960,7 @@ function Frame(props) {
       </div>
       <div class="lattice-tree-children" hidden=${() => !packagesOpen()}></div>
       </div>
+      <${CallBar} inspector=${inspector} />
       <${Me} />
     </nav>`;
   }

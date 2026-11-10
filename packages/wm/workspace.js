@@ -22,6 +22,8 @@ import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
+import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
+import { CallPrompt, CallFloating, Face } from "./call/ui.js";
 
 const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
@@ -340,10 +342,10 @@ export function mountWorkspace(
       for (const person of list) theirs.set(person.peer, person);
       setPeople(
         reconcile(
-          list.map(({ peer, name, colour, avatar, pointer, look, shared }) => {
+          list.map(({ peer, contact, name, colour, avatar, pointer, look, shared }) => {
             const ext = {};
             for (const { name, key, channel } of presenceKeys) (ext[name] ??= {})[key] = shared[channel];
-            return { peer, name, colour, avatar, pointer, look, ext };
+            return { peer, contact, name, colour, avatar, pointer, look, ext };
           }),
           { key: "peer" },
         ),
@@ -353,6 +355,56 @@ export function mountWorkspace(
         showTheirViews();
       }
     });
+  }
+
+  // ── a call, in the project (call/call.js): hearing whether there's one
+  //    on, and asking, as you arrive, whether you'll join it. the phone,
+  //    beside the +, is there while one's on, or while ctrl, alt and
+  //    command are held (and a moment after, to press it)
+  const callProject = roomHandle && {
+    room: roomHandle,
+    repo: baseRepo,
+    get name() {
+      return projectName();
+    },
+  };
+  const offCallProject = callProject ? inProject(callProject) : () => {};
+  const offCalls = callProject
+    ? hearCalls(roomHandle, () => {
+        if (call.get()?.room !== roomHandle.url) ask(callProject);
+      })
+    : () => {};
+  const callHere = () => !!callProject && call.get()?.room === roomHandle.url;
+  const callOn = () => !!callProject && onCallIn(roomHandle.url).length > 0;
+  const [chord, setChord] = createSignal(false);
+  let chordTimer = null;
+  function onChord(event) {
+    clearTimeout(chordTimer);
+    if (event.ctrlKey && event.altKey && event.metaKey) setChord(true);
+    else if (chord()) chordTimer = setTimeout(() => setChord(false), 2500);
+  }
+  document.addEventListener("keydown", onChord);
+  document.addEventListener("keyup", onChord);
+  let phone;
+  function pressPhone() {
+    if (callHere()) return hangUp();
+    const box = phone?.getBoundingClientRect();
+    ask(callProject, { at: box && { x: box.left, y: box.bottom + 6 }, focus: true });
+  }
+  // a ctrl-click on a mac is a right click, and never a click: it's the
+  // press that's the phone's, then (once it's let go of, so letting go
+  // doesn't close what it opens)
+  let chordPress = false;
+  function onPhoneDown(event) {
+    chordPress = event.button === 0 && event.ctrlKey;
+  }
+  function onPhoneUp() {
+    if (!chordPress) return;
+    setTimeout(pressPhone);
+  }
+  function onPhoneClick() {
+    if (chordPress) chordPress = false;
+    else pressPhone();
   }
 
   // ── what's going on in each pane: wm answers patchwork:view-state for
@@ -1630,6 +1682,8 @@ export function mountWorkspace(
           <${For} each=${() => pointersOver(active())}>
             ${(person) => {
               const image = () => pointerImage(person.colour, person.look);
+              // their face on it, while you're in a call with them
+              const inCall = createMemo(() => (call.settings.faces === "cursors" ? (call.find(person)?.id ?? null) : null));
               return html`<div
                 class="lattice-wm-pointer"
                 data-look=${() => person.look}
@@ -1647,6 +1701,10 @@ export function mountWorkspace(
                   alt=""
                 />
                 <span class="lattice-wm-pointer-name">${() => person.name}</span>
+                ${() => {
+                  const id = inCall();
+                  return id ? html`<span class="lattice-wm-pointer-face"><${Face} id=${id} size=${44} title=${false} /></span>` : null;
+                }}
               </div>`;
             }}
           <//>
@@ -2179,6 +2237,22 @@ export function mountWorkspace(
         <header class="lattice-wm-files-heading">
           <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
+          <${Show} when=${() => callProject && (chord() || callHere() || callOn())}>
+            <button
+              class="lattice-wm-icon-button lattice-wm-phone"
+              ref=${(el) => (phone = el)}
+              data-on=${() => (callHere() ? "" : undefined)}
+              data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
+              title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
+              aria-label=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
+              onPointerDown=${onPhoneDown}
+              onPointerUp=${onPhoneUp}
+              onContextMenu=${(event) => event.preventDefault()}
+              onClick=${onPhoneClick}
+            >
+              ${() => icon(callHere() ? "hang-up" : "phone", 14)}
+            </button>
+          <//>
           <button
             class="lattice-wm-icon-button"
             title="a new file, or open one"
@@ -2374,6 +2448,10 @@ export function mountWorkspace(
           <${Menu} />
           <${ToolMenu} />
         </div>
+        <${Show} when=${() => callProject}>
+          <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
+          <${CallFloating} />
+        <//>
       </div>`;
   }, element);
 
@@ -2402,6 +2480,11 @@ export function mountWorkspace(
     document.removeEventListener("pointerdown", onPressWhileOpen, true);
     menusOff();
     document.removeEventListener("keyup", onAltKey);
+    document.removeEventListener("keydown", onChord);
+    document.removeEventListener("keyup", onChord);
+    clearTimeout(chordTimer);
+    offCalls();
+    offCallProject();
     clearTimeout(noticeTimer);
     clearTimeout(removingTimer);
     clearInterval(ticker);
