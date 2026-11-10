@@ -949,7 +949,27 @@ export function mountWorkspace(
   document.addEventListener("keydown", onAltKey);
   document.addEventListener("keyup", onAltKey);
 
+  // pressing the button a menu came from, while it's open, closes it: the
+  // press dismisses it (it's an auto popover), and the click after would
+  // open it again, so a press on its opener says not to
+  const openers = new Map();
+  let pressedOpener = null;
+  function onPressWhileOpen(event) {
+    pressedOpener = null;
+    for (const [popover, opener] of openers) {
+      if (popover?.matches(":popover-open") && opener?.contains(event.target)) pressedOpener = opener;
+    }
+  }
+  document.addEventListener("pointerdown", onPressWhileOpen, true);
+  function pressedToClose(popover, opener) {
+    const close = pressedOpener === opener;
+    pressedOpener = null;
+    openers.set(popover, close ? null : opener);
+    return close;
+  }
+
   function openMenu(event, groupId) {
+    if (pressedToClose(menu, event.currentTarget)) return;
     setAltHeld(event.altKey);
     setMenuFor(groupId);
     const rect = event.currentTarget.getBoundingClientRect();
@@ -1027,6 +1047,7 @@ export function mountWorkspace(
   const [toolMenuFor, setToolMenuFor] = createSignal(null);
 
   function openToolMenu(event, panel, groupId) {
+    if (pressedToClose(toolMenu, event.currentTarget)) return;
     setToolMenuFor({ panel, groupId });
     const rect = event.currentTarget.getBoundingClientRect();
     toolMenu.style.top = `${rect.bottom + 4}px`;
@@ -2214,6 +2235,7 @@ export function mountWorkspace(
     document.removeEventListener("dragend", stopDragging);
     document.removeEventListener("drop", stopDragging);
     document.removeEventListener("keydown", onAltKey);
+    document.removeEventListener("pointerdown", onPressWhileOpen, true);
     document.removeEventListener("keyup", onAltKey);
     clearTimeout(noticeTimer);
     clearTimeout(removingTimer);
