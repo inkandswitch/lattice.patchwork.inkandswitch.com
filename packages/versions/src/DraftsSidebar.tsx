@@ -613,7 +613,7 @@ export function DraftsSidebar(props: { element: HTMLElement }) {
   const mergeTargetName = createMemo<string>(() => {
     const parentUrl = mergeParentUrl();
     if (parentUrl === null || parentUrl === list().main.url) {
-      return list().main.name ?? "Main";
+      return list().main.name ?? "main";
     }
     return list().drafts.find((s) => s.url === parentUrl)?.name ?? "Draft";
   });
@@ -1240,7 +1240,7 @@ function MainCard(props: {
         <div class="dgr-card-title">
           <DraftName
             name={props.name}
-            fallback="Main"
+            fallback="main"
             onRename={props.onRename}
           />
           {/* Shown left of the tools while the timeline is pinned: drops the
@@ -2720,9 +2720,12 @@ function EditCounts(props: { additions: number; deletions: number; max: number }
 function GroupingPicker() {
   const mode = () => grouping().mode;
   return (
-    <div class="dgr-grouping" title="How the history below is grouped">
+    <div
+      class="dgr-grouping"
+      title={GROUP_MODES.find((m) => m.value === mode())?.hint}
+    >
       <label class="dgr-grouping-field">
-        <span class="dgr-grouping-caption">Group by</span>
+        <span class="dgr-grouping-caption">group by</span>
         <select
           class="dgr-grouping-select"
           value={mode()}
@@ -2761,9 +2764,6 @@ function GroupingPicker() {
           </select>
         </label>
       </Show>
-      <span class="dgr-grouping-hint">
-        {GROUP_MODES.find((m) => m.value === mode())?.hint}
-      </span>
     </div>
   );
 }

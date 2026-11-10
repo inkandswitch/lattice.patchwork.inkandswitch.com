@@ -10,6 +10,8 @@
   --dgr-hover-bg: var(--studio-fill-offset-10, #f9fafb);
   --dgr-selected-bg: var(--studio-fill-offset-20, #eef2ff);
   --dgr-font: var(--studio-family-sans, system-ui, sans-serif);
+  /* what a draft or a file is called: the card titles, the File rows */
+  --dgr-name-family: var(--dgr-font);
   --dgr-mono: var(--studio-family-code, ui-monospace, monospace);
   --dgr-primary: var(--studio-primary-fill, var(--studio-primary, #3b82f6));
   /* The accent used as ink on the ambient background (accent-coloured text,
@@ -36,10 +38,11 @@
 }
 
 .dgr-panel {
+  box-sizing: border-box;
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 0.5rem;
+  padding: 0 0.5rem 0.5rem;
   gap: 0.5rem;
   font-family: var(--dgr-font);
   color: var(--dgr-fg);
@@ -94,6 +97,11 @@
   flex-direction: column;
 }
 
+/* with no other cards to keep room for, it takes what there is */
+.dgr-card[data-selected]:only-child {
+  max-height: 100%;
+}
+
 /* While the menu's "Merge into …" item is hovered, the target card (the
    draft's parent) lights up so you can see where the changes will land. */
 .dgr-card[data-merge-target] {
@@ -134,8 +142,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.875rem;
-  font-weight: 500;
+  font-family: var(--dgr-name-family);
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
 .dgr-name {
@@ -765,13 +774,6 @@
   background: var(--dgr-hover-bg);
 }
 
-/* The mode's one-line explanation, on its own line below the controls. */
-.dgr-grouping-hint {
-  flex: 1 0 100%;
-  font-size: 0.6875rem;
-  color: var(--dgr-faint-fg);
-}
-
 /* The mode's caption on a row: the time bucket, the author's name, or the
    document. Truncates before the counts do. */
 .dgr-group-label {
@@ -781,6 +783,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--dgr-fg);
+}
+
+/* by file, a row is the file: its counts, who, its name, when. the person's
+   name is in the row's tooltip, so the file's has the room */
+.dgr-group-row[data-mode="document"] {
+  flex-wrap: nowrap;
+  column-gap: 0.375rem;
+}
+.dgr-group-row[data-mode="document"] .dgr-group-time {
+  padding-left: 0.25rem;
+}
+.dgr-group-row[data-mode="document"] .dgr-group-author,
+.dgr-group-row[data-mode="document"] .dgr-group-word {
+  display: none;
+}
+.dgr-group-row[data-mode="document"] .dgr-group-label {
+  flex: 1 1 auto;
+  font-family: var(--dgr-name-family);
+  font-size: 0.6875rem;
 }
 
 /* Who made the exact change the sticker sits on. */

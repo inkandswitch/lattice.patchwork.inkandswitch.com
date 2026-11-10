@@ -37,23 +37,23 @@ export const DEFAULT_GROUPING: Grouping = { mode: "document", resolution: "hour"
 export const GROUP_MODES: { value: GroupMode; label: string; hint: string }[] = [
   {
     value: "activity",
-    label: "Activity",
-    hint: "Bursts of editing, split by pauses of ten minutes or more",
+    label: "activity",
+    hint: "bursts of editing, split by pauses of ten minutes or more",
   },
   {
     value: "time",
-    label: "Time",
-    hint: "Fixed calendar buckets — pick the resolution alongside",
+    label: "time",
+    hint: "fixed calendar buckets · pick how long alongside",
   },
   {
     value: "author",
-    label: "Author",
-    hint: "Consecutive runs of changes by the same person",
+    label: "author",
+    hint: "runs of changes by the same person",
   },
   {
     value: "document",
-    label: "File",
-    hint: "Consecutive runs of changes in the same file",
+    label: "file",
+    hint: "runs of changes in the same file",
   },
 ];
 

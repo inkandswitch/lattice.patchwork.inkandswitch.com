@@ -1160,6 +1160,26 @@
 		min-height: 0;
 		overflow: auto;
 	}
+
+	/* the versions panel (packages/versions), in lattice's own look: cards on
+	   the sheet like the comments', names in the path face */
+	& .lattice-inspector {
+		--dgr-fg: var(--lattice-shell-line);
+		--dgr-muted-fg: var(--lattice-muted);
+		--dgr-faint-fg: var(--lattice-muted);
+		--dgr-bg: var(--lattice-shell-fill);
+		--dgr-border: var(--lattice-rule);
+		--dgr-hover-bg: var(--lattice-shell-chrome-fill-offset-20);
+		--dgr-selected-bg: var(--lattice-current);
+		--dgr-font: var(--lattice-shell-family-ui);
+		--dgr-mono: var(--lattice-shell-family-code);
+		--dgr-name-family: var(--lattice-path-family);
+		--dgr-primary: var(--lattice-shell-primary);
+		--dgr-danger-text: var(--lattice-shell-danger);
+		--dgr-radius: var(--lattice-shell-radius);
+		--dgr-radius-sm: var(--lattice-shell-radius-sm);
+		--dgr-shadow-sm: var(--lattice-shell-shadow-sm);
+	}
 }
 
 /* a filled button's text: offset black or white, whichever reads better on
