@@ -462,12 +462,9 @@ export function SettingsPage(props) {
     } catch (error) {
       console.warn("[lattice] couldn't save the shell before reloading", error);
     }
-    // a #frame= in the address would still say this one
-    const url = new URL(location.href);
-    const hash = new URLSearchParams(url.hash.slice(1));
-    hash.delete("frame");
-    url.hash = hash.toString();
-    history.replaceState(history.state, "", url.href);
+    // the new shell starts fresh at /# — this one's path means nothing to it,
+    // and a #frame= in the address would still say this one
+    history.replaceState(null, "", "/#");
     location.reload();
   }
 
