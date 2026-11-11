@@ -134,7 +134,9 @@ function workerRenderer(canvas, {onHover, onGoto, onFail}) {
 			return new Promise((resolve, reject) => parsing.set(id, {resolve, reject}))
 		},
 		highlight: lines => worker.postMessage({type: "highlight", lines}),
-		resetZoom: () => worker.postMessage({type: "resetZoom"}),
+		// moving there, unless whoever's looking asked for less motion
+		resetZoom: () =>
+			worker.postMessage({type: "resetZoom", animate: !matchMedia("(prefers-reduced-motion: reduce)").matches}),
 		resize: () => worker.postMessage({type: "resize", size: sizeOf(canvas)}),
 		transform: () => transform,
 		destroy() {
@@ -159,7 +161,7 @@ async function pageRenderer(canvas, {onHover, onGoto}) {
 			return show.parse(text, false, resetView)
 		},
 		highlight: lines => show.setHighlightFn(highlighter(lines)),
-		resetZoom: () => show.resetZoom(),
+		resetZoom: () => show.resetZoom(!matchMedia("(prefers-reduced-motion: reduce)").matches),
 		resize: () => show.requestDraw(),
 		transform: () => show.currentTransform ?? null,
 		destroy() {},

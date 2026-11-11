@@ -7,7 +7,7 @@ import {highlighter} from "./stitch-source.js"
 //
 // in:  {type: "init", canvas, size} · {type: "resize", size}
 //      {type: "parse", id, text, resetView, yarns} · {type: "highlight", lines}
-//      {type: "resetZoom"} · {type: "event", event: {type, ...fields}}
+//      {type: "resetZoom", animate} · {type: "event", event: {type, ...fields}}
 // out: {type: "ready"} · {type: "parsed", id} · {type: "error", id, message}
 //      {type: "hover", source, stitch} · {type: "goto", source}
 //      {type: "transform", transform}: how the stitches are drawn on the
@@ -55,7 +55,7 @@ onmessage = async ({data}) => {
 	} else if (data.type === "highlight") {
 		show.setHighlightFn(highlighter(data.lines))
 	} else if (data.type === "resetZoom") {
-		show.resetZoom()
+		show.resetZoom(!!data.animate)
 	} else if (data.type === "event") {
 		const {type, ...fields} = data.event
 		const event = new Event(type, {cancelable: true})

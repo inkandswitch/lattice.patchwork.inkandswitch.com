@@ -41,6 +41,8 @@ export const TOOLS = {
     title: "the passes this .k makes on a Kniterate, drawn the way its editor draws them",
     position: 3,
     extensions: ["k"],
+    // not offered for now: a pane that already shows it still does
+    offered: false,
     load: () => import("./kniterate.js"),
   },
   animation: {
@@ -107,8 +109,10 @@ export const TOOLS = {
   },
 };
 
+// (those offered: a tool with offered false is only there for the panes
+// that show it already)
 export function toolsFor(extension) {
-  return Object.values(TOOLS).filter((tool) => tool.extensions.includes(extension));
+  return Object.values(TOOLS).filter((tool) => tool.offered !== false && tool.extensions.includes(extension));
 }
 
 // for wm: a doc's tools are its kind's. one none of them fits shows with

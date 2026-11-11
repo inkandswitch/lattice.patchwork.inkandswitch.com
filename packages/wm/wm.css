@@ -482,6 +482,7 @@
 		background: none;
 		color: inherit;
 		cursor: pointer;
+		transition: scale 120ms ease-out;
 
 		& svg {
 			display: block;
@@ -490,6 +491,10 @@
 		&:hover {
 			background: var(--lattice-wm-highlighter);
 			color: var(--lattice-wm-ink);
+		}
+
+		&:active {
+			scale: 0.95;
 		}
 	}
 
@@ -757,6 +762,22 @@
 		background: var(--lattice-wm-highlighter);
 		box-shadow: 1px 1px 0 var(--lattice-wm-line);
 		color: var(--lattice-wm-ink);
+		transition:
+			opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
+			translate 160ms cubic-bezier(0.23, 1, 0.32, 1);
+
+		@starting-style {
+			opacity: 0;
+			translate: 0 4px;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: opacity 160ms ease-out;
+
+			@starting-style {
+				translate: none;
+			}
+		}
 	}
 
 	/* everyone else's pointers, over the doc they're pointing at: an arrow
@@ -906,6 +927,23 @@
 	}
 
 	& .lattice-wm-empty-card {
+		transition:
+			opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+			translate 200ms cubic-bezier(0.23, 1, 0.32, 1);
+
+		@starting-style {
+			opacity: 0;
+			translate: 0 6px;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: opacity 200ms ease-out;
+
+			@starting-style {
+				translate: none;
+			}
+		}
+
 		max-width: 320px;
 		padding: 24px 28px 20px;
 		border: 1px solid var(--lattice-wm-line);
@@ -1348,6 +1386,16 @@
 		cursor: grab;
 		touch-action: none;
 		user-select: none;
+		/* arriving (someone joins, or faces start floating): from a little
+		   smaller, and see-through */
+		transition:
+			opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
+			scale 200ms cubic-bezier(0.23, 1, 0.32, 1);
+
+		@starting-style {
+			opacity: 0;
+			scale: 0.95;
+		}
 
 		&:active {
 			cursor: grabbing;
@@ -1360,28 +1408,45 @@
 	}
 
 	/* a floating face's corner: drag it to size the face */
+	/* the picture's box, its shape (4:3) whichever the face is: the whole
+	   picture, or a circle as tall in the middle of it. between the two, its
+	   width and corners move */
 	& .lattice-wm-call-float-picture {
 		position: relative;
-		display: block;
+		display: flex;
+		justify-content: center;
 		width: 100%;
-	}
+		aspect-ratio: 4 / 3;
 
-	/* a circle as tall as the picture would be, in the middle of where it
-	   would be */
-	& .lattice-wm-call-float[data-shape="round"] {
-		& .lattice-wm-call-float-picture {
-			display: flex;
-			justify-content: center;
-		}
 		& .lattice-wm-call-face {
+			width: 100%;
+			height: 100%;
+			aspect-ratio: auto;
+			transition:
+				width 200ms cubic-bezier(0.23, 1, 0.32, 1),
+				border-radius 200ms cubic-bezier(0.23, 1, 0.32, 1);
+		}
+	}
+	& .lattice-wm-call-float[data-shape="round"] {
+		& .lattice-wm-call-float-picture .lattice-wm-call-face {
 			width: 75%;
-			height: auto;
-			aspect-ratio: 1;
 			border-radius: 50%;
 			font-size: 32px;
 		}
 		& .lattice-wm-call-size {
 			right: 14%;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		& .lattice-wm-call-float {
+			transition: opacity 200ms ease-out;
+
+			@starting-style {
+				scale: 1;
+			}
+		}
+		& .lattice-wm-call-float-picture .lattice-wm-call-face {
+			transition: none;
 		}
 	}
 	& .lattice-wm-call-size {
@@ -1525,10 +1590,15 @@
 		color: var(--lattice-wm-quiet);
 		font-size: 15px;
 		cursor: pointer;
+		transition: scale 120ms ease-out;
 
 		&:hover {
 			background: var(--lattice-wm-chrome);
 			color: inherit;
+		}
+
+		&:active {
+			scale: 0.95;
 		}
 	}
 
@@ -1755,6 +1825,33 @@
 	white-space: pre-line;
 	overflow-wrap: anywhere;
 	pointer-events: none;
+	transform-origin: top center;
+	transition:
+		opacity 125ms ease-out,
+		scale 125ms ease-out;
+
+	@starting-style {
+		opacity: 0;
+		scale: 0.97;
+	}
+
+	/* above what it's for */
+	&[data-above] {
+		transform-origin: bottom center;
+	}
+
+	/* one straight after another: no waiting, and no fading in either */
+	&[data-instant] {
+		transition: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		transition: opacity 125ms ease-out;
+
+		@starting-style {
+			scale: 1;
+		}
+	}
 }
 
 /* buttons in a project take the type and colour around them. no

@@ -7,6 +7,8 @@ import {turnOf} from "./strands.js"
 import {YARNS_CHANGED, yarnPicker, yarnStrands} from "../knitoutjs/core/yarns.js"
 import {icon, withIcon} from "../wm/ui/icons.js"
 import {stylesheet} from "../wm/ui/stylesheet.js"
+import {viewStateOf} from "../wm/view-state.js"
+import {easeInOut, lessMotion} from "../wm/ui/ease.js"
 
 const STYLESHEET = new URL("./knit3d.css", import.meta.url).href
 const REPARSE_DELAY = 250
@@ -188,6 +190,14 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 // how wide the camera sees, up and down (radians)
 const FOV = 0.6
+// how long the camera takes to go where it's sent (ms): reset, and to keep
+// up with whoever you're following
+const CAMERA_MOVE = 300
+const FOLLOW_MOVE = 120
+// how often what it shows goes to anyone following, while it plays, and at
+// most while it's turned (ms)
+const SHARE_EVERY = 1000
+const SHARE_SOON = 100
 function normalize(v) {
 	const length = Math.hypot(v[0], v[1], v[2]) || 1
 	return [v[0] / length, v[1] / length, v[2] / length]
@@ -432,10 +442,9 @@ export default function Knit3dTool(handle, element, context = {}) {
 		yarns.element,
 		withIcon(
 			"fit",
-			button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () => {
-				resetCamera()
-				draw()
-			}),
+			button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () =>
+				moveCamera(framed()),
+			),
 		),
 	)
 
@@ -831,13 +840,50 @@ export default function Knit3dTool(handle, element, context = {}) {
 	// ── the camera: it turns round the fabric
 
 	const camera = {yaw: 0, pitch: 0.18, distance: 30, target: [10, -5, 0]}
-	function resetCamera() {
+	// the camera on all of it, from the front
+	function framed() {
 		const centre = [0, 1, 2].map(k => (bounds.min[k] + bounds.max[k]) / 2)
 		const size = Math.max(bounds.max[0] - bounds.min[0], (bounds.max[1] - bounds.min[1]) * 1.2)
-		camera.target = centre
-		camera.yaw = 0
-		camera.pitch = 0.18
-		camera.distance = Math.max(8, size * 1.55)
+		return {target: centre, yaw: 0, pitch: 0.18, distance: Math.max(8, size * 1.55)}
+	}
+	function resetCamera() {
+		stopCamera()
+		Object.assign(camera, framed())
+	}
+
+	// the camera, moved to `goal` over `duration` (ms), so you see where it
+	// went: in and out, as something moving on screen goes. turning it,
+	// moving it or zooming takes it from there. asked for less motion, it's
+	// just there
+	let cameraFrame = 0
+	function stopCamera() {
+		cancelAnimationFrame(cameraFrame)
+		cameraFrame = 0
+	}
+	function moveCamera(goal, duration = CAMERA_MOVE) {
+		stopCamera()
+		if (duration <= 0 || lessMotion()) {
+			Object.assign(camera, goal, {target: [...goal.target]})
+			draw()
+			return
+		}
+		const from = {...camera, target: [...camera.target]}
+		// round the shorter way
+		let yaw = goal.yaw
+		while (yaw - from.yaw > Math.PI) yaw -= 2 * Math.PI
+		while (from.yaw - yaw > Math.PI) yaw += 2 * Math.PI
+		const start = performance.now()
+		const step = now => {
+			const t = Math.min(1, (now - start) / duration)
+			const e = easeInOut(t)
+			camera.yaw = from.yaw + (yaw - from.yaw) * e
+			camera.pitch = from.pitch + (goal.pitch - from.pitch) * e
+			camera.distance = from.distance * Math.pow(goal.distance / from.distance, e)
+			camera.target = from.target.map((value, k) => value + (goal.target[k] - value) * e)
+			draw()
+			cameraFrame = t < 1 ? requestAnimationFrame(step) : 0
+		}
+		cameraFrame = requestAnimationFrame(step)
 	}
 
 	// where the camera is: turned round what it looks at, `distance` from it
@@ -957,6 +1003,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			playhead = Math.min(knitout.ops.length, playhead + dt * speed.perSecond)
 			upTo = Math.floor(playhead)
 			if (upTo >= knitout.ops.length) pause()
+			else if (now - sharedAt > SHARE_EVERY) share()
 			dirty = true
 		}
 		if (dirty) {
@@ -981,17 +1028,20 @@ export default function Knit3dTool(handle, element, context = {}) {
 		playing = true
 		playButton.replaceChildren(icon("pause"), " pause")
 		refresh()
+		share()
 	}
 
 	function pause() {
 		playing = false
 		playButton.replaceChildren(icon("play"), " play")
+		share()
 	}
 
 	// ── pointer and wheel
 
 	let drag = null
 	function onPointerDown(event) {
+		stopCamera()
 		canvas.setPointerCapture(event.pointerId)
 		drag = {x: event.clientX, y: event.clientY, pan: event.shiftKey || event.button !== 0}
 	}
@@ -1010,18 +1060,20 @@ export default function Knit3dTool(handle, element, context = {}) {
 			camera.pitch = Math.max(-1.4, Math.min(1.4, camera.pitch + dy * 0.008))
 		}
 		draw()
+		shareSoon()
 	}
 	function onPointerUp() {
 		drag = null
 	}
 	function onWheel(event) {
 		event.preventDefault()
+		stopCamera()
 		camera.distance = Math.max(2, Math.min(800, camera.distance * Math.exp(event.deltaY * 0.0015)))
 		draw()
+		shareSoon()
 	}
 	function onDoubleClick() {
-		resetCamera()
-		draw()
+		moveCamera(framed())
 	}
 	const canvasListeners = {
 		pointerdown: onPointerDown,
@@ -1038,18 +1090,21 @@ export default function Knit3dTool(handle, element, context = {}) {
 
 	speedSelect.addEventListener("change", () => {
 		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
+		share()
 	})
 	scrubber.addEventListener("input", () => {
 		pause()
 		upTo = Number(scrubber.value)
 		refresh()
+		share()
 	})
 	roundSlider.addEventListener("input", () => {
 		round = Number(roundSlider.value)
 		refresh()
+		shareSoon()
 	})
-	bedBox.addEventListener("change", refresh)
-	strainBox.addEventListener("change", refresh)
+	bedBox.addEventListener("change", () => (refresh(), share()))
+	strainBox.addEventListener("change", () => (refresh(), share()))
 	// the machine and yarn, as they're set (see settings.js), and so how big
 	// each stitch is
 	// (and the machine and yarns the .k's knitted with, as the check finds them)
@@ -1108,6 +1163,8 @@ export default function Knit3dTool(handle, element, context = {}) {
 			resetCamera()
 			draw()
 		}
+		// someone's, from before it had anything to show it on
+		applyTheirs()
 	}
 
 	function scheduleReread() {
@@ -1116,11 +1173,87 @@ export default function Knit3dTool(handle, element, context = {}) {
 		timer = setTimeout(reread, REPARSE_DELAY)
 	}
 
+	// ── following: what it shows goes to anyone following you, as wm's view
+	//    state for the pane (how far it's knitted, whether it's playing, how
+	//    fast, the camera, how worn it is, the bed and strain), again every
+	//    SHARE_EVERY while it plays, and as you turn it (at most every
+	//    SHARE_SOON). following someone, theirs: its camera goes where
+	//    theirs is, on its way
+
+	let view = null
+	let applying = false
+	let sharedAt = 0
+	let soon = 0
+	let theirs = null
+	function share() {
+		clearTimeout(soon)
+		soon = 0
+		if (applying || !view) return
+		sharedAt = performance.now()
+		view.set({
+			at: upTo,
+			playing,
+			speed: SPEEDS.indexOf(speed),
+			camera: {yaw: camera.yaw, pitch: camera.pitch, distance: camera.distance, target: [...camera.target]},
+			round,
+			bed: bedBox.checked,
+			strain: strainBox.checked,
+		})
+	}
+	function shareSoon() {
+		if (!applying && !soon) soon = setTimeout(share, SHARE_SOON)
+	}
+	const isNumber = n => typeof n === "number" && Number.isFinite(n)
+	function applyTheirs() {
+		const state = theirs
+		if (!state || !knitout.ops.length) return
+		applying = true
+		try {
+			if (Number.isInteger(state.speed) && SPEEDS[state.speed] && SPEEDS[state.speed] !== speed) {
+				speed = SPEEDS[state.speed]
+				speedSelect.value = String(state.speed)
+			}
+			if (typeof state.bed === "boolean") bedBox.checked = state.bed
+			if (typeof state.strain === "boolean") strainBox.checked = state.strain
+			if (isNumber(state.round) && state.round !== round) {
+				round = Math.max(0, Math.min(1, state.round))
+				roundSlider.value = String(round)
+			}
+			const c = state.camera
+			if (c && [c.yaw, c.pitch, c.distance].every(isNumber) && Array.isArray(c.target) && c.target.length === 3 && c.target.every(isNumber)) {
+				moveCamera({yaw: c.yaw, pitch: c.pitch, distance: Math.max(2, c.distance), target: c.target}, FOLLOW_MOVE)
+			}
+			if (Number.isInteger(state.at)) {
+				const target = Math.max(0, Math.min(knitout.ops.length, state.at))
+				// while it plays, near is near enough: each draws at its own pace
+				const slack = state.playing ? Math.max(2, speed.perSecond) : 0
+				if (Math.abs(target - upTo) > slack) {
+					upTo = target
+					playhead = target
+				}
+			}
+			if (state.playing && !playing) play()
+			else if (!state.playing && playing) pause()
+			refresh()
+		} finally {
+			applying = false
+		}
+	}
+	if (context.repo) {
+		view = viewStateOf(element, context.repo, state => {
+			theirs = state
+			applyTheirs()
+		})
+	}
+
 	readColours()
 	handle.on("change", scheduleReread)
 	reread()
 
 	return () => {
+		view?.stop()
+		stopCamera()
+		clearTimeout(soon)
 		delete element.inkSpace
 		playing = false
 		clearTimeout(timer)

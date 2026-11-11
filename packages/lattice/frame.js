@@ -813,9 +813,24 @@ function Frame(props) {
     projectMenu.showPopover();
   }
 
-  function copyFromMenu(text) {
-    navigator.clipboard?.writeText(text);
-    projectMenu.hidePopover();
+  // copying: it says so, a moment, before the menu goes
+  const [copied, setCopied] = createSignal(false);
+  let copiedTimer = null;
+  onCleanup(() => clearTimeout(copiedTimer));
+  async function copyFromMenu(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error("[lattice] couldn't copy it", error);
+      projectMenu.hidePopover();
+      return;
+    }
+    setCopied(true);
+    clearTimeout(copiedTimer);
+    copiedTimer = setTimeout(() => {
+      projectMenu.hidePopover();
+      setCopied(false);
+    }, 600);
   }
 
   async function downloadFromMenu() {
@@ -836,15 +851,19 @@ function Frame(props) {
       popover="auto"
       ref=${(el) => (projectMenu = el)}
     >
-      <${Show} when=${menuAlt}>
+      <${Show} when=${() => menuAlt() || copied()}>
         <button
-          class="lattice-wm-menu-item"
+          class="lattice-wm-menu-item lattice-copy-link"
           disabled=${() => !menuFiles()}
+          data-copied=${() => (copied() ? "" : undefined)}
           onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
         >
-          ${icon("link")}
+          ${() => icon(copied() ? "check" : "link")}
           copy link
-          <small>a link here · they get their own</small>
+          ${() =>
+            copied()
+              ? html`<small class="lattice-copied">copied</small>`
+              : html`<small>a link here · they get their own</small>`}
         </button>
       <//>
       <button

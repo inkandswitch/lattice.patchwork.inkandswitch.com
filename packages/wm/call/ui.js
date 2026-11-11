@@ -244,7 +244,7 @@ export function CallFloating() {
             onPointerCancel=${onPointerUp}
           >
             <span class="lattice-wm-call-float-picture">
-              <${Face} id=${peer.id} shape=${shape} muted=${false} />
+              <${Face} id=${peer.id} shape="tile" muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
             </span>
             <span class="lattice-wm-call-float-name">

@@ -72,6 +72,7 @@ function ShowKnitout(canvas) {
 		me.mouse.y = ( (evt.clientY - rect.top) / rect.height * canvas.height );
 
 		if (evt.buttons & 1) {
+			me.cameraMove = null; //patchwork: dragging takes it from a reset that's on its way
 			let deltaX = me.mouse.x - oldX;
 			let deltaY = me.mouse.y - oldY;
 			if (me.currentTransform && deltaX === deltaX && deltaY === deltaY) {
@@ -87,6 +88,7 @@ function ShowKnitout(canvas) {
 	canvas.addEventListener('wheel', function(evt){
 		evt.preventDefault();
 
+		me.cameraMove = null; //patchwork: as does zooming
 		let dY = evt.deltaY;
 		if (evt.deltaMode == 1) dY *= 16.0; //if delta is in lines, make larger
 
@@ -470,12 +472,54 @@ ShowKnitout.prototype.showTiles = function ShowKnitout_showTiles() {
 	}
 };
 
-ShowKnitout.prototype.resetZoom = function ShowKnitout_resetZoom() {
+//patchwork: `animate`, and it moves there over 300ms, in and out
+//(cubic-bezier(0.77, 0, 0.175, 1)), so you see where it went; dragging or
+//zooming meanwhile takes it from wherever it's got to
+ShowKnitout.prototype.resetZoom = function ShowKnitout_resetZoom(animate = false) {
 	const Margin = 0.5 * TileSet.TileHeight;
-	this.camera.x = 0.5 * (this.max.x + this.min.x);
-	this.camera.y = 0.5 * (this.max.y + this.min.y);
-	this.camera.radius = 0.5 * Math.max(this.max.x - this.min.x + 2.0 * Margin, this.max.y - this.min.y + 2.0 * Margin);
-	this.requestDraw();
+	const goal = {
+		x: 0.5 * (this.max.x + this.min.x),
+		y: 0.5 * (this.max.y + this.min.y),
+		radius: 0.5 * Math.max(this.max.x - this.min.x + 2.0 * Margin, this.max.y - this.min.y + 2.0 * Margin),
+	};
+	if (!animate) {
+		this.cameraMove = null;
+		Object.assign(this.camera, goal);
+		this.requestDraw();
+		return;
+	}
+	const from = { ...this.camera };
+	const start = performance.now();
+	const move = {};
+	this.cameraMove = move;
+	const me = this;
+	const step = function(now) {
+		if (me.cameraMove !== move) return;
+		const t = Math.min(1, (now - start) / 300);
+		const e = easeInOut(t);
+		me.camera.x = from.x + (goal.x - from.x) * e;
+		me.camera.y = from.y + (goal.y - from.y) * e;
+		me.camera.radius = from.radius * Math.pow(goal.radius / from.radius, e);
+		me.draw();
+		if (t < 1) frame(step);
+		else me.cameraMove = null;
+	};
+	frame(step);
+}
+
+//patchwork: cubic-bezier(0.77, 0, 0.175, 1), for resetZoom
+function easeInOut(x) {
+	const at = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t ** 2 * (1 - t) + t ** 3;
+	const slope = (a, b, t) => 3 * a * (1 - t) ** 2 + 6 * (b - a) * t * (1 - t) + 3 * (1 - b) * t ** 2;
+	if (x <= 0) return 0;
+	if (x >= 1) return 1;
+	let t = x;
+	for (let i = 0; i < 8; i++) {
+		const d = slope(0.77, 0.175, t);
+		if (Math.abs(d) < 1e-6) break;
+		t -= (at(0.77, 0.175, t) - x) / d;
+	}
+	return at(0, 1, Math.max(0, Math.min(1, t)));
 }
 
 ShowKnitout.prototype.parse = async function ShowKnitout_parse(codeText, useKnitoutAsSource=false, resetView=false) {

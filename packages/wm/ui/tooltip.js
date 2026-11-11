@@ -55,7 +55,10 @@ export function tooltips(scope) {
     const big = rect.height > 48;
     const x = (byPointer || big ? pointer.x : rect.left + rect.width / 2) - width / 2;
     let y = (byPointer && big ? pointer.y + 16 : rect.bottom) + GAP;
-    if (y + height > innerHeight - GAP) y = (big ? pointer.y : rect.top) - height - GAP;
+    const above = y + height > innerHeight - GAP;
+    if (above) y = (big ? pointer.y : rect.top) - height - GAP;
+    // (it grows from what it's for: above it, from its bottom)
+    tip.toggleAttribute("data-above", above);
     tip.style.left = `${Math.round(Math.max(GAP, Math.min(x, innerWidth - width - GAP)))}px`;
     tip.style.top = `${Math.round(Math.max(GAP, y))}px`;
   }
@@ -63,6 +66,8 @@ export function tooltips(scope) {
   function show(el, text, byPointer) {
     if (!el.isConnected || !text.trim()) return;
     tip.textContent = text;
+    // straight after another: there at once, not faded in
+    tip.toggleAttribute("data-instant", Date.now() < warmUntil);
     if (!tip.matches(":popover-open")) tip.showPopover();
     place(el, byPointer);
   }
