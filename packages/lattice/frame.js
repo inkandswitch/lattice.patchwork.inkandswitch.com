@@ -20,7 +20,7 @@ import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.j
 import { icon } from "../wm/ui/icons.js";
 import { tooltips } from "../wm/ui/tooltip.js";
 import { menuKeys } from "../wm/ui/menus.js";
-import { secret } from "../wm/ui/secret.js";
+import { holdSecret, secret } from "../wm/ui/secret.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
@@ -224,6 +224,17 @@ function Frame(props) {
         if (change.url && String(entry.url) !== change.url) entry.url = change.url;
         if (change.type && String(entry.type) !== change.type) entry.type = change.type;
         if (change.name && String(entry.name) !== change.name) entry.name = change.name;
+      }
+    });
+  }
+
+  // a project out of the root folder: it's gone from the list. the project
+  // itself is still there for anything else that links to it
+  function removeEntry(url) {
+    homeHandle()?.change((doc) => {
+      const docs = doc.docs ?? [];
+      for (let i = docs.length - 1; i >= 0; i--) {
+        if (String(docs[i]?.url) === url) docs.splice(i, 1);
       }
     });
   }
@@ -801,6 +812,7 @@ function Frame(props) {
     setMenuAlt(event.altKey);
     setMenuProject(project);
     setPacking(null);
+    setRemoving(false);
     setMenuFiles(isOld(project) ? project.url : null);
     if (!isOld(project)) {
       findSoon(repo, project.url).then((doc) => {
@@ -845,6 +857,15 @@ function Frame(props) {
     }
   }
 
+  // removing asks twice, as a project's files do: the first press arms it
+  const [removing, setRemoving] = createSignal(false);
+  function removeFromMenu() {
+    if (!removing()) return setRemoving(true);
+    setRemoving(false);
+    projectMenu.hidePopover();
+    removeEntry(menuProject().url);
+  }
+
   function ProjectMenu() {
     return html`<div
       class="lattice-wm-menu lattice-context-menu"
@@ -874,6 +895,11 @@ function Frame(props) {
         ${icon("download")}
         download
         <small>${() => packing() ?? ".patchworkfolder, files and all"}</small>
+      </button>
+      <button class="lattice-wm-menu-item" onClick=${removeFromMenu}>
+        ${icon("close")}
+        ${() => (removing() ? "remove?" : "remove")}
+        <small>${() => (removing() ? "click again to remove it" : "from your projects (the project itself stays)")}</small>
       </button>
     </div>`;
   }
@@ -910,7 +936,7 @@ function Frame(props) {
         }}
       />
       <${Show} when=${secret}>
-        <form class="lattice-wm-menu-url" onSubmit=${onAddFromUrl}>
+        <form class="lattice-wm-menu-url" ref=${holdSecret} onSubmit=${onAddFromUrl}>
           <input
             name="url"
             placeholder="automerge:… url"

@@ -22,7 +22,7 @@ import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
-import { secret } from "./ui/secret.js";
+import { holdSecret, secret } from "./ui/secret.js";
 import { createInk } from "./ink.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
 import { CallPrompt, CallFloating, Face } from "./call/ui.js";
@@ -2289,7 +2289,10 @@ export function mountWorkspace(
           <${Show} when=${() => callProject && (secret() || callHere() || callOn())}>
             <button
               class="lattice-wm-icon-button lattice-wm-phone"
-              ref=${(el) => (phone = el)}
+              ref=${(el) => {
+                phone = el;
+                holdSecret(el);
+              }}
               data-on=${() => (callHere() ? "" : undefined)}
               data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
               title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
