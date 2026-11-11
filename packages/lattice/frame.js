@@ -38,10 +38,20 @@ const STYLESHEETS = ["./fonts/fonts.css", "../wm/wm.css", "../knitoutjs/look.css
   (path) => new URL(path, import.meta.url).href,
 );
 
-// where this frame came from, when it isn't the site it's running in: a
-// dev server's, given as ?dev= (see src/main.ts)
+// where this frame came from, when it's a dev server's, given as ?dev= (see
+// src/main.ts). only then: another site can install lattice from this one's
+// /packages/lattice/, and that's lattice, not a dev server
 const FRAME_ORIGIN = new URL(import.meta.url).origin;
-const DEV_FRAME = FRAME_ORIGIN === location.origin ? null : FRAME_ORIGIN;
+function devFrame() {
+  const wanted = new URLSearchParams(location.search).get("dev");
+  if (!wanted || FRAME_ORIGIN === location.origin) return null;
+  try {
+    return new URL(wanted, location.href).origin === FRAME_ORIGIN ? FRAME_ORIGIN : null;
+  } catch {
+    return null;
+  }
+}
+const DEV_FRAME = devFrame();
 
 // a dev frame has no vite client in this page to reload it when it changes,
 // so it asks the dev server, which answers when it has (see vite/frame.ts)
