@@ -181,62 +181,131 @@ function Frame(props) {
   addEventListener("hashchange", openShared);
   onCleanup(() => removeEventListener("hashchange", openShared));
 
-  // what the root folder links to: {url, name, type}. each the same object
-  // while it's the same, so the list keeps its places
+  // the folders in the root folder, and in theirs, all the way down, live: a
+  // folder's url → its doc once it's here, or null if it couldn't be found
+  const [folderDocs, setFolderDocs] = createSignal({});
+  const folderHandles = new Map();
+  const unwatch = [];
+  let gone = false;
+  onCleanup(() => {
+    gone = true;
+    for (const off of unwatch) off();
+  });
+  function watchFolder(url) {
+    if (folderHandles.has(url)) return;
+    folderHandles.set(url, null);
+    const put = (doc) => !gone && setFolderDocs((all) => ({ ...all, [url]: doc }));
+    // one that's slow to come is taken as not there, till it comes
+    const timer = setTimeout(() => put(null), 15000);
+    repo.find(url).then(
+      (handle) => {
+        clearTimeout(timer);
+        if (gone) return;
+        folderHandles.set(url, handle);
+        const changed = () => put(handle.doc() ?? null);
+        handle.on("change", changed);
+        unwatch.push(() => handle.off("change", changed));
+        changed();
+      },
+      () => {
+        clearTimeout(timer);
+        put(null);
+      },
+    );
+  }
+
+  // a folder that's been looked in: true if it's a lattice project from
+  // before, false if it's not (or isn't there). null while it's being looked in
+  const lookedIn = (url) => {
+    const all = folderDocs();
+    return url in all ? isOldLatticeFolder(all[url] ?? undefined) : null;
+  };
+
+  // what the root folder links to, and what the folders in it do, depth
+  // first: {url, name, type, folder} (`folder`: the one that links to it).
+  // each the same object while it's the same, so the list keeps its places.
+  // a lattice project from before is a folder, but its insides are its files
   const known = new Map();
-  const entries = createMemo(() =>
-    (Array.isArray(homeDoc()?.docs) ? homeDoc().docs : [])
-      .map((raw) => {
+  const links = createMemo(() => {
+    const all = [];
+    const walked = new Set();
+    const walk = (folder, docs) => {
+      if (walked.has(folder)) return;
+      walked.add(folder);
+      for (const raw of Array.isArray(docs) ? docs : []) {
         const url = String(raw?.url ?? "");
+        if (!isValidAutomergeUrl(url)) continue;
         const name = String(raw?.name ?? "untitled");
         const type = String(raw?.type ?? "");
-        const key = `${url} ${type} ${name}`;
-        if (!known.has(key)) known.set(key, { url, name, type });
-        return known.get(key);
-      })
-      .filter((entry) => isValidAutomergeUrl(entry.url)),
-  );
-
-  // which of the root folder's folders are lattice projects from before: a
-  // folder's url → true or false, once it's been looked in
-  const [looked, setLooked] = createSignal({});
-  createEffect(() => {
-    for (const entry of entries()) {
-      if (entry.type !== "folder" || entry.url in untrack(looked)) continue;
-      setLooked((all) => ({ ...all, [entry.url]: null }));
-      findSoon(repo, entry.url).then((doc) =>
-        setLooked((all) => ({ ...all, [entry.url]: isOldLatticeFolder(doc) })),
-      );
-    }
+        const key = `${folder} ${url} ${type} ${name}`;
+        if (!known.has(key)) known.set(key, { url, name, type, folder });
+        all.push(known.get(key));
+        if (type !== "folder" || lookedIn(url) !== false) continue;
+        walk(url, folderDocs()[url]?.docs);
+      }
+    };
+    const root = rootFolderUrl();
+    if (root) walk(root, homeDoc()?.docs);
+    return all;
   });
+  createEffect(() => {
+    for (const link of links()) if (link.type === "folder") watchFolder(link.url);
+  });
+
+  // each doc once, where it's first linked from
+  const entries = createMemo(() => {
+    const seen = new Set();
+    return links().filter((link) => !seen.has(link.url) && seen.add(link.url));
+  });
+
+  // a folder's still being looked in, so there may be more projects to come
+  const walking = createMemo(() =>
+    entries().some((entry) => entry.type === "folder" && lookedIn(entry.url) == null),
+  );
 
   const projects = createMemo(() =>
     entries().filter(
-      (entry) => ENTRY_TYPES.includes(entry.type) || (entry.type === "folder" && looked()[entry.url]),
+      (entry) => ENTRY_TYPES.includes(entry.type) || (entry.type === "folder" && lookedIn(entry.url)),
     ),
   );
 
-  // an entry in the root folder, changed: where it points, and what it is
-  function changeEntry(url, change) {
-    homeHandle()?.change((doc) => {
-      for (const entry of doc.docs ?? []) {
-        if (String(entry?.url) !== url) continue;
-        if (change.url && String(entry.url) !== change.url) entry.url = change.url;
-        if (change.type && String(entry.type) !== change.type) entry.type = change.type;
-        if (change.name && String(entry.name) !== change.name) entry.name = change.name;
-      }
-    });
+  // the folders that link to a doc, each once
+  function foldersLinking(url) {
+    const handles = new Set();
+    for (const link of links()) {
+      if (link.url !== url) continue;
+      const handle = link.folder === rootFolderUrl() ? homeHandle() : folderHandles.get(link.folder);
+      if (handle) handles.add(handle);
+    }
+    return handles;
   }
 
-  // a project out of the root folder: it's gone from the list. the project
-  // itself is still there for anything else that links to it
+  // the links to a doc, changed, in whichever folders they're in: where
+  // they point, and what it is
+  function changeEntry(url, change) {
+    for (const handle of foldersLinking(url)) {
+      handle.change((doc) => {
+        for (const entry of doc.docs ?? []) {
+          if (String(entry?.url) !== url) continue;
+          if (change.url && String(entry.url) !== change.url) entry.url = change.url;
+          if (change.type && String(entry.type) !== change.type) entry.type = change.type;
+          if (change.name && String(entry.name) !== change.name) entry.name = change.name;
+        }
+      });
+    }
+  }
+
+  // a project out of the folders it's in: it's gone from the list. the
+  // project itself is still there for anything else that links to it
   function removeEntry(url) {
-    homeHandle()?.change((doc) => {
-      const docs = doc.docs ?? [];
-      for (let i = docs.length - 1; i >= 0; i--) {
-        if (String(docs[i]?.url) === url) docs.splice(i, 1);
-      }
-    });
+    for (const handle of foldersLinking(url)) {
+      handle.change((doc) => {
+        const docs = doc.docs ?? [];
+        for (let i = docs.length - 1; i >= 0; i--) {
+          if (String(docs[i]?.url) === url) docs.splice(i, 1);
+        }
+      });
+    }
   }
 
   function addEntry(entry) {
@@ -282,22 +351,19 @@ function Frame(props) {
   // a project the address asks for (/projects/<name>-<short>), till it's
   // found among yours
   const [wanted, setWanted] = createSignal(parsePath(location.pathname)?.short ?? null);
-  // the chosen project, while it's still in the root folder; else the first
+  // the chosen project, while it's still in a folder of yours; else the first
   const current = createMemo(() => {
     const all = projects();
     if (wanted()) {
       const asked = projectByShort(all, wanted());
       if (asked) return asked;
-      // not loaded yet, so not yet known not to be one of yours
-      if (!homeDoc()) return null;
+      // not all loaded yet, so not yet known not to be one of yours
+      if (!homeDoc() || walking()) return null;
     }
     const found = all.find((project) => project.url === chosen());
     if (found) return found;
-    // (a folder that's still being looked in might be it)
-    const looking = entries().some(
-      (entry) => entry.url === chosen() && entry.type === "folder" && looked()[entry.url] == null,
-    );
-    return looking ? null : (all[0] ?? null);
+    // (it might be in, or be, a folder that's still being looked in)
+    return chosen() != null && walking() ? null : (all[0] ?? null);
   });
   const currentUrl = createMemo(() => current()?.url ?? null);
   // the project shown changes when it does, or when it's updated
@@ -322,7 +388,7 @@ function Frame(props) {
     const now = { page: page(), url: project?.url ?? null };
     // a project the address asked for, found: it's the one chosen now. one
     // that isn't among yours, once they're in: what was chosen shows instead
-    if (wanted() && homeDoc()) {
+    if (wanted() && homeDoc() && !walking()) {
       const asked = projectByShort(projects(), wanted());
       untrack(() => {
         setWanted(null);
@@ -1050,21 +1116,14 @@ function Frame(props) {
 
   function NoProject() {
     return html`<div class="lattice-no-project" hidden=${() => page() === "settings"}>
-      <p>${() => (homeHandle() && !chosenLooking() ? "no projects yet" : "finding projects…")}</p>
-      <${Show} when=${() => homeHandle() && !chosenLooking()}>
+      <p>${() => (homeHandle() && !walking() ? "no projects yet" : "finding projects…")}</p>
+      <${Show} when=${() => homeHandle() && !walking()}>
         <button class="lattice-button" onClick=${() => newProject()}>
           ${icon("plus")} new project
         </button>
       <//>
     </div>`;
   }
-
-  // the chosen project is a folder that's still being looked in
-  const chosenLooking = createMemo(() =>
-    entries().some(
-      (entry) => entry.url === chosen() && entry.type === "folder" && looked()[entry.url] == null,
-    ),
-  );
 
   onCleanup(() => clearTimeout(noteTimer));
 
