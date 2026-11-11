@@ -10,7 +10,8 @@ built on, and Knitout JS too.
   package, so a datatype can use it in a worker.
 - `ui/`: icons, tooltips, sidebars, and the stylesheet helper. and
   `secret.js`: what's hidden till ctrl, alt and command are tapped together
-  twice, with nothing else in between (the same again hides it).
+  twice, with nothing else in between (it hides itself after a couple of
+  seconds, or the same again hides it sooner).
 - `ink.js`: following someone, you draw on their panes, they see it, and it
   fades a moment after. it's pinned to what it's drawn on: a character in a
   codemirror editor, a point in a tool's own space (a tool that says what's
