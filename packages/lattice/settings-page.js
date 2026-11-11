@@ -17,8 +17,8 @@ import { COLOURS, colourFor, MOUSE, POINTER_PATH } from "./pointer.js";
 
 const string = (value) => (value == null ? "" : String(value));
 
-// lattice's own id, as a frame tool (index.js)
-const FRAME_ID = "lattice";
+// lattice's own id, as a shell (a frame tool to patchwork, index.js)
+const SHELL_ID = "lattice";
 const isUrl = (value) => isValidAutomergeUrl(string(value));
 
 // a picture, made square (the middle of it) and small
@@ -435,24 +435,24 @@ export function SettingsPage(props) {
     </section>`;
   }
 
-  // ── the frame ──────────────────────────────────────────────────────────
+  // ── the shell ──────────────────────────────────────────────────────────
 
-  // the frames installed here, lattice among them. there's only a choice
+  // the shells installed here (frame tools), lattice among them. there's only a choice
   // when there's another: then which the site opens in is your account's
   // frameToolId (patchwork's router reads it once, so changing it reloads)
   const tools = getRegistry("patchwork:tool");
-  const readFrames = () =>
+  const readShells = () =>
     tools
       .all()
       .filter((tool) => tool.tags?.includes("frame-tool") && !tool.unlisted)
       .map((tool) => ({ id: tool.id, name: string(tool.name) || tool.id }));
-  const [frames, setFrames] = createSignal(readFrames(), {
-    equals: (a, b) => a.length === b.length && a.every((frame, i) => frame.id === b[i].id && frame.name === b[i].name),
+  const [shells, setShells] = createSignal(readShells(), {
+    equals: (a, b) => a.length === b.length && a.every((shell, i) => shell.id === b[i].id && shell.name === b[i].name),
   });
-  onCleanup(tools.on("changed", () => setFrames(readFrames())));
+  onCleanup(tools.on("changed", () => setShells(readShells())));
 
-  async function switchFrame(id) {
-    if (id === FRAME_ID) return;
+  async function switchShell(id) {
+    if (id === SHELL_ID) return;
     account.change((doc) => {
       doc.frameToolId = id;
     });
@@ -460,7 +460,7 @@ export function SettingsPage(props) {
     try {
       await repo.flush?.([account.documentId]);
     } catch (error) {
-      console.warn("[lattice] couldn't save the frame before reloading", error);
+      console.warn("[lattice] couldn't save the shell before reloading", error);
     }
     // a #frame= in the address would still say this one
     const url = new URL(location.href);
@@ -471,18 +471,17 @@ export function SettingsPage(props) {
     location.reload();
   }
 
-  function Frame() {
+  function Shell() {
     return html`<section class="lattice-settings-section">
-      <h2>frame</h2>
+      <h2>shell</h2>
       <label class="lattice-setting">
         <span class="lattice-settings-label">open in</span>
-        <select onChange=${(event) => switchFrame(event.currentTarget.value)}>
-          <${For} each=${frames}>
-            ${(frame) => html`<option value=${frame.id} selected=${frame.id === FRAME_ID}>${frame.name}</option>`}
+        <select onChange=${(event) => switchShell(event.currentTarget.value)}>
+          <${For} each=${shells}>
+            ${(shell) => html`<option value=${shell.id} selected=${shell.id === SHELL_ID}>${shell.name}</option>`}
           <//>
         </select>
       </label>
-      <p class="lattice-settings-hint">for your account, everywhere. the page reloads in it</p>
     </section>`;
   }
 
@@ -490,6 +489,6 @@ export function SettingsPage(props) {
     <h1>settings</h1>
     <${You} />
     <${Theme} />
-    <${Show} when=${() => frames().length > 1}><${Frame} /><//>
+    <${Show} when=${() => shells().length > 1}><${Shell} /><//>
   </div>`;
 }
