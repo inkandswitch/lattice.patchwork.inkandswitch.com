@@ -87,7 +87,32 @@ export function Face(props) {
     <${Show} when=${() => props.muted !== false && person() && !person().mic}>
       <span class="lattice-wm-call-muted" aria-label="muted">${icon("mic-off", 9)}</span>
     <//>
+    <${Show} when=${() => (mine() ? call.get()?.screen : person()?.screen)}>
+      <span class="lattice-wm-call-sharing" aria-label="sharing their screen" title="sharing their screen"
+        >${icon("screen", 9)}</span
+      >
+    <//>
   </span>`;
+}
+
+/** someone's screen (`props.id`), while they're sharing it: all of it */
+export function Screen(props) {
+  const video = videoOf(() => call.screen(props.id), () => null);
+  return html`<span class="lattice-wm-call-screen">${video}</span>`;
+}
+
+/**
+ * someone big (`props.id`): their screen while they're sharing it, with
+ * their face small in its corner, else their face
+ */
+function Picture(props) {
+  return html`<${Show}
+    when=${() => call.screen(props.id)}
+    fallback=${html`<${Face} id=${props.id} shape="tile" muted=${false} title=${false} />`}
+  >
+    <${Screen} id=${props.id} />
+    <span class="lattice-wm-call-them"><${Face} id=${props.id} shape="tile" muted=${false} title=${false} /></span>
+  <//>`;
 }
 
 /**
@@ -345,6 +370,7 @@ export function CallFloating(props) {
             class="lattice-wm-call-float"
             data-shape=${shape}
             data-mine=${mine ? "" : undefined}
+            data-staged=${() => (call.stage() && (mine || call.stage() === id) ? "" : undefined)}
             onDblClick=${() => setFloating(key(), { ...at(), shape: shape() === "round" ? "tile" : "round" })}
             ref=${(el) => {
               float = el;
@@ -551,9 +577,7 @@ export function CallTiles() {
 
   const Focused = () => html`<div class="lattice-wm-call-tiles" data-layout="focus">
     <button class="lattice-wm-call-focus" title="everyone again" onClick=${() => setFocus(null)}>
-      <${Show} when=${focused} keyed>
-        ${(id) => html`<${Face} id=${id} shape="tile" muted=${false} title=${false} />`}
-      <//>
+      <${Show} when=${focused} keyed>${(id) => html`<${Picture} id=${id} />`}<//>
       <span class="lattice-wm-call-focus-name">${() => name(focused())}</span>
       <span class="lattice-wm-call-focus-me"><${Face} id="me" shape="tile" title=${false} /></span>
     </button>
@@ -636,10 +660,10 @@ export function CallStage(props) {
       title="double click: the whole screen"
     >
       <${Show} when=${id} keyed>
-        ${(staged) => html`<${Face} id=${staged} shape="tile" muted=${false} title=${false} />`}
+        ${(staged) => html`<${Picture} id=${staged} />`}
       <//>
       <span class="lattice-wm-call-stage-name">
-        ${() => person()?.name}
+        ${() => (call.screen(id()) ? `${person()?.name}'s screen` : person()?.name)}
         <${Show} when=${() => person() && !person().mic}>${icon("mic-off", 12)}<//>
       </span>
       <button

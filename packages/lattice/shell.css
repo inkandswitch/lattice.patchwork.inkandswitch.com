@@ -448,6 +448,12 @@
 		&[data-off] {
 			color: var(--lattice-wm-danger);
 		}
+		/* your screen, being shared */
+		&[data-on],
+		&[data-on]:hover {
+			background: var(--lattice-shell-primary);
+			color: var(--lattice-shell-primary-line, white);
+		}
 	}
 	& .lattice-call-hang-up {
 		background: var(--lattice-wm-danger-fill);

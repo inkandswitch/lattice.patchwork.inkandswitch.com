@@ -1,12 +1,26 @@
 // the call you're in, down the bottom of the projects, above you: where it
-// is, everyone in it, and your mic, camera and hanging up. its menu says how
-// faces are shown (floating, or in the sidebar, and on cursors too or not)
-// and which mic
-// and camera. not in one, it says when there's one on in the project you're
-// in, to join
+// is, everyone in it, and your mic, camera, screen (where there's one to
+// share) and hanging up. its menu says how faces are shown (floating, or in
+// the sidebar, and on cursors too or not) and which mic and camera. not in
+// one, it says when there's one on in the project you're in, to join
 import { createMemo, createSignal, For, Show } from "solid-js";
 import html from "solid-js/html";
-import { FACES, ask, call, devices, hangUp, onCallIn, setCamera, setCursors, setDevice, setFaces, setMic } from "../wm/call/call.js";
+import {
+  FACES,
+  ask,
+  call,
+  canShare,
+  devices,
+  hangUp,
+  onCallIn,
+  setCamera,
+  setCursors,
+  setDevice,
+  setFaces,
+  setMic,
+  startScreen,
+  stopScreen,
+} from "../wm/call/call.js";
 import { DragOut, Face, StageButton, names } from "../wm/call/ui.js";
 import { shownInBar } from "../wm/call/sizes.js";
 import { icon } from "../wm/ui/icons.js";
@@ -116,6 +130,18 @@ export function CallBar(props) {
         >
           ${() => icon(call.get().camera ? "video" : "video-off", 14)}
         </button>
+        <${Show} when=${canShare}>
+          <button
+            class="lattice-call-button"
+            data-on=${() => (call.get().screen ? "" : undefined)}
+            aria-pressed=${() => String(!!call.get().screen)}
+            title=${() => (call.get().screen ? "stop sharing your screen" : "share your screen")}
+            aria-label=${() => (call.get().screen ? "stop sharing your screen" : "share your screen")}
+            onClick=${() => (call.get().screen ? stopScreen() : startScreen())}
+          >
+            ${icon("screen", 14)}
+          </button>
+        <//>
         <button class="lattice-call-button lattice-call-hang-up" title="hang up" aria-label="hang up" onClick=${hangUp}>
           ${icon("hang-up", 14)}
         </button>
