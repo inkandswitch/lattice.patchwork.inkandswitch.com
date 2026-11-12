@@ -22,6 +22,8 @@ export function stylesheet(href, root = null) {
 		const keep = document.createElement("link")
 		keep.rel = "stylesheet"
 		keep.href = href
+		// so a dev server's swap can take out an old version's (lattice/dev-swap.js)
+		keep.dataset.latticeKept = ""
 		document.head.append(keep)
 	}, {once: true})
 	link.addEventListener("error", show, {once: true})

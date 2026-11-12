@@ -24,6 +24,7 @@ import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
 import { holdSecret, secret } from "./ui/secret.js";
 import { createInk } from "./ink.js";
+import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
 import { CallPrompt, CallFloating, Face } from "./call/ui.js";
 
@@ -274,11 +275,21 @@ export function mountWorkspace(
 
   // who else is in the project (presence.js): a face each, and their panes.
   // following one, their panes show here instead (read only) until you stop:
-  // `following` is their peer id
+  // `following` is their peer id. it's kept in the tab, so it outlasts a
+  // reload, and a dev server's changes being swapped in (lattice/dev-swap.js),
+  // which mounts all this again: then they're waited for a while, since
+  // nobody's been heard yet, them included
   let room = null;
   const [people, setPeople] = createStore([]);
   const theirs = new Map();
-  const [following, setFollowing] = createSignal(null);
+  const followKept = keptFollow(roomHandle && `lattice-wm:following:${roomHandle.url}`);
+  const [following, setFollowingNow] = createSignal(followKept.initial);
+  const setFollowing = (peer) => {
+    followKept.set(peer);
+    setFollowingNow(peer);
+  };
+  // and not seen in that while: let go
+  const followGrace = followKept.initial ? setTimeout(() => readLayout(), FOLLOW_GRACE + 50) : null;
   const [theirActive, setTheirActive] = createStore({});
 
   function readLayout() {
@@ -300,7 +311,8 @@ export function mountWorkspace(
     if (soonest < Infinity) lapse = setTimeout(readLayout, soonest - now + 10);
     shareLayout(shown);
     const leader = following() && theirs.get(following());
-    if (following() && !leader) setFollowing(null);
+    if (following() && !leader && !followKept.waiting(following())) setFollowing(null);
+    if (leader) followKept.heard();
     if (leader) setTheirActive(reconcile(leader.active));
     setLayout(reconcile(Layout.read(leader ? leader.nodes : shown), { key: "id" }));
   }
@@ -2573,6 +2585,7 @@ export function mountWorkspace(
     tabChannel.close();
     frameObserver.disconnect();
     clearTimeout(lapse);
+    clearTimeout(followGrace);
     clearTimeout(sendTimer);
     offFiles();
     document.removeEventListener("dragover", onDocumentDragOver);

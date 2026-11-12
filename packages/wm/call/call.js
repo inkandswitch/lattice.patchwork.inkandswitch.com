@@ -17,6 +17,8 @@ import { createStore } from "solid-js/store";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { HELLO } from "../presence.js";
 import { faceFrom, watchFace } from "./face.js";
+import { lasting } from "../lasting.js";
+import { callToRejoin, forgetCall, keepCall, leavingCall } from "./rejoin.js";
 
 const KEY = "lattice-wm:call";
 const ICE_SERVERS = [
@@ -59,9 +61,15 @@ function writeSettings(settings) {
 }
 
 // ── the state, for anything to show ─────────────────────────────────────
+//
+// it's the page's (../lasting.js), as the session is: a dev server's changes
+// are swapped in by importing this again (lattice/dev-swap.js), and the new
+// version shows, and hangs up, the call the old one's in. what an old
+// version's set going (its listeners, its timers) carries on running its own
+// code till the call ends: changes here are for the next one
 
 const { state, setState, settings, setSettings, heard, setHeard, version, bump, asking, setAsking, current, setCurrent } =
-  createRoot(() => {
+  lasting("lattice-wm:call:state", () => createRoot(() => {
     const saved = readSettings();
     const [state, setState] = createStore({
       // the call you're in: {room, name, id, mic, camera, joining, problem}
@@ -98,14 +106,15 @@ const { state, setState, settings, setSettings, heard, setHeard, version, bump, 
       current,
       setCurrent,
     };
-  });
+  }));
 
 function saveSettings() {
   writeSettings({ faces: settings.faces, camera: settings.camera, mic: settings.mic, floating: settings.floating });
 }
 
-// the session: what isn't for showing
-let session = null;
+// the session: what isn't for showing. {session} so every version of this
+// has the same one
+const live = lasting("lattice-wm:call:session", () => ({ session: null }));
 
 // ── who you are ─────────────────────────────────────────────────────────
 
@@ -165,7 +174,7 @@ export function hearCalls(room, onArrive) {
     const message = event.message;
     if (!isObject(message) || !(KEY in message)) return;
     const from = string(message.from);
-    if (!from || from === session?.id) return;
+    if (!from || from === live.session?.id) return;
     if (message[KEY] === "bye") {
       setHeard(url, from, undefined);
       return;
@@ -208,6 +217,14 @@ export function onCallIn(url) {
 /** the project that's mounted: {room, repo, name}, while it is */
 export function inProject(project) {
   setCurrent(project);
+  // the page was reloaded in a call here: back in it, as you were
+  const back = !live.session && project?.room ? callToRejoin(project.room.url) : null;
+  if (back) {
+    forgetCall();
+    join(project, { video: back.camera }).then(() => {
+      if (!back.mic) setMic(false);
+    });
+  }
   return () => {
     if (current() === project) setCurrent(null);
   };
@@ -243,19 +260,19 @@ async function getTrack(kind) {
   }
 }
 
-const trackOf = (kind) => session?.local.getTracks().find((track) => track.kind === kind) ?? null;
+const trackOf = (kind) => live.session?.local.getTracks().find((track) => track.kind === kind) ?? null;
 
 // put `track` (or none) in as yours of its kind, everywhere it goes
 function useTrack(kind, track) {
   const old = trackOf(kind);
   if (old === track) return;
   if (old) {
-    session.local.removeTrack(old);
+    live.session.local.removeTrack(old);
     old.stop();
   }
-  if (track) session.local.addTrack(track);
+  if (track) live.session.local.addTrack(track);
   if (kind === "video") watchMine(track);
-  for (const peer of session.peers.values()) {
+  for (const peer of live.session.peers.values()) {
     for (const transceiver of peer.pc.getTransceivers()) {
       if (transceiver.receiver.track?.kind === kind && !transceiver.stopped) {
         transceiver.sender.replaceTrack(track).catch((error) => console.warn("[wm] couldn't swap a track", error));
@@ -268,12 +285,12 @@ function useTrack(kind, track) {
 // your face, in your camera's pictures (face.js), while it's on: said to
 // everyone as it moves
 function watchMine(track) {
-  session.stopFace?.();
-  session.stopFace = null;
+  live.session.stopFace?.();
+  live.session.stopFace = null;
   setState("call", "face", null);
   if (!track) return;
-  session.stopFace = watchFace(new MediaStream([track]), (face) => {
-    if (!session) return;
+  live.session.stopFace = watchFace(new MediaStream([track]), (face) => {
+    if (!live.session) return;
     setState("call", "face", face);
     send({ [KEY]: "face", face });
   });
@@ -286,7 +303,7 @@ function watchMine(track) {
  * says whether with your camera. `name` is the project's, for showing
  */
 export async function join({ room, repo, name = "" }, { video = false } = {}) {
-  if (session?.room.url === room.url) return;
+  if (live.session?.room.url === room.url) return;
   hangUp();
   const id = crypto.randomUUID();
   const now = {
@@ -300,7 +317,7 @@ export async function join({ room, repo, name = "" }, { video = false } = {}) {
     timers: [],
     dead: false,
   };
-  session = now;
+  live.session = now;
   setState({ call: { room: room.url, name, id, mic: true, camera: !!video, joining: true, problem: null }, peers: {} });
 
   // your name and face, when your contact's found: it's said again then,
@@ -328,24 +345,35 @@ export async function join({ room, repo, name = "" }, { video = false } = {}) {
   setState("call", { joining: false, camera: !!camera, mic: !!audio, problem });
   bump();
 
-  room.on("ephemeral-message", onMessage);
+  // what's set going is kept with the session, so any version of this can
+  // stop it (see the state, above)
+  now.onMessage = onMessage;
+  room.on("ephemeral-message", now.onMessage);
   sayHere();
   // whoever's been heard on it already: no waiting till they say so again
   for (const person of onCallIn(room.url)) onHere(person.id, person.peer, person);
   now.timers.push(setInterval(sayHere, HERE_EVERY));
   now.timers.push(setInterval(forgetGone, GONE_AFTER / 3));
-  addEventListener("pagehide", hangUp);
+  // the page going (a reload, say): you're back in it if it's back soon
+  now.onPageHide = () => hangUp({ rejoin: true });
+  addEventListener("pagehide", now.onPageHide);
+  rememberCall();
 }
 
-/** leave the call you're in */
-export function hangUp() {
-  const now = session;
+/**
+ * leave the call you're in. `rejoin`: it's the page going, so it's to be
+ * joined again if the page comes back soon (rejoin.js)
+ */
+export function hangUp({ rejoin = false } = {}) {
+  const now = live.session;
   if (!now) return;
   now.dead = true;
-  session = null;
-  removeEventListener("pagehide", hangUp);
+  live.session = null;
+  if (rejoin === true) leavingCall();
+  else forgetCall();
+  removeEventListener("pagehide", now.onPageHide);
   now.timers.forEach(clearInterval);
-  now.room.off("ephemeral-message", onMessage);
+  now.room.off("ephemeral-message", now.onMessage);
   try {
     now.room.broadcast({ [KEY]: "bye", from: now.id });
   } catch {}
@@ -356,51 +384,62 @@ export function hangUp() {
   bump();
 }
 
+// the call you're in, as it is now, kept in the tab for after a reload
+function rememberCall() {
+  const call = state.call;
+  if (!live.session || !call || call.joining) return;
+  keepCall({ room: call.room, camera: call.camera, mic: call.mic });
+}
+
 /** your mic, on or off */
 export function setMic(on) {
-  if (!session || state.call?.joining) return;
+  if (!live.session || state.call?.joining) return;
   const track = trackOf("audio");
   if (on && !track) {
     getTrack("audio").then((track) => {
-      if (!session || !track) return setState("call", "problem", "no mic");
+      if (!live.session || !track) return setState("call", "problem", "no mic");
       useTrack("audio", track);
       setState("call", { mic: true, problem: null });
       sayHere();
+      rememberCall();
     });
     return;
   }
   if (track) track.enabled = on;
   setState("call", "mic", on && !!track);
   sayHere();
+  rememberCall();
 }
 
 /** your camera, on or off: off, it's let go of (its light goes out) */
 export async function setCamera(on) {
-  if (!session || state.call?.joining) return;
+  if (!live.session || state.call?.joining) return;
   if (!on) {
     useTrack("video", null);
     setState("call", "camera", false);
     sayHere();
+    rememberCall();
     return;
   }
-  const now = session;
+  const now = live.session;
   const track = await getTrack("video");
-  if (session !== now) return track?.stop();
+  if (live.session !== now) return track?.stop();
   if (!track) return setState("call", "problem", "no camera");
   useTrack("video", track);
   setState("call", { camera: true, problem: null });
   sayHere();
+  rememberCall();
 }
 
 /** which mic or camera ("audio" or "video") to use: a device id, or "" for any */
 export async function setDevice(kind, device) {
   setSettings(kind === "audio" ? "mic" : "camera", string(device));
   saveSettings();
-  if (!session) return;
+  if (!live.session) return;
   if (kind === "video" && !state.call?.camera) return;
-  const now = session;
+  const now = live.session;
   const track = await getTrack(kind);
-  if (session !== now || !track) return track?.stop();
+  if (live.session !== now || !track) return track?.stop();
   if (kind === "audio") track.enabled = state.call.mic;
   useTrack(kind, track);
 }
@@ -437,15 +476,15 @@ export const call = {
   /** someone's pictures and sound (read in an effect: it says when they change) */
   stream(id) {
     version();
-    return session?.peers.get(id)?.stream ?? null;
+    return live.session?.peers.get(id)?.stream ?? null;
   },
   /** yours */
   local() {
     version();
-    return session && state.call?.camera ? session.local : null;
+    return live.session && state.call?.camera ? live.session.local : null;
   },
   /** who you are in it */
-  me: () => (session ? { ...session.who } : null),
+  me: () => (live.session ? { ...live.session.who } : null),
   settings,
   asking,
   current,
@@ -467,9 +506,9 @@ export const call = {
 // ── talking ─────────────────────────────────────────────────────────────
 
 function send(message) {
-  if (!session || session.dead) return;
+  if (!live.session || live.session.dead) return;
   try {
-    session.room.broadcast({ ...message, from: session.id });
+    live.session.room.broadcast({ ...message, from: live.session.id });
   } catch (error) {
     console.warn("[wm] couldn't say", message[KEY], error);
   }
@@ -477,27 +516,27 @@ function send(message) {
 
 // who you are, and your mic and camera: in what you say
 const about = () => ({
-  who: session.who,
+  who: live.session.who,
   mic: !!state.call?.mic,
   camera: !!state.call?.camera,
   face: state.call?.camera ? (state.call.face ?? null) : null,
 });
 
 function sayHere() {
-  if (!session || state.call?.joining) return;
+  if (!live.session || state.call?.joining) return;
   send({ [KEY]: "here", ...about() });
 }
 
 function forgetGone() {
   const now = Date.now();
-  for (const [id, peer] of session?.peers ?? []) {
+  for (const [id, peer] of live.session?.peers ?? []) {
     if (now - peer.heard > GONE_AFTER) drop(id);
   }
 }
 
 function onMessage(event) {
   const message = event.message;
-  if (!session || !isObject(message)) return;
+  if (!live.session || !isObject(message)) return;
   // someone's arriving: say you're here, so they know there's a call on
   if (message[HELLO]) {
     setTimeout(sayHere, Math.random() * 200);
@@ -507,8 +546,8 @@ function onMessage(event) {
   // the tab they're in, as presence knows it
   const peer = string(event.senderId);
   const from = string(message.from);
-  if (!from || from === session.id) return;
-  if (message.to && message.to !== session.id) return;
+  if (!from || from === live.session.id) return;
+  if (message.to && message.to !== live.session.id) return;
   switch (message[KEY]) {
     case "here":
       return onHere(from, peer, message);
@@ -533,25 +572,25 @@ function onMessage(event) {
 
 // ── connections ─────────────────────────────────────────────────────────
 
-const offers = (theirs) => session.id > theirs;
+const offers = (theirs) => live.session.id > theirs;
 
 function showPeer(id, fields) {
-  if (!session?.peers.has(id)) return;
+  if (!live.session?.peers.has(id)) return;
   setState("peers", id, (had) => ({ ...(had ?? { id }), ...fields }));
 }
 
 function onHere(from, tab, message) {
   const who = whoFrom(message.who);
   if (!who) return;
-  let peer = session.peers.get(from);
+  let peer = live.session.peers.get(from);
   if (!peer && offers(from)) peer = connect(from, crypto.randomUUID());
   if (peer) {
     peer.heard = Date.now();
     showPeer(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
   } else {
     // they'll offer: until they do, they're on the call, connecting
-    session.waiting ??= new Map();
-    session.waiting.set(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
+    live.session.waiting ??= new Map();
+    live.session.waiting.set(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
   }
 }
 
@@ -565,9 +604,9 @@ function connect(id, conn) {
   audio.autoplay = true;
   audio.srcObject = stream;
   const peer = { id, conn, pc, stream, audio, heard: Date.now(), interrupted: null };
-  session.peers.set(id, peer);
-  setState("peers", id, { id, connection: "connecting", ...(session.waiting?.get(id) ?? {}) });
-  session.waiting?.delete(id);
+  live.session.peers.set(id, peer);
+  setState("peers", id, { id, connection: "connecting", ...(live.session.waiting?.get(id) ?? {}) });
+  live.session.waiting?.delete(id);
 
   pc.ontrack = (event) => {
     if (!stream.getTrackById(event.track.id)) stream.addTrack(event.track);
@@ -610,18 +649,18 @@ function connect(id, conn) {
 // a connection that's failed: let it go, and start again (the one who
 // offers does that on hearing them next; the other asks them to)
 function lost(id) {
-  const peer = session?.peers.get(id);
+  const peer = live.session?.peers.get(id);
   if (!peer) return;
   const offering = offers(id);
   drop(id);
   if (!offering) send({ [KEY]: "again", to: id, ...about() });
 }
 
-function drop(id, from = session) {
+function drop(id, from = live.session) {
   const peer = from?.peers.get(id);
   from?.pendingIce.delete(id);
   if (!peer) {
-    if (from === session) setState("peers", id, undefined);
+    if (from === live.session) setState("peers", id, undefined);
     return;
   }
   from.peers.delete(id);
@@ -630,7 +669,7 @@ function drop(id, from = session) {
     peer.pc.close();
   } catch {}
   peer.audio.srcObject = null;
-  if (from === session) {
+  if (from === live.session) {
     setState("peers", id, undefined);
     bump();
   }
@@ -638,7 +677,7 @@ function drop(id, from = session) {
 
 async function onOffer(from, { conn, sdp }) {
   if (offers(from) || !isObject(sdp) || sdp.type !== "offer" || typeof sdp.sdp !== "string") return;
-  let peer = session.peers.get(from);
+  let peer = live.session.peers.get(from);
   if (!peer || peer.conn !== conn) peer = connect(from, string(conn));
   const { pc } = peer;
   try {
@@ -658,7 +697,7 @@ async function onOffer(from, { conn, sdp }) {
 }
 
 async function onAnswer(from, { conn, sdp }) {
-  const peer = session.peers.get(from);
+  const peer = live.session.peers.get(from);
   if (!peer || peer.conn !== conn || !isObject(sdp) || sdp.type !== "answer") return;
   if (peer.pc.signalingState !== "have-local-offer") return;
   try {
@@ -672,11 +711,11 @@ async function onAnswer(from, { conn, sdp }) {
 // candidates can come before what they're for: kept till it's in
 async function onIce(from, { conn, candidate }) {
   if (!isObject(candidate)) return;
-  const peer = session.peers.get(from);
+  const peer = live.session.peers.get(from);
   if (!peer || peer.conn !== conn || !peer.pc.remoteDescription) {
-    const pending = session.pendingIce.get(from) ?? [];
+    const pending = live.session.pendingIce.get(from) ?? [];
     pending.push({ conn, candidate });
-    session.pendingIce.set(from, pending.slice(-50));
+    live.session.pendingIce.set(from, pending.slice(-50));
     return;
   }
   try {
@@ -687,8 +726,8 @@ async function onIce(from, { conn, candidate }) {
 }
 
 async function addPendingIce(peer) {
-  const pending = session?.pendingIce.get(peer.id) ?? [];
-  session?.pendingIce.set(
+  const pending = live.session?.pendingIce.get(peer.id) ?? [];
+  live.session?.pendingIce.set(
     peer.id,
     pending.filter((ice) => ice.conn !== peer.conn),
   );

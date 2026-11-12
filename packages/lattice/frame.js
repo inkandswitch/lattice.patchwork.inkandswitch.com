@@ -31,6 +31,7 @@ import { useToolStorage } from "./storage.js";
 import { CallBar } from "./call-bar.js";
 import { call } from "../wm/call/call.js";
 import { CallTiles } from "../wm/call/ui.js";
+import { swapOnChange } from "./dev-swap.js";
 
 // wm's, too, for its menus, before any project has brought it; knitout.js's
 // look, which lattice wears; and the fonts lattice brings
@@ -53,29 +54,13 @@ function devFrame() {
 }
 const DEV_FRAME = devFrame();
 
-// a dev frame has no vite client in this page to reload it when it changes,
-// so it asks the dev server, which answers when it has (see vite/frame.ts)
-async function reloadOnChange() {
-  const changes = new URL("__changes", import.meta.url);
-  let seen = null;
-  let wait = 2000;
-  for (;;) {
-    try {
-      if (seen != null) changes.searchParams.set("since", seen);
-      const { version } = await (await fetch(changes, { cache: "no-store" })).json();
-      if (seen != null && version !== seen) return location.reload();
-      seen = version;
-      wait = 2000;
-    } catch {
-      // the dev server's away (a stopped tunnel answers with cloudflare's own
-      // error page, which the browser reports as a cors error): ask less and
-      // less often. if it comes back with a new version, the page reloads
-      await new Promise((resolve) => setTimeout(resolve, wait));
-      wait = Math.min(wait * 2, 60_000);
-    }
-  }
-}
-if (DEV_FRAME) reloadOnChange();
+// the dev server this frame's from, if it's from one: another site's, by
+// ?dev=, or this page's own, which says so (vite/frame.ts). its changes are
+// swapped in as it makes them, without a reload (dev-swap.js)
+const DEV_SERVER =
+  DEV_FRAME ??
+  (FRAME_ORIGIN === location.origin && document.querySelector('meta[name="lattice-dev-server"]') ? FRAME_ORIGIN : null);
+if (DEV_SERVER) swapOnChange(DEV_SERVER);
 
 // a sidebar toggle's icon: a window with a column filled, `at` from its left
 function sidebarIcon(at) {
