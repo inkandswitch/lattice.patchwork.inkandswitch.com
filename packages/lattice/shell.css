@@ -601,6 +601,38 @@
 		}
 	}
 
+	/* copying your key: its two words share one cell, so it's as wide as
+	   "copy account key" whichever it's saying */
+	& .lattice-copy-key {
+		display: inline-flex;
+		align-items: center;
+		gap: calc(6 * var(--lattice-px, 1px));
+	}
+	& .lattice-copy-key-says {
+		display: inline-grid;
+
+		& > span {
+			grid-area: 1 / 1;
+		}
+		& > [aria-hidden="true"] {
+			visibility: hidden;
+		}
+	}
+
+	/* logging in: a key, pasted (hidden, unless you ask) */
+	& .lattice-log-in-key {
+		display: flex;
+		flex: 1;
+		min-width: calc(160 * var(--lattice-px, 1px));
+		gap: calc(6 * var(--lattice-px, 1px));
+
+		& input {
+			flex: 1;
+			min-width: 0;
+			font-family: var(--lattice-path-family);
+		}
+	}
+
 	/* your own packages (secret): one by its url, and those you have */
 	& .lattice-package-add {
 		display: flex;

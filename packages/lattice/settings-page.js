@@ -5,7 +5,7 @@
 // the same name: you're only changing it
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import html from "solid-js/html";
-import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
+import { isValidAutomergeUrl, parseAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { getRegistry } from "@inkandswitch/patchwork-plugins";
 import { useDocument } from "./vendor/solid-automerge.js";
 import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
@@ -22,6 +22,36 @@ const string = (value) => (value == null ? "" : String(value));
 // lattice's own id, as a shell (a frame tool to patchwork, index.js)
 const SHELL_ID = "lattice";
 const isUrl = (value) => isValidAutomergeUrl(string(value));
+
+// where the bootloader keeps which account this computer's on (src/main.ts's
+// accountKey): an automerge url. changing it and reloading is logging in
+const ACCOUNT_KEY = "tinyPatchworkAccountUrl";
+
+// an account's key, the way patchwork's account picker writes them: your
+// name's only there for people, it's the doc id that's the account
+function accountKeyOf(url, name) {
+  const { documentId } = parseAutomergeUrl(url);
+  return `account:${encodeURIComponent(name)}/${documentId}`;
+}
+// an account key (or an account's automerge url) as the account's url
+function accountUrlOf(text) {
+  const key = text.trim().match(/^account:[^/]*\/(.+)$/)?.[1];
+  if (key) return isUrl(`automerge:${key}`) ? `automerge:${key}` : null;
+  return urlFromText(text);
+}
+
+// off to another account (or, with none, a new one): what's changed here
+// is kept first, then the site starts again, at the top
+async function becomeAccount(repo, url) {
+  try {
+    await repo.flush?.();
+  } catch (error) {
+    console.warn("[lattice] couldn't save everything before changing account", error);
+  }
+  if (url) localStorage.setItem(ACCOUNT_KEY, url);
+  else localStorage.removeItem(ACCOUNT_KEY);
+  location.replace("/");
+}
 
 // a picture, made square (the middle of it) and small
 const PICTURE = 256;
@@ -267,6 +297,164 @@ export function SettingsPage(props) {
             </button>`}
           <//>
         </span>
+      </div>
+    </section>`;
+  }
+
+  // ── your account ───────────────────────────────────────────────────────
+
+  // your key's how you're you on another computer: copied here, pasted in
+  // there. pasting someone's (your own, from elsewhere) is logging in as
+  // them; signing out leaves this account, for a new one, so it asks first
+  // (and offers the key, since without it there's no coming back)
+  function Account() {
+    const [copied, setCopied] = createSignal(false);
+    let copiedTimer;
+    onCleanup(() => clearTimeout(copiedTimer));
+    async function copyKey() {
+      try {
+        await navigator.clipboard.writeText(accountKeyOf(account.url, string(me()?.name)));
+        setCopied(true);
+        clearTimeout(copiedTimer);
+        copiedTimer = setTimeout(() => setCopied(false), 1200);
+      } catch (error) {
+        console.error("[lattice] couldn't copy your account key", error);
+      }
+    }
+    // both its words are always there, one hidden, so it's as wide as the
+    // longer and what's beside it doesn't move when it says copied
+    const CopyKey = () => html`<button class="lattice-button lattice-copy-key" data-copied=${() => (copied() ? "" : undefined)} onClick=${copyKey}>
+      ${() => icon(copied() ? "check" : "copy", 12)}
+      <span class="lattice-copy-key-says">
+        <span aria-hidden=${() => String(copied())}>copy account key</span>
+        <span aria-hidden=${() => String(!copied())}>copied</span>
+      </span>
+    </button>`;
+
+    // the account a pasted key's for, once it's been found: {url, name}
+    const [key, setKey] = createSignal("");
+    const [showKey, setShowKey] = createSignal(false);
+    const [found, setFound] = createSignal(null);
+    const [looking, setLooking] = createSignal(null);
+    let lookup = 0;
+    async function lookFor(text) {
+      const ask = ++lookup;
+      setKey(text);
+      setFound(null);
+      if (!text.trim()) return setLooking(null);
+      const url = accountUrlOf(text);
+      // a key that doesn't read yet might still be being typed: it's only
+      // wrong once you've stopped for a moment (a paste's checked at once)
+      if (!url) {
+        setLooking(null);
+        setTimeout(() => ask === lookup && setLooking("that isn't an account key"), 600);
+        return;
+      }
+      if (url === account.url) return setLooking("that's this account already");
+      setLooking("finding it…");
+      const them = await findSoon(repo, url, 8000);
+      const contact = isUrl(them?.contactUrl) ? await findSoon(repo, string(them.contactUrl), 8000) : undefined;
+      if (ask !== lookup) return;
+      if (!them) return setLooking("couldn't find that account: check the key, or open lattice on the computer it's from so it syncs");
+      if (!isUrl(them.contactUrl) && !isUrl(them.rootFolderUrl)) return setLooking("that's a doc, but not an account");
+      setLooking(null);
+      setFound({ url, name: string(contact?.name).trim() });
+    }
+
+    // logging in's only there once you ask for it; closing it forgets the key
+    const [loggingIn, setLoggingIn] = createSignal(false);
+    let logInButton;
+    function closeLogIn() {
+      lookup++;
+      setKey("");
+      setFound(null);
+      setLooking(null);
+      setShowKey(false);
+      setLoggingIn(false);
+      queueMicrotask(() => logInButton?.focus());
+    }
+
+    // logging in or signing out saves first, which can take a moment: say
+    // so, and don't let it be pressed twice
+    const [going, setGoing] = createSignal(null);
+    function go(url, doing) {
+      if (going()) return;
+      setGoing(doing);
+      becomeAccount(repo, url);
+    }
+
+    const [leaving, setLeaving] = createSignal(false);
+    let signOutButton;
+    const stay = () => {
+      setLeaving(false);
+      queueMicrotask(() => signOutButton?.focus());
+    };
+
+    return html`<section class="lattice-settings-section">
+      <h2>account</h2>
+      <div class="lattice-setting">
+        <${CopyKey} />
+        <${Show} when=${() => !loggingIn()}>
+          <button class="lattice-button" ref=${(el) => (logInButton = el)} onClick=${() => setLoggingIn(true)}>
+            log in with an account key
+          </button>
+        <//>
+      </div>
+      <p class="lattice-settings-hint">
+        to be you on another computer, copy your account key, then paste it into “log in with an account key” there
+      </p>
+      <${Show} when=${loggingIn}>
+        <form
+          class="lattice-setting lattice-log-in"
+          onKeyDown=${(event) => event.key === "Escape" && !going() && closeLogIn()}
+          onSubmit=${(event) => {
+            event.preventDefault();
+            if (found()) go(found().url, "logging in…");
+          }}
+        >
+          <span class="lattice-log-in-key">
+            <input
+              type=${() => (showKey() ? "text" : "password")}
+              value=${key}
+              placeholder="account:…"
+              aria-label="an account key"
+              autocomplete="off"
+              spellcheck="false"
+              disabled=${() => !!going()}
+              ref=${(el) => queueMicrotask(() => el.focus())}
+              onInput=${(event) => lookFor(event.currentTarget.value)}
+            />
+            <button type="button" class="lattice-button" onClick=${() => setShowKey((shown) => !shown)}>
+              ${() => (showKey() ? "hide" : "show")}
+            </button>
+          </span>
+          <button class="lattice-button" disabled=${() => !found() || !!going()}>
+            ${() => going() ?? (found()?.name ? `log in as ${found().name}` : "log in")}
+          </button>
+          <button type="button" class="lattice-button" disabled=${() => !!going()} onClick=${closeLogIn}>cancel</button>
+        </form>
+        <${Show} when=${looking}>
+          <p class="lattice-settings-hint" role="status" data-problem=${() => (looking() === "finding it…" ? undefined : "")}>
+            ${looking}
+          </p>
+        <//>
+      <//>
+      <div class="lattice-theme-reset" onKeyDown=${(event) => event.key === "Escape" && leaving() && !going() && stay()}>
+        <${Show}
+          when=${leaving}
+          fallback=${html`<button class="lattice-reset" ref=${(el) => (signOutButton = el)} onClick=${() => setLeaving(true)}>
+            sign out
+          </button>`}
+        >
+          <span class="lattice-reset-ask" role="status">sign out? without your account key, there's no coming back to this account</span>
+          <${CopyKey} />
+          <button class="lattice-button" disabled=${() => !!going()} ref=${(el) => queueMicrotask(() => el.focus())} onClick=${stay}>
+            stay
+          </button>
+          <button class="lattice-button lattice-button-danger" disabled=${() => !!going()} onClick=${() => go(null, "signing out…")}>
+            ${() => going() ?? "sign out"}
+          </button>
+        <//>
       </div>
     </section>`;
   }
@@ -641,6 +829,7 @@ export function SettingsPage(props) {
   return html`<div class="lattice-settings">
     <h1>settings</h1>
     <${You} />
+    <${Account} />
     <${Theme} />
     <${Show} when=${() => shells().length > 1}><${Shell} /><//>
     <${Show} when=${secret}><${Packages} /><//>
