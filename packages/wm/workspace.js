@@ -312,6 +312,32 @@ export function mountWorkspace(
   // while the panes, tabs and scrolling still follow along
   const [followMode, setFollowMode] = createSignal("draw");
   const drawing = () => !!following() && followMode() === "draw";
+  // the contact of whoever you follow, to know them by when their peer id
+  // changes (refollow, below)
+  let followingContact = null;
+  // whoever you follow, as last heard. gone (reloading, say), they're kept
+  // a while as they were, for them to come back as another peer; till then
+  // it's their panes as they last were you see, not yours
+  let lastLeader = null;
+  let leaderLostAt = 0;
+  let leaderGrace = null;
+  function leaderNow() {
+    const peer = following();
+    if (!peer) return null;
+    const leader = theirs.get(peer);
+    if (leader) {
+      lastLeader = leader;
+      leaderLostAt = 0;
+      return leader;
+    }
+    if (lastLeader?.peer !== peer || !followingContact) return null;
+    if (!leaderLostAt) {
+      leaderLostAt = Date.now();
+      clearTimeout(leaderGrace);
+      leaderGrace = setTimeout(() => readLayout(), FOLLOW_GRACE + 50);
+    }
+    return Date.now() - leaderLostAt < FOLLOW_GRACE ? lastLeader : null;
+  }
   const setFollowing = (peer) => {
     followKept.set(peer);
     setFollowingNow(peer);
@@ -338,7 +364,7 @@ export function mountWorkspace(
     clearTimeout(lapse);
     if (soonest < Infinity) lapse = setTimeout(readLayout, soonest - now + 10);
     shareLayout(shown);
-    const leader = following() && theirs.get(following());
+    const leader = leaderNow();
     if (following() && !leader && !followKept.waiting(following())) setFollowing(null);
     if (leader) followKept.heard();
     if (leader) setTheirActive(reconcile(leader.active));
@@ -392,6 +418,7 @@ export function mountWorkspace(
           { key: "peer" },
         ),
       );
+      refollow(list);
       // whoever you follow starting to follow someone else: you stop. you'd
       // only be seeing their copy of someone else's panes, and two people
       // following each other would see nothing of their own
@@ -510,7 +537,7 @@ export function mountWorkspace(
   // doc in the same tool, and else a view of nothing yet. not following:
   // yours, and back where you'd scrolled
   function showTheirViews() {
-    const leader = following() && theirs.get(following());
+    const leader = leaderNow();
     for (const [id, host] of hosts) {
       const view = leader?.views[id];
       const here = view && view.url === host.url && view.tool === host.tool ? view : null;
@@ -572,8 +599,29 @@ export function mountWorkspace(
         )
       : [];
 
+  // it's a person that's followed, not one page of theirs: reloading, or a
+  // dev server's changes being swapped in, gives them a new peer id. when the
+  // one followed goes and they're back as another (the same contact), it's
+  // that one that's followed. else you'd be left on their panes as they
+  // were, or on yours, and none of their tabs would come
+  function refollow(list) {
+    const peer = following();
+    if (!peer) {
+      followingContact = null;
+      return;
+    }
+    const leader = theirs.get(peer);
+    if (leader) {
+      followingContact = leader.contact || followingContact;
+      return;
+    }
+    const again = followingContact && list.find((person) => person.contact === followingContact);
+    if (again) setFollowing(again.peer);
+  }
+
   // someone's panes instead of yours, or yours again (`peer` again, or none)
   function follow(peer) {
+    followingContact = (peer && theirs.get(peer)?.contact) || null;
     setFollowing(peer && following() !== peer ? peer : null);
     readLayout();
     showTheirViews();
@@ -2720,6 +2768,7 @@ export function mountWorkspace(
     frameObserver.disconnect();
     clearTimeout(lapse);
     clearTimeout(followGrace);
+    clearTimeout(leaderGrace);
     clearTimeout(sendTimer);
     offFiles();
     document.removeEventListener("dragover", onDocumentDragOver);

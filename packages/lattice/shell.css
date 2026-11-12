@@ -484,6 +484,11 @@
 		color: var(--lattice-wm-danger);
 		font-size: 11px;
 	}
+	& .lattice-call-note {
+		margin: 0;
+		color: var(--lattice-muted);
+		font-size: 11px;
+	}
 
 	/* base's contact-avatar, at whatever size its view is: it's 2rem, with its
 	   border outside that, and sits on the line, unless it's told otherwise */
@@ -569,6 +574,48 @@
 		color: var(--lattice-muted);
 		font-size: 12px;
 		font-style: italic;
+
+		&[data-problem] {
+			color: var(--lattice-shell-danger-text);
+			font-style: normal;
+		}
+	}
+
+	/* your own packages (secret): one by its url, and those you have */
+	& .lattice-package-add {
+		display: flex;
+		gap: 8px;
+
+		& input {
+			flex: 1;
+			min-width: 0;
+			font-family: var(--lattice-path-family);
+		}
+	}
+	& .lattice-package-list {
+		display: grid;
+		gap: 4px;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	& .lattice-package {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		min-height: 28px;
+
+		& .lattice-package-name {
+			flex: 1;
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		& .lattice-package-url {
+			color: var(--lattice-muted);
+			font: 12px var(--lattice-path-family);
+		}
 	}
 
 	/* you: your picture, where the labels are, and your name beside it, as

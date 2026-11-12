@@ -8,8 +8,10 @@ import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { getRegistry } from "@inkandswitch/patchwork-plugins";
 import { useDocument } from "./vendor/solid-automerge.js";
-import { createDoc } from "../wm/patchwork/docs.js";
+import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
+import { shortUrl } from "../wm/doc/files.js";
 import { icon } from "../wm/ui/icons.js";
+import { holdSecret, secret } from "../wm/ui/secret.js";
 import { themeValue } from "./themes.js";
 import { ThemePreview } from "./theme-preview.js";
 import { fonts, firstFamily } from "./fonts.js";
@@ -482,10 +484,138 @@ export function SettingsPage(props) {
     </section>`;
   }
 
+  // ── packages (secret: ctrl, alt and command, tapped together twice) ─────
+
+  // your own packages, beside the site's: pushworked ones, by their
+  // automerge urls. they're your account's module settings (its
+  // moduleSettingsUrl, made the first time), which patchwork follows live:
+  // one added loads now, and again whenever it's pushed to; one taken away
+  // goes
+  const settingsUrl = () => (isUrl(accountDoc.moduleSettingsUrl) ? string(accountDoc.moduleSettingsUrl) : undefined);
+  const [moduleSettings, moduleSettingsHandle] = useDocument(settingsUrl, { repo });
+  const installed = () => (Array.isArray(moduleSettings()?.modules) ? moduleSettings().modules.map(string) : []);
+
+  let makingSettings = null;
+  async function mySettings() {
+    const url = settingsUrl();
+    if (url) return moduleSettingsHandle() ?? repo.find(url);
+    makingSettings ??= createDoc(repo, { "@patchwork": { type: "patchwork:module-settings" }, modules: [] }, hive).then(
+      (handle) => {
+        account.change((doc) => {
+          doc.moduleSettingsUrl = handle.url;
+        });
+        return handle;
+      },
+    );
+    return makingSettings;
+  }
+
+  // a package's name: its package.json's, else its title. pushwork makes a
+  // package a directory (paths → urls: "package.json": "automerge:…") or,
+  // the older way, a folder ({docs: [{name, url}]})
+  async function packageName(url) {
+    const root = await findSoon(repo, url, 8000);
+    const linked = Array.isArray(root?.docs)
+      ? root.docs.find((link) => link?.name === "package.json")?.url
+      : root?.["package.json"];
+    if (linked && string(linked).startsWith("automerge:")) {
+      try {
+        const content = (await findSoon(repo, string(linked), 8000))?.content;
+        const text = content instanceof Uint8Array ? new TextDecoder().decode(content) : string(content);
+        const name = JSON.parse(text).name;
+        if (name) return string(name);
+      } catch {}
+    }
+    return string(root?.["@patchwork"]?.title || root?.title || root?.name);
+  }
+
+  const [installing, setInstalling] = createSignal(null);
+  const [installProblem, setInstallProblem] = createSignal(null);
+  async function install(event) {
+    event.preventDefault();
+    const input = event.currentTarget.elements.url;
+    const url = urlFromText(input.value);
+    setInstallProblem(null);
+    if (!url) return setInstallProblem("that isn't an automerge url");
+    if (installed().includes(url)) return setInstallProblem("that's installed already");
+    setInstalling("finding it…");
+    const found = await findSoon(repo, url);
+    // the box was off while it looked: back in it, so the secret stays out
+    // (it goes once nothing's holding it) and what's installed shows
+    const done = (problem) => {
+      setInstalling(null);
+      setInstallProblem(problem);
+      input.focus();
+    };
+    if (!found) return done("couldn't find that doc (has it been pushed?)");
+    const handle = await mySettings();
+    handle.change((doc) => {
+      if (!Array.isArray(doc.modules)) doc.modules = [];
+      if (!doc.modules.includes(url)) doc.modules.push(url);
+    });
+    input.value = "";
+    done(null);
+  }
+
+  async function uninstall(url) {
+    (await mySettings()).change((doc) => {
+      const at = Array.isArray(doc.modules) ? doc.modules.indexOf(url) : -1;
+      if (at >= 0) doc.modules.splice(at, 1);
+    });
+  }
+
+  function InstalledPackage(props) {
+    const [name, setName] = createSignal("");
+    packageName(props.url).then(setName);
+    return html`<li class="lattice-package">
+      <span class="lattice-package-name">${() => name() || shortUrl(props.url)}</span>
+      <code class="lattice-package-url" title=${props.url}>${shortUrl(props.url)}</code>
+      <button
+        class="lattice-button"
+        title="uninstall it"
+        aria-label=${() => `uninstall ${name() || props.url}`}
+        onClick=${() => uninstall(props.url)}
+      >
+        ${icon("close", 9)}
+      </button>
+    </li>`;
+  }
+
+  function Packages() {
+    return html`<section class="lattice-settings-section lattice-settings-packages" ref=${holdSecret}>
+      <h2>packages</h2>
+      <p class="lattice-settings-hint">
+        a pushworked package, by its automerge url: it loads now, and again whenever it's pushed to
+      </p>
+      <form class="lattice-package-add" onSubmit=${install}>
+        <input
+          name="url"
+          placeholder="automerge:…"
+          aria-label="a package's automerge url"
+          autocomplete="off"
+          disabled=${() => !!installing()}
+          onInput=${() => setInstallProblem(null)}
+        />
+        <button class="lattice-button" disabled=${() => !!installing()}>install</button>
+      </form>
+      <${Show} when=${() => installing() || installProblem()}>
+        <p class="lattice-settings-hint" data-problem=${() => (installProblem() ? "" : undefined)}>
+          ${() => installProblem() ?? installing()}
+        </p>
+      <//>
+      <${Show} when=${() => installed().length}>
+        <ul class="lattice-package-list">
+          <${For} each=${installed}>${(url) => html`<${InstalledPackage} url=${url} />`}<//>
+        </ul>
+      <//>
+    </section>`;
+  }
+
   return html`<div class="lattice-settings">
     <h1>settings</h1>
     <${You} />
     <${Theme} />
     <${Show} when=${() => shells().length > 1}><${Shell} /><//>
+    <${Show} when=${secret}><${Packages} /><//>
   </div>`;
 }

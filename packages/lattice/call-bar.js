@@ -18,9 +18,11 @@ import {
   setDevice,
   setFaces,
   setMic,
+  setNoise,
   startScreen,
   stopScreen,
 } from "../wm/call/call.js";
+import { download, DOWNLOAD_BYTES, NOISE } from "../wm/call/noise.js";
 import { DragOut, Face, StageButton, names } from "../wm/call/ui.js";
 import { shownInBar } from "../wm/call/sizes.js";
 import { icon } from "../wm/ui/icons.js";
@@ -53,7 +55,7 @@ export function CallBar(props) {
         menu.hidePopover();
       }}
     >
-      ${props.label}
+      ${() => props.label}
     </button>`;
   }
 
@@ -150,6 +152,14 @@ export function CallBar(props) {
     <${Show} when=${() => call.get().problem}>
       <p class="lattice-call-problem">${() => call.get().problem}</p>
     <//>
+    <${Show} when=${() => call.settings.noise === "deepfilternet" && download().state === "loading"}>
+      <p class="lattice-call-note">
+        getting DeepFilterNet ${() => Math.floor((download().got / download().total) * 100)}% · the browser's till then
+      </p>
+    <//>
+    <${Show} when=${() => call.settings.noise === "deepfilternet" && download().state === "failed"}>
+      <p class="lattice-call-problem">couldn't get DeepFilterNet (${() => download().problem}): the browser's for now</p>
+    <//>
     <div class="lattice-wm-menu lattice-call-menu" popover="auto" role="menu" ref=${(el) => (menu = el)}>
       <div class="lattice-wm-menu-heading">faces</div>
       <${For} each=${FACES}>
@@ -172,9 +182,29 @@ export function CallBar(props) {
         on cursors too
       </button>
       <${Devices} kind="audio" />
+      <div class="lattice-wm-menu-heading">noise</div>
+      <${For} each=${NOISE}>
+        ${([id, label]) =>
+          html`<${Choice}
+            label=${() => (id === "deepfilternet" ? `${label} ${deepFilterNote()}` : label)}
+            checked=${() => call.settings.noise === id}
+            choose=${(event) => setNoise(id)}
+          />`}
+      <//>
       <${Devices} kind="video" />
     </div>
   </div>`;
+
+  // DeepFilterNet's download, in its line of the menu and under the call
+  // while it's going: what it is till it's here, how far it's got, or why not
+  const megabytes = (bytes) => `${Math.round(bytes / 1024 / 1024)}MB`;
+  function deepFilterNote() {
+    const { state, got, total } = download();
+    if (state === "loading") return `· downloading ${Math.floor((got / total) * 100)}%`;
+    if (state === "failed") return "· couldn't download it";
+    if (state === "ready") return "";
+    return `· AI, ${megabytes(DOWNLOAD_BYTES)} once`;
+  }
 
   // a call on where you are, that you're not in
   const On = () => html`<div class="lattice-call" data-on="">

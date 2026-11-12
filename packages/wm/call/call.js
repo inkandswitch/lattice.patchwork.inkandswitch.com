@@ -21,6 +21,7 @@ import { faceFrom, watchFace } from "./face.js";
 import { lasting } from "../lasting.js";
 import { callToRejoin, forgetCall, keepCall, leavingCall } from "./rejoin.js";
 import { listen } from "./speaking.js";
+import { haveModel, isNoise, loadModel, suppressed } from "./noise.js";
 import { videoFor } from "./sizes.js";
 
 const KEY = "lattice-wm:call";
@@ -97,6 +98,8 @@ const { state, setState, settings, setSettings, heard, setHeard, version, bump, 
       cursors: typeof saved.cursors === "boolean" ? saved.cursors : saved.faces === "cursors",
       camera: string(saved.camera),
       mic: string(saved.mic),
+      // what's done about the noise round your voice (noise.js)
+      noise: isNoise(saved.noise) ? saved.noise : "browser",
       floating: isObject(saved.floating) ? saved.floating : {},
     });
     // who's heard to be on a call, in each room heard: {[room]: {[id]: {who, at}}}
@@ -129,6 +132,7 @@ function saveSettings() {
     cursors: call.cursors(),
     camera: settings.camera,
     mic: settings.mic,
+    noise: settings.noise,
     floating: settings.floating,
   });
 }
@@ -273,23 +277,89 @@ export function ask(project = current(), { at = null, focus = false } = {}) {
 
 // ── media ───────────────────────────────────────────────────────────────
 
-const constraint = (device) => (device ? { deviceId: { exact: device } } : true);
+// the mic's processing, said outright rather than left to the browser:
+// echo cancelling and levelling always, its noise suppression only when
+// it's what's chosen (DeepFilterNet wants the mic as it is)
+const constraint = (kind, device, noiseSuppression) => {
+  const picked = device ? { deviceId: { exact: device } } : {};
+  if (kind !== "audio") return device ? picked : true;
+  return { ...picked, echoCancellation: true, autoGainControl: true, noiseSuppression };
+};
 
-async function getTrack(kind) {
+async function getTrack(kind, { noiseSuppression = true } = {}) {
   const device = kind === "audio" ? settings.mic : settings.camera;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ [kind]: constraint(device) });
+    const stream = await navigator.mediaDevices.getUserMedia({ [kind]: constraint(kind, device, noiseSuppression) });
     return stream.getTracks()[0] ?? null;
   } catch (error) {
     // the one picked isn't there any more: any will do
     if (device && error?.name === "OverconstrainedError") {
       try {
-        return (await navigator.mediaDevices.getUserMedia({ [kind]: true })).getTracks()[0] ?? null;
+        const any = constraint(kind, "", noiseSuppression);
+        return (await navigator.mediaDevices.getUserMedia({ [kind]: any })).getTracks()[0] ?? null;
       } catch {}
     }
     console.warn(`[wm] no ${kind}`, error);
     return null;
   }
+}
+
+// your mic, the noise round it dealt with as settings.noise says. with
+// DeepFilterNet not downloaded yet, it's the browser's suppression till it
+// is: it's downloaded meanwhile, and then the mic's taken again (refreshMic)
+async function getAudio() {
+  const mode = settings.noise;
+  if (mode !== "deepfilternet") return getTrack("audio", { noiseSuppression: mode === "browser" });
+  if (!(await haveModel())) {
+    loadModel().then(
+      () => settings.noise === "deepfilternet" && refreshMic(),
+      (error) => console.warn("[wm] couldn't get DeepFilterNet", error),
+    );
+    return getTrack("audio", { noiseSuppression: true });
+  }
+  const raw = await getTrack("audio", { noiseSuppression: false });
+  if (!raw) return null;
+  try {
+    return await suppressed(raw, {
+      // this computer can't keep up: the browser's, then
+      onOverload: () => {
+        if (!live.session) return;
+        setState("call", "problem", "DeepFilterNet's too much for this computer: using the browser's");
+        setNoise("browser");
+      },
+    });
+  } catch (error) {
+    console.warn("[wm] couldn't start DeepFilterNet", error);
+    raw.stop();
+    if (live.session) setState("call", "problem", "couldn't start DeepFilterNet: using the browser's");
+    return getTrack("audio", { noiseSuppression: true });
+  }
+}
+
+// your mic taken again (a different one, or dealt with differently), in
+// place of the one you had, muted or not as that was
+async function refreshMic() {
+  const now = live.session;
+  if (!now || state.call?.joining) return;
+  // the old one goes first: chrome gives a second track on a mic the first
+  // one's processing, whatever it asks for, so the new one would come with
+  // the browser's noise suppression still on (or still off). there's a
+  // moment's quiet, as it's swapped
+  trackOf("audio")?.stop();
+  const track = await getAudio();
+  if (live.session !== now || !track) return track?.stop();
+  track.enabled = state.call.mic;
+  useTrack("audio", track);
+}
+
+/** what's done about the noise round your voice: "browser", "deepfilternet" or "none" (noise.js) */
+export function setNoise(mode) {
+  if (!isNoise(mode) || settings.noise === mode) return;
+  setSettings("noise", mode);
+  saveSettings();
+  // downloaded now, chosen out of a call, so it's ready for the next
+  if (mode === "deepfilternet" && !live.session) loadModel().catch(() => {});
+  refreshMic();
 }
 
 const trackOf = (kind) => live.session?.local.getTracks().find((track) => track.kind === kind) ?? null;
@@ -374,7 +444,7 @@ export async function join({ room, repo, name = "" }, { video = false } = {}) {
     sayHere();
   });
   const [audio, camera] = await Promise.all([
-    getTrack("audio"),
+    getAudio(),
     video ? getTrack("video") : null,
     Promise.race([who, new Promise((resolve) => setTimeout(resolve, 800))]),
   ]);
@@ -446,7 +516,7 @@ export function setMic(on) {
   if (!live.session || state.call?.joining) return;
   const track = trackOf("audio");
   if (on && !track) {
-    getTrack("audio").then((track) => {
+    getAudio().then((track) => {
       if (!live.session || !track) return setState("call", "problem", "no mic");
       useTrack("audio", track);
       setState("call", { mic: true, problem: null });
@@ -487,10 +557,10 @@ export async function setDevice(kind, device) {
   saveSettings();
   if (!live.session) return;
   if (kind === "video" && !state.call?.camera) return;
+  if (kind === "audio") return refreshMic();
   const now = live.session;
   const track = await getTrack(kind);
   if (live.session !== now || !track) return track?.stop();
-  if (kind === "audio") track.enabled = state.call.mic;
   useTrack(kind, track);
 }
 
