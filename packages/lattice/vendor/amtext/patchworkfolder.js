@@ -275,6 +275,8 @@ function resolvePath(fromFile, rel) {
  *   Automerge  default window.Automerge
  *   plugins    default window.patchwork.plugins (needs getRegistry, createDocOfDatatype2)
  *   spanConfig passed to Automerge.updateSpans on import, e.g. { defaultExpand: "after" }
+ *   extension  what an exported archive's name ends with, default .patchworkfolder.
+ *              it's the same zip whatever it's called: import takes any name
  */
 export function patchworkFolder(env = {}) {
   const ctx = () => {
@@ -401,7 +403,7 @@ export function patchworkFolder(env = {}) {
     const base =
       (typeof title === "string" && title.replace(/[\\/:*?"<>|\x00-\x1f]+/g, "-").trim().slice(0, 80)) ||
       root.slice("automerge:".length);
-    return { bytes, filename: base + EXT, count: docs.size, failed };
+    return { bytes, filename: base + (env.extension ?? EXT), count: docs.size, failed };
   }
 
   async function downloadFolder(rootUrl) {
@@ -600,7 +602,7 @@ export function patchworkFolder(env = {}) {
     return new Promise((resolve, reject) => {
       const input = document.createElement("input");
       input.type = "file";
-      input.accept = `${EXT},.zip,.amtext`;
+      input.accept = [...new Set([env.extension ?? EXT, EXT, ".zip", ".amtext"])].join(",");
       input.onchange = () => {
         const f = input.files?.[0];
         if (!f) return reject(new Error("no file chosen"));

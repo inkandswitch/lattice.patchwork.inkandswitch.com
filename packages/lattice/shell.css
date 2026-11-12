@@ -204,7 +204,7 @@
 		border-right: 1px solid var(--lattice-rule);
 	}
 
-	/* a .patchworkfolder over it, to be dropped */
+	/* a .latticeproject over it, to be dropped */
 	& .lattice-sidebar[data-dropping] {
 		background: var(--lattice-current);
 		outline: 2px dashed var(--lattice-shell-primary);
@@ -1134,7 +1134,7 @@
 		color: var(--lattice-muted);
 	}
 
-	/* how a .patchworkfolder dropped or pasted is going */
+	/* how a .latticeproject dropped or pasted is going */
 	& .lattice-tree-note {
 		margin: 4px 12px 4px 24px;
 		color: var(--lattice-muted);

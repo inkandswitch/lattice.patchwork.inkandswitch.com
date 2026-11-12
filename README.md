@@ -85,7 +85,8 @@ and the patchwork side:
 - **patchwork** and **automerge** are ink & switch's.
 - **solid-automerge** (`packages/lattice/vendor/solid-automerge.js`) is
   chee's, and **amtext** (`packages/lattice/vendor/amtext`), the
-  .patchworkfolder format, is from knit.patchwork.inkandswitch.com.
+  .patchworkfolder format (a .latticeproject is one), is from
+  knit.patchwork.inkandswitch.com.
 
 the fonts lattice brings (`packages/lattice/fonts`) are all under the SIL Open
 Font License: [Jost](https://github.com/indestructible-type/Jost),

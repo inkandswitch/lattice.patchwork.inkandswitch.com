@@ -1,8 +1,9 @@
-// a project as a .patchworkfolder, and one back: a zip of .amtext files, the
-// project and every doc it reaches (its files, the docs in its panes), as
-// patchwork's sideboard downloads and takes them. amtext's own code, in
-// vendor/amtext: knit.patchwork.inkandswitch.com's packages/amtext at
-// 49dd849, copied, so the frame has it wherever it's installed
+// a project as a .latticeproject, and one back: a zip of .amtext files, the
+// project and every doc it reaches (its files, the docs in its panes). it's a
+// .patchworkfolder by another name, so those are taken too, as is a .zip of
+// one. knit.patchwork.inkandswitch.com takes a .latticeproject as lattice
+// does. amtext's own code, in vendor/amtext: knit.patchwork.inkandswitch.com's
+// packages/amtext, copied, so the frame has it wherever it's installed
 import * as Automerge from "@automerge/automerge";
 import { getRegistry, isKeyhiveDoc } from "@inkandswitch/patchwork-plugins";
 import { patchworkFolder } from "./vendor/amtext/patchworkfolder.js";
@@ -24,17 +25,18 @@ const folder = (repo, hive) =>
     repo,
     hive,
     Automerge,
+    extension: ".latticeproject",
     plugins: { getRegistry, isKeyhiveDoc, createDocOfDatatype2: typedDoc },
   });
 
-export const isArchive = (file) => /\.(patchworkfolder|zip)$/i.test(String(file?.name ?? ""));
+export const isArchive = (file) => /\.(latticeproject|patchworkfolder|zip)$/i.test(String(file?.name ?? ""));
 
-// downloads `url`, and all it reaches, as a .patchworkfolder named after it
+// downloads `url`, and all it reaches, as a .latticeproject named after it
 export function downloadArchive(repo, url, hive) {
   return folder(repo, hive).downloadFolder(url);
 }
 
-// unpacks a .patchworkfolder into new docs. resolves with its root's url
+// unpacks a .latticeproject (or .patchworkfolder) into new docs. resolves with its root's url
 export async function unpackArchive(repo, file, hive) {
   return (await folder(repo, hive).importFolder(file)).root;
 }

@@ -776,7 +776,7 @@ function Frame(props) {
   }
 
   // the projects' +: a new project, or one from anywhere by its url, or from
-  // a .patchworkfolder. `adding` says what it's doing, while it is
+  // a .latticeproject. `adding` says what it's doing, while it is
   let homeMenu;
   let archiveInput;
   const [adding, setAdding] = createSignal(null);
@@ -802,7 +802,7 @@ function Frame(props) {
     homeMenu.hidePopover();
   }
 
-  // under the projects: how a .patchworkfolder dropped or pasted there is
+  // under the projects: how a .latticeproject dropped or pasted there is
   // going, or what went wrong with it
   const [note, setNote] = createSignal(null);
   let noteTimer = null;
@@ -812,11 +812,11 @@ function Frame(props) {
     if (text && problem) noteTimer = setTimeout(() => setNote(null), 8000);
   }
 
-  // .patchworkfolders: each unpacked into new docs, and what it's of added as
-  // if by its url. says what went wrong, or nothing
+  // .latticeprojects (or .patchworkfolders): each unpacked into new docs, and
+  // what it's of added as if by its url. says what went wrong, or nothing
   async function addArchives(files) {
     const archives = [...(files ?? [])].filter(isArchive);
-    if (!archives.length) return "that's not a .patchworkfolder";
+    if (!archives.length) return "that's not a .latticeproject";
     for (const file of archives) {
       let root;
       try {
@@ -955,7 +955,7 @@ function Frame(props) {
       >
         ${icon("download")}
         download
-        <small>${() => packing() ?? ".patchworkfolder, files and all"}</small>
+        <small>${() => packing() ?? ".latticeproject, files and all"}</small>
       </button>
       <button class="lattice-wm-menu-item" onClick=${removeFromMenu}>
         ${icon("close")}
@@ -981,12 +981,12 @@ function Frame(props) {
       <div class="lattice-wm-menu-heading">from anywhere</div>
       <button class="lattice-wm-menu-item" disabled=${() => !!adding()} onClick=${() => archiveInput.click()}>
         ${icon("file")}
-        .patchworkfolder
+        .latticeproject
         <small>from a file</small>
       </button>
       <input
         type="file"
-        accept=".patchworkfolder,.zip"
+        accept=".latticeproject,.patchworkfolder,.zip"
         multiple
         hidden
         ref=${(el) => (archiveInput = el)}
@@ -1001,7 +1001,7 @@ function Frame(props) {
           <input
             name="url"
             placeholder="automerge:… url"
-            aria-label="a project's, folder's or directory's automerge url, or a .patchworkfolder pasted"
+            aria-label="a project's, folder's or directory's automerge url, or a .latticeproject pasted"
             autocomplete="off"
             disabled=${() => !!adding()}
             onInput=${() => setAddProblem(null)}
@@ -1012,7 +1012,7 @@ function Frame(props) {
         ${() =>
           addProblem() ??
           adding() ??
-          (secret() ? "a project, folder or directory · or drop or paste a .patchworkfolder" : "drop or paste a .patchworkfolder")}
+          (secret() ? "a project, folder or directory · or drop or paste a .latticeproject" : "drop or paste a .latticeproject")}
       </p>
     </div>`;
   }
