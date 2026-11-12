@@ -1,12 +1,13 @@
 // the call you're in, down the bottom of the projects, above you: where it
 // is, everyone in it, and your mic, camera and hanging up. its menu says how
-// faces are shown (on cursors, floating, or in the sidebar) and which mic
+// faces are shown (floating, or in the sidebar, and on cursors too or not)
+// and which mic
 // and camera. not in one, it says when there's one on in the project you're
 // in, to join
 import { createMemo, createSignal, For, Show } from "solid-js";
 import html from "solid-js/html";
-import { FACES, ask, call, devices, hangUp, onCallIn, setCamera, setDevice, setFaces, setMic } from "../wm/call/call.js";
-import { Face, StageButton, names } from "../wm/call/ui.js";
+import { FACES, ask, call, devices, hangUp, onCallIn, setCamera, setCursors, setDevice, setFaces, setMic } from "../wm/call/call.js";
+import { DragOut, Face, StageButton, names } from "../wm/call/ui.js";
 import { shownInBar } from "../wm/call/sizes.js";
 import { icon } from "../wm/ui/icons.js";
 
@@ -86,7 +87,7 @@ export function CallBar(props) {
     </div>
     <div class="lattice-call-row">
       <span class="lattice-call-faces">
-        <${Face} id="me" size=${26} />
+        <${DragOut} id="me"><${Face} id="me" size=${26} /><//>
         <${For} each=${() => bar().shown}>
           ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-call-face-button"><${Face} id=${peer.id} size=${26} /><//>`}
         <//>
@@ -129,13 +130,21 @@ export function CallBar(props) {
         ${([id, label]) =>
           html`<${Choice}
             label=${label}
-            checked=${() => call.settings.faces === id}
+            checked=${() => call.mode() === id}
             choose=${(event) => {
               setFaces(id);
               if (id === "sidebar") props.inspector?.setOpen(true);
             }}
           />`}
       <//>
+      <button
+        class="lattice-wm-menu-item lattice-call-choice"
+        role="menuitemcheckbox"
+        aria-checked=${() => String(call.cursors())}
+        onClick=${() => setCursors(!call.cursors())}
+      >
+        on cursors too
+      </button>
       <${Devices} kind="audio" />
       <${Devices} kind="video" />
     </div>

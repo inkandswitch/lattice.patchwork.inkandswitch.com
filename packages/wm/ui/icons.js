@@ -4,6 +4,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const PATHS = {
   plus: "M8 3.5v9M3.5 8h9",
   close: "M4.5 4.5l7 7M11.5 4.5l-7 7",
+  minimise: "M4 11.5h8",
   "chevron-down": "M4.5 6.25 8 9.75l3.5-3.5",
   "chevron-right": "M6.25 4.5 9.75 8l-3.5 3.5",
   warning: "M8 2.5 14 13H2ZM8 6.5v3M8 11.25v.01",

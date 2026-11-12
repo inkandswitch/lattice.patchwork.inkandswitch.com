@@ -643,7 +643,7 @@ function Frame(props) {
             {
               id: "call",
               name: "call",
-              when: () => !!call.get() && call.settings.faces === "sidebar",
+              when: () => !!call.get() && call.mode() === "sidebar",
               render: () => html`<${CallTiles} />`,
             },
             { id: "versions", was: "drafts", name: "versions", render: () => html`<${Versions} />` },

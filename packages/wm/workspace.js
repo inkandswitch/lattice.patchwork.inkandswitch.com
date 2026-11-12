@@ -26,7 +26,7 @@ import { holdSecret, secret } from "./ui/secret.js";
 import { createInk } from "./ink.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
-import { CallPrompt, CallFloating, CallSelf, CallStage, Face } from "./call/ui.js";
+import { CallPrompt, CallFloating, CallStage, Face } from "./call/ui.js";
 
 const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
@@ -1736,7 +1736,7 @@ export function mountWorkspace(
             ${(person) => {
               const image = () => pointerImage(person.colour, person.look);
               // their face on it, while you're in a call with them
-              const inCall = createMemo(() => (call.settings.faces === "cursors" ? (call.find(person)?.id ?? null) : null));
+              const inCall = createMemo(() => (call.cursors() ? (call.find(person)?.id ?? null) : null));
               return html`<div
                 class="lattice-wm-pointer"
                 data-look=${() => person.look}
@@ -2567,7 +2567,6 @@ export function mountWorkspace(
         <${Show} when=${() => callProject}>
           <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
           <${CallFloating} />
-          <${CallSelf} panes=${() => root} />
         <//>
         <${Show} when=${() => callProject}>
           <${CallStage}

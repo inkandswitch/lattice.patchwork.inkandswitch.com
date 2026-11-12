@@ -42,8 +42,9 @@ const isObject = (value) => !!value && typeof value === "object" && !Array.isArr
 
 // ── what's remembered, in this browser ──────────────────────────────────
 
+// where faces are: floating over everything, or down the sidebar. and on
+// everyone's cursor too, or not, whichever (settings.cursors)
 export const FACES = [
-  ["cursors", "on cursors"],
   ["floating", "floating"],
   ["sidebar", "in the sidebar"],
 ];
@@ -81,7 +82,9 @@ const { state, setState, settings, setSettings, heard, setHeard, version, bump, 
       peers: {},
     });
     const [settings, setSettings] = createStore({
-      faces: FACES.some(([id]) => id === saved.faces) ? saved.faces : "floating",
+      faces: saved.faces === "sidebar" ? "sidebar" : "floating",
+      // on cursors was a third place for faces, once: it's on, then
+      cursors: typeof saved.cursors === "boolean" ? saved.cursors : saved.faces === "cursors",
       camera: string(saved.camera),
       mic: string(saved.mic),
       floating: isObject(saved.floating) ? saved.floating : {},
@@ -111,7 +114,13 @@ const { state, setState, settings, setSettings, heard, setHeard, version, bump, 
   }));
 
 function saveSettings() {
-  writeSettings({ faces: settings.faces, camera: settings.camera, mic: settings.mic, floating: settings.floating });
+  writeSettings({
+    faces: call.mode(),
+    cursors: call.cursors(),
+    camera: settings.camera,
+    mic: settings.mic,
+    floating: settings.floating,
+  });
 }
 
 // the session: what isn't for showing. {session} so every version of this
@@ -490,10 +499,24 @@ export function setFaces(faces) {
   saveSettings();
 }
 
-/** where someone's floating face is: fractions of the window */
+/** faces on everyone's cursors too, or not */
+export function setCursors(on) {
+  setSettings("cursors", !!on);
+  saveSettings();
+}
+
+/** where someone's floating face is (`key`: call.floatKey's): fractions of the window */
 export function setFloating(key, at) {
   setSettings("floating", key, at);
   saveSettings();
+}
+
+/** someone's floating face (`key`) put away, or (`at`: where) back */
+export function hideFloating(key) {
+  setFloating(key, { ...call.settings.floating[key], hidden: true });
+}
+export function showFloating(key, at) {
+  setFloating(key, { ...call.settings.floating[key], ...at, hidden: false });
 }
 
 // ── reading it ──────────────────────────────────────────────────────────
@@ -516,6 +539,12 @@ export const call = {
   /** who you are in it */
   me: () => (live.session ? { ...live.session.who } : null),
   settings,
+  /** where faces are: "floating" or "sidebar" */
+  mode: () => (settings.faces === "sidebar" ? "sidebar" : "floating"),
+  /** whether faces are on cursors too (a page from before has it as a mode) */
+  cursors: () => settings.cursors ?? settings.faces === "cursors",
+  /** what someone's floating face is kept by: who they are, so it's theirs next call too */
+  floatKey: (id) => (id === "me" ? "me" : state.peers[id]?.contact || id),
   asking,
   current,
   stopAsking: () => setAsking(null),

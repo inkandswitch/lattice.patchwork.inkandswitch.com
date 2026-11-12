@@ -1,10 +1,12 @@
 // a call's faces, and the question before you're in one: for wm's panes, and
 // for an app's own (lattice's frame shows the call down the bottom, and in
-// its sidebar). someone's face, clicked there, fills the panes (CallStage),
-// and double clicked, the screen
-import { createEffect, createMemo, For, Show, onCleanup } from "solid-js";
+// its sidebar). someone's face in the call bar, clicked, fills the panes
+// (CallStage), and that, double clicked, the screen. in the sidebar, clicked,
+// they fill the sidebar's box. floating, each face can be put away, and
+// dragged out of the call bar again (DragOut)
+import { createEffect, createMemo, createSignal, For, Show, onCleanup } from "solid-js";
 import html from "solid-js/html";
-import { call, onCallIn, join, setFloating, toggleStage, showStage, setFull, closeStage } from "./call.js";
+import { call, onCallIn, join, setFloating, hideFloating, showFloating, toggleStage, setFull, closeStage } from "./call.js";
 import { tilesFor } from "./sizes.js";
 import { faceImage } from "../presence.js";
 import { centreOn } from "./face.js";
@@ -191,6 +193,78 @@ function inWindow({ x, y, width }) {
   };
 }
 
+// ── a floating face going to the call bar, and coming out of it ─────────
+
+// on screen, moving: in and out. coming in: out
+const EASE_MOVE = "cubic-bezier(0.77, 0, 0.175, 1)";
+const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
+const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+// someone's face in the call bar (or, past the ones it has room for, the
+// count of the rest): where their floating face goes to, and comes from
+function inBar(id) {
+  return (
+    document.querySelector(`.lattice-call [data-call-face="${CSS.escape(id)}"]`) ??
+    (id === "me" ? null : document.querySelector(".lattice-call .lattice-call-more"))
+  );
+}
+
+// the transform that puts `float`'s picture over `target`, and the origin it's
+// from (the picture's middle), or null if either isn't on screen
+function towards(float, target) {
+  const picture = float.querySelector(".lattice-wm-call-float-picture")?.getBoundingClientRect();
+  const box = float.getBoundingClientRect();
+  const to = target?.getBoundingClientRect();
+  if (!picture?.width || !to?.width) return null;
+  const x = picture.left + picture.width / 2;
+  const y = picture.top + picture.height / 2;
+  return {
+    origin: `${x - box.left}px ${y - box.top}px`,
+    transform: `translate(${to.left + to.width / 2 - x}px, ${to.top + to.height / 2 - y}px) scale(${to.width / picture.width})`,
+  };
+}
+
+// put away: it goes into their face in the call bar, then it's gone
+function minimise(float, id, done) {
+  const to = reducedMotion() ? null : towards(float, inBar(id));
+  float.style.pointerEvents = "none";
+  const motion = to
+    ? float.animate(
+        [
+          { transformOrigin: to.origin, transform: "none", opacity: 1 },
+          { transformOrigin: to.origin, transform: to.transform, opacity: 0.3 },
+        ],
+        { duration: 240, easing: EASE_MOVE, fill: "forwards" },
+      )
+    : float.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: "ease-out", fill: "forwards" });
+  motion.finished.then(done, done);
+}
+
+// the ones just dragged out of the call bar: they're where they were let go,
+// not coming out of it
+const dropped = new Set();
+
+// arriving (you've joined, they have, or faces are floating now): out of
+// their face in the call bar to where it goes, one after another
+function arrive(float, id, key, index) {
+  if (dropped.delete(key) || reducedMotion()) {
+    float.animate([{ opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1 }], { duration: 160, easing: EASE_OUT });
+    return;
+  }
+  const from = towards(float, inBar(id));
+  if (!from) {
+    float.animate([{ opacity: 0, scale: 0.95 }, { opacity: 1, scale: 1 }], { duration: 200, easing: EASE_OUT });
+    return;
+  }
+  float.animate(
+    [
+      { transformOrigin: from.origin, transform: from.transform, opacity: 0.3 },
+      { transformOrigin: from.origin, transform: "none", opacity: 1 },
+    ],
+    { duration: 280, delay: Math.min(index, 8) * 40, easing: EASE_OUT, fill: "backwards" },
+  );
+}
+
 /**
  * everyone's faces, floating over everything, each where you put it and the
  * size you made it: dragged to move, and by its corner to size. each is a
@@ -198,15 +272,18 @@ function inWindow({ x, y, width }) {
  * (4:3), none of it cut off (and double clicked again, a circle)
  */
 export function CallFloating() {
-  // you too, last: by id, so each keeps its place as people come and go
-  const ids = createMemo(() => [...call.peers().map((peer) => peer.id), "me"]);
-  return html`<${Show} when=${() => call.get() && call.settings.faces === "floating"}>
+  // you too, last: by id, so each keeps its place as people come and go.
+  // not the ones put away (dragged out of the call bar, they're back)
+  const ids = createMemo(() =>
+    [...call.peers().map((peer) => peer.id), "me"].filter((id) => !call.settings.floating[call.floatKey(id)]?.hidden),
+  );
+  return html`<${Show} when=${() => call.get() && call.mode() === "floating"}>
     <div class="lattice-wm-call-floating">
       <${For} each=${ids}>
         ${(id, index) => {
           const mine = id === "me";
           const peer = () => (mine ? null : call.peers().find((peer) => peer.id === id));
-          const key = () => (mine ? "me" : peer()?.contact || id);
+          const key = () => call.floatKey(id);
           const name = () => (mine ? "you" : peer()?.name);
           const muted = () => (mine ? !call.get()?.mic : !peer()?.mic);
           const at = () => ({ ...startAt(index()), ...call.settings.floating[key()] });
@@ -214,7 +291,7 @@ export function CallFloating() {
           // what's being done to it: {sizing, dx, dy (or the width it was), at}
           let dragging = null;
           function onPointerDown(event) {
-            if (event.button !== 0) return;
+            if (event.button !== 0 || event.target.closest(".lattice-wm-call-float-close")) return;
             const box = float.getBoundingClientRect();
             const sizing = !!event.target.closest(".lattice-wm-call-size");
             dragging = sizing
@@ -246,7 +323,11 @@ export function CallFloating() {
             data-shape=${shape}
             data-mine=${mine ? "" : undefined}
             onDblClick=${() => setFloating(key(), { ...at(), shape: shape() === "round" ? "tile" : "round" })}
-            ref=${(el) => (float = el)}
+            ref=${(el) => {
+              float = el;
+              // once it's where it goes
+              requestAnimationFrame(() => float.isConnected && arrive(float, id, key(), index()));
+            }}
             style=${() => ({ ...inWindow(at()), width: `${at().width}px` })}
             onPointerDown=${onPointerDown}
             onPointerMove=${onPointerMove}
@@ -256,6 +337,15 @@ export function CallFloating() {
             <span class="lattice-wm-call-float-picture">
               <${Face} id=${id} shape="tile" muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
+              <button
+                class="lattice-wm-call-float-close"
+                aria-label=${() => `minimise ${mine ? "your face" : `${name()}'s face`}`}
+                title="minimise to the call bar (drag them out of it to have them back)"
+                onClick=${() => minimise(float, id, () => hideFloating(key()))}
+                onDblClick=${(event) => event.stopPropagation()}
+              >
+                ${icon("minimise", 10)}
+              </button>
             </span>
             <span class="lattice-wm-call-float-name">
               ${name}
@@ -270,18 +360,109 @@ export function CallFloating() {
   <//>`;
 }
 
+// a face dragged out (of the call bar) and let go somewhere else: their
+// floating face is back, there. only while faces are floating. returns the
+// handlers for what's dragged, and whether what just happened was a drag
+// (so it's not a click too)
+const DRAG_FROM = 5;
+function dragOut(id) {
+  let start = null;
+  let ghost = null;
+  let dragged = false;
+  function onPointerDown(event) {
+    if (event.button !== 0 || call.mode() !== "floating") return;
+    start = { x: event.clientX, y: event.clientY, from: event.currentTarget };
+    dragged = false;
+  }
+  function onPointerMove(event) {
+    if (!start) return;
+    if (!ghost) {
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < DRAG_FROM) return;
+      start.from.setPointerCapture(event.pointerId);
+      // what's dragged: a copy of their face, pictures and all
+      const face = start.from.querySelector(".lattice-wm-call-face");
+      ghost = face.cloneNode(true);
+      const video = face.querySelector("video");
+      const copy = ghost.querySelector("video");
+      if (video && copy) {
+        copy.srcObject = video.srcObject;
+        copy.muted = true;
+        copy.play().catch(() => {});
+      }
+      ghost.classList.add("lattice-wm-call-ghost");
+      document.body.append(ghost);
+    }
+    ghost.style.left = `${event.clientX}px`;
+    ghost.style.top = `${event.clientY}px`;
+  }
+  function onPointerUp(event) {
+    if (ghost) {
+      ghost.remove();
+      ghost = null;
+      dragged = true;
+      // let go on what it came from: never mind
+      if (!start.from.closest(".lattice-call")?.contains(document.elementFromPoint(event.clientX, event.clientY))) {
+        const width = call.settings.floating[call.floatKey(id)]?.width ?? FLOAT_WIDTH;
+        dropped.add(call.floatKey(id));
+        showFloating(call.floatKey(id), {
+          x: Math.max(0, (event.clientX - width / 2) / innerWidth),
+          y: Math.max(0, (event.clientY - 24) / innerHeight),
+          width,
+        });
+      }
+    }
+    start = null;
+  }
+  return {
+    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+    // (once: the click after a drag)
+    wasDrag: () => {
+      const was = dragged;
+      dragged = false;
+      return was;
+    },
+  };
+}
+
+/** `props.id`'s face (props.children), to drag out of where it is into a floating face */
+export function DragOut(props) {
+  const drag = dragOut(props.id);
+  return html`<span
+    class="lattice-wm-call-drag"
+    data-call-face=${() => props.id}
+    title=${() => (call.mode() === "floating" ? "drag out to float" : undefined)}
+    onPointerDown=${drag.handlers.onPointerDown}
+    onPointerMove=${drag.handlers.onPointerMove}
+    onPointerUp=${drag.handlers.onPointerUp}
+    onPointerCancel=${drag.handlers.onPointerCancel}
+    onClick=${() => drag.wasDrag()}
+  >
+    ${props.children}
+  </span>`;
+}
+
 /**
- * a face to click to fill the panes with them (again: the panes back), or
- * double click to fill the screen. `props.id`; the rest's what's in it
+ * a face to click to fill the panes with them (again: the panes back), or,
+ * floating, drag out to float. `props.id`; the rest's what's in it
  */
 export function StageButton(props) {
+  const drag = dragOut(props.id);
   return html`<button
     class=${() => `lattice-wm-call-stage-button ${props.class ?? ""}`}
+    data-call-face=${() => props.id}
     data-staged=${() => (call.stage() === props.id ? "" : undefined)}
     aria-pressed=${() => String(call.stage() === props.id)}
-    title=${() => (call.stage() === props.id ? "back to the panes (double click: the whole screen)" : "fill the panes with them (double click: the whole screen)")}
-    onClick=${(event) => event.detail <= 1 && toggleStage(props.id)}
-    onDblClick=${() => showStage(props.id, { full: true })}
+    title=${() =>
+      call.stage() === props.id
+        ? "back to the panes"
+        : call.mode() === "floating"
+          ? "fill the panes with them (or drag out to float)"
+          : "fill the panes with them"}
+    onPointerDown=${drag.handlers.onPointerDown}
+    onPointerMove=${drag.handlers.onPointerMove}
+    onPointerUp=${drag.handlers.onPointerUp}
+    onPointerCancel=${drag.handlers.onPointerCancel}
+    onClick=${() => !drag.wasDrag() && toggleStage(props.id)}
   >
     ${props.children}
   </button>`;
@@ -290,9 +471,12 @@ export function StageButton(props) {
 /**
  * everyone's faces, for a sidebar, yours last: big while there are few, two
  * across when there are more, and past that a list, whoever spoke last at
- * the top. each, clicked, fills the panes (StageButton)
+ * the top. one clicked fills the box, you in its corner; clicked again, all
+ * of them
  */
 export function CallTiles() {
+  const [focus, setFocus] = createSignal(null);
+  const focused = () => (focus() && call.peers().some((peer) => peer.id === focus()) ? focus() : null);
   const count = () => call.peers().length + 1;
   const layout = () => tilesFor(count());
   const peers = createMemo(() => {
@@ -300,9 +484,25 @@ export function CallTiles() {
     if (layout() !== "chips") return list;
     return [...list].sort((a, b) => (b.speaking ? 1 : 0) - (a.speaking ? 1 : 0) || (b.spoke ?? 0) - (a.spoke ?? 0));
   });
-  return html`<div class="lattice-wm-call-tiles" data-layout=${layout}>
+  const name = (id) => call.peers().find((peer) => peer.id === id)?.name;
+
+  const Focused = () => html`<div class="lattice-wm-call-tiles" data-layout="focus">
+    <button class="lattice-wm-call-focus" title="everyone again" onClick=${() => setFocus(null)}>
+      <${Show} when=${focused} keyed>
+        ${(id) => html`<${Face} id=${id} shape="tile" muted=${false} title=${false} />`}
+      <//>
+      <span class="lattice-wm-call-focus-name">${() => name(focused())}</span>
+      <span class="lattice-wm-call-focus-me"><${Face} id="me" shape="tile" title=${false} /></span>
+    </button>
+  </div>`;
+
+  return html`<${Show} when=${focused} fallback=${html`<div class="lattice-wm-call-tiles" data-layout=${layout}>
     <${For} each=${peers}>
-      ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-wm-call-tile">
+      ${(peer) => html`<button
+        class="lattice-wm-call-stage-button lattice-wm-call-tile"
+        title="fill the box with them"
+        onClick=${() => setFocus(peer.id)}
+      >
         <${Show}
           when=${() => layout() !== "chips"}
           fallback=${html`<${Face} id=${peer.id} size=${28} title=${false} />`}
@@ -310,7 +510,7 @@ export function CallTiles() {
           <${Face} id=${peer.id} shape="tile" title=${false} />
         <//>
         <span class="lattice-wm-call-tile-name">${() => peer.name}</span>
-      <//>`}
+      </button>`}
     <//>
     <${Show} when=${() => call.get()}>
       <div class="lattice-wm-call-tile" data-mine="">
@@ -323,7 +523,9 @@ export function CallTiles() {
         <span class="lattice-wm-call-tile-name">you</span>
       </div>
     <//>
-  </div>`;
+  </div>`}>
+    ${Focused}
+  <//>`;
 }
 
 /**
@@ -389,63 +591,6 @@ export function CallStage(props) {
       <span class="lattice-wm-call-stage-me">
         <${Face} id="me" shape="tile" title=${false} />
       </span>
-    </div>
-  <//>`;
-}
-
-// where your own face goes in circles mode, to start with: the bottom right
-// of the panes (fractions of the window, as a floating face's are)
-const SELF_SIZE = 64;
-function selfStart(box) {
-  const right = box ? box.right : innerWidth;
-  const bottom = box ? box.bottom : innerHeight;
-  return { x: (right - SELF_SIZE - 16) / innerWidth, y: (bottom - SELF_SIZE - 16) / innerHeight };
-}
-
-/**
- * your own face, while faces are on cursors (everyone else's are on theirs):
- * a circle, at the bottom right of `props.panes` (an element) till you drag
- * it somewhere else, which is remembered
- */
-export function CallSelf(props) {
-  let self;
-  let dragging = null;
-  const at = () => call.settings.floating["me:cursors"] ?? selfStart(props.panes?.getBoundingClientRect());
-  const place = ({ x, y }) => ({
-    left: `${Math.max(0, Math.min(x * innerWidth, innerWidth - SELF_SIZE))}px`,
-    top: `${Math.max(0, Math.min(y * innerHeight, innerHeight - SELF_SIZE))}px`,
-  });
-  function onPointerDown(event) {
-    if (event.button !== 0) return;
-    const box = self.getBoundingClientRect();
-    dragging = { dx: event.clientX - box.left, dy: event.clientY - box.top, at: at() };
-    self.setPointerCapture(event.pointerId);
-    event.preventDefault();
-  }
-  function onPointerMove(event) {
-    if (!dragging) return;
-    dragging.at = {
-      x: Math.max(0, Math.min(1, (event.clientX - dragging.dx) / innerWidth)),
-      y: Math.max(0, Math.min(1, (event.clientY - dragging.dy) / innerHeight)),
-    };
-    Object.assign(self.style, place(dragging.at));
-  }
-  function onPointerUp() {
-    if (dragging) setFloating("me:cursors", dragging.at);
-    dragging = null;
-  }
-  return html`<${Show} when=${() => call.get() && call.settings.faces === "cursors" && !call.stage()}>
-    <div
-      class="lattice-wm-call-self"
-      ref=${(el) => (self = el)}
-      style=${() => place(at())}
-      title="you (drag to move)"
-      onPointerDown=${onPointerDown}
-      onPointerMove=${onPointerMove}
-      onPointerUp=${onPointerUp}
-      onPointerCancel=${onPointerUp}
-    >
-      <${Face} id="me" size=${SELF_SIZE} title=${false} />
     </div>
   <//>`;
 }

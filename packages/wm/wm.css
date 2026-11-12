@@ -1401,16 +1401,8 @@
 		cursor: grab;
 		touch-action: none;
 		user-select: none;
-		/* arriving (someone joins, or faces start floating): from a little
-		   smaller, and see-through */
-		transition:
-			opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
-			scale 200ms cubic-bezier(0.23, 1, 0.32, 1);
-
-		@starting-style {
-			opacity: 0;
-			scale: 0.95;
-		}
+		/* arriving, it comes out of their face in the call bar, and minimised
+		   goes back into it (ui.js: arrive, minimise) */
 
 		&:active {
 			cursor: grabbing;
@@ -1453,13 +1445,6 @@
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		& .lattice-wm-call-float {
-			transition: opacity 200ms ease-out;
-
-			@starting-style {
-				scale: 1;
-			}
-		}
 		& .lattice-wm-call-float-picture .lattice-wm-call-face {
 			transition: none;
 		}
@@ -1690,35 +1675,85 @@
 	}
 }
 
-/* your own face, while everyone else's is on their cursor: a circle that
-   stays where you put it */
-.lattice-wm-call-self {
-	position: fixed;
-	z-index: 50;
+/* a floating face put away: its ×, there while it's pointed at */
+.lattice-wm-call-floating .lattice-wm-call-float-close {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	display: grid;
+	place-items: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 1px solid var(--lattice-wm-line);
 	border-radius: 50%;
-	box-shadow: 2px 2px 0 var(--lattice-wm-line);
-	cursor: grab;
+	background: var(--lattice-wm-sheet);
+	color: var(--lattice-wm-ink);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 120ms ease-out;
+}
+.lattice-wm-call-floating .lattice-wm-call-float:hover .lattice-wm-call-float-close,
+.lattice-wm-call-floating .lattice-wm-call-float-close:focus-visible {
+	opacity: 1;
+}
+.lattice-wm-call-floating .lattice-wm-call-float[data-shape="round"] .lattice-wm-call-float-close {
+	right: 14%;
+}
+
+/* a face that can be dragged out (of the call bar) to float */
+.lattice-wm-call-drag {
+	display: inline-grid;
 	touch-action: none;
-	user-select: none;
-	transition:
-		opacity 200ms cubic-bezier(0.23, 1, 0.32, 1),
-		scale 200ms cubic-bezier(0.23, 1, 0.32, 1);
+}
 
-	@starting-style {
-		opacity: 0;
-		scale: 0.9;
-	}
+/* what's dragged out: a copy of the face, under the pointer */
+.lattice-wm-call-ghost {
+	--lattice-wm-call-size: 56px !important;
+	position: fixed;
+	z-index: 60;
+	translate: -50% -50%;
+	box-shadow: 2px 2px 0 var(--lattice-wm-line);
+	pointer-events: none;
+}
 
-	&:active {
-		cursor: grabbing;
-	}
+/* one face filling the sidebar's box, you in its corner */
+.lattice-wm-call-tiles[data-layout="focus"] {
+	& .lattice-wm-call-focus {
+		position: relative;
+		display: block;
+		width: 100%;
+		padding: 0;
+		border: none;
+		background: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
 
-	@media (prefers-reduced-motion: reduce) {
-		transition: opacity 200ms ease-out;
-
-		@starting-style {
-			scale: 1;
+		& > .lattice-wm-call-face {
+			aspect-ratio: 3 / 4;
+			border-radius: 8px;
 		}
+	}
+
+	& .lattice-wm-call-focus-name {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+		padding: 2px 6px;
+		border-radius: 4px;
+		background: rgb(0 0 0 / 0.55);
+		color: white;
+		font: 600 11px/1.3 var(--lattice-wm-sans);
+	}
+
+	& .lattice-wm-call-focus-me {
+		position: absolute;
+		right: 8px;
+		bottom: 8px;
+		width: 32%;
+		border-radius: 6px;
+		box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
 	}
 }
 
