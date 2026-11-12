@@ -1675,37 +1675,40 @@
 	}
 }
 
-/* a floating face minimised to the call bar: its button, top left, there
-   while it's pointed at */
+/* a floating face's minimise: an arrow before their name, down to the call
+   bar. quiet till it's pointed at */
 .lattice-wm-call-floating .lattice-wm-call-float-close {
-	position: absolute;
-	top: 4px;
-	left: 4px;
-	display: grid;
+	display: inline-grid;
 	place-items: center;
-	width: 20px;
-	height: 18px;
+	width: 16px;
+	height: 16px;
+	margin: 0 2px 0 -3px;
 	padding: 0;
-	border: 1px solid var(--lattice-wm-line);
-	border-radius: 4px;
-	background: var(--lattice-wm-sheet);
-	color: var(--lattice-wm-ink);
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--lattice-wm-muted);
+	vertical-align: -4px;
 	cursor: pointer;
-	opacity: 0;
 	transition:
-		opacity 120ms ease-out,
+		background-color 120ms ease-out,
+		color 120ms ease-out,
 		scale 120ms ease-out;
 
 	&:active {
-		scale: 0.92;
+		scale: 0.9;
+	}
+
+	&:focus-visible {
+		outline: 2px solid var(--lattice-wm-accent);
+		outline-offset: 1px;
 	}
 }
-.lattice-wm-call-floating .lattice-wm-call-float:hover .lattice-wm-call-float-close,
-.lattice-wm-call-floating .lattice-wm-call-float-close:focus-visible {
-	opacity: 1;
-}
-.lattice-wm-call-floating .lattice-wm-call-float[data-shape="round"] .lattice-wm-call-float-close {
-	left: 14%;
+@media (hover: hover) and (pointer: fine) {
+	.lattice-wm-call-floating .lattice-wm-call-float-close:hover {
+		background: var(--lattice-wm-chrome-hover);
+		color: var(--lattice-wm-ink);
+	}
 }
 
 /* a face that can be dragged out (of the call bar) to float */

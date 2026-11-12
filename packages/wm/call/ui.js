@@ -173,15 +173,36 @@ export function CallPrompt(props) {
 }
 
 // a floating face's width, to start with, and as small and big as it goes
-const FLOAT_WIDTH = 160;
 const FLOAT_MIN = 72;
 const FLOAT_MAX = 640;
-// where a floating face starts: down the right, one under another
-const startAt = (index) => ({
-  x: Math.max(0, 1 - (FLOAT_WIDTH + 16) / innerWidth),
-  y: Math.min(0.8, (96 + index * (FLOAT_WIDTH * 0.75 + 32)) / innerHeight),
-  width: FLOAT_WIDTH,
-});
+// to start with, everyone else bigger than you
+const THEIR_WIDTH = 200;
+const MY_WIDTH = 120;
+
+// a little, but always the same little, for `key`: -1 to 1
+function nudge(key) {
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  return ((Math.abs(hash) % 1000) / 1000) * 2 - 1;
+}
+
+// where a floating face starts (fractions of the window): you in the bottom
+// right, and everyone else (`index`: which of them) left of the middle, near
+// the call, two across and a few down, each nudged out of line a little
+function startAt(index, key) {
+  if (key === "me") {
+    return {
+      x: 1 - (MY_WIDTH + 24) / innerWidth,
+      y: 1 - (MY_WIDTH * 0.75 + 56) / innerHeight,
+      width: MY_WIDTH,
+    };
+  }
+  const column = index % 2;
+  const row = Math.floor(index / 2);
+  const left = Math.max(220, innerWidth * 0.24) + column * (THEIR_WIDTH + 32) + (row % 2) * 48 + nudge(`${key}x`) * 20;
+  const top = innerHeight * 0.28 + row * (THEIR_WIDTH * 0.75 + 56) + nudge(`${key}y`) * 20;
+  return { x: left / innerWidth, y: top / innerHeight, width: THEIR_WIDTH };
+}
 
 // where a floating face goes: where it was put, but all of it in the window
 // (a face sized bigger near an edge moves away from it)
@@ -286,7 +307,7 @@ export function CallFloating() {
           const key = () => call.floatKey(id);
           const name = () => (mine ? "you" : peer()?.name);
           const muted = () => (mine ? !call.get()?.mic : !peer()?.mic);
-          const at = () => ({ ...startAt(index()), ...call.settings.floating[key()] });
+          const at = () => ({ ...startAt(index(), key()), ...call.settings.floating[key()] });
           let float;
           // what's being done to it: {sizing, dx, dy (or the width it was), at}
           let dragging = null;
@@ -337,17 +358,17 @@ export function CallFloating() {
             <span class="lattice-wm-call-float-picture">
               <${Face} id=${id} shape="tile" muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
+            </span>
+            <span class="lattice-wm-call-float-name">
               <button
                 class="lattice-wm-call-float-close"
                 aria-label=${() => `minimise ${mine ? "your face" : `${name()}'s face`}`}
-                title="minimise to the call bar (drag them out of it to have them back)"
+                title="minimise to the call bar (click them there, or drag them out, to have them back)"
                 onClick=${() => minimise(float, id, () => hideFloating(key()))}
                 onDblClick=${(event) => event.stopPropagation()}
               >
-                ${icon("minimise", 10)}
+                ${icon("minimise", 11)}
               </button>
-            </span>
-            <span class="lattice-wm-call-float-name">
               ${name}
               <${Show} when=${muted}>
                 <span class="lattice-wm-call-float-muted" aria-label="muted">${icon("mic-off", 10)}</span>
@@ -406,7 +427,7 @@ function dragOut(id) {
       // let go back over the call bar: never mind
       if (from.closest(".lattice-call")?.contains(document.elementFromPoint(ended.clientX, ended.clientY))) return;
       const key = call.floatKey(id);
-      const width = call.settings.floating[key]?.width ?? FLOAT_WIDTH;
+      const width = call.settings.floating[key]?.width ?? (key === "me" ? MY_WIDTH : THEIR_WIDTH);
       dropped.add(key);
       showFloating(key, {
         x: Math.max(0, (ended.clientX - width / 2) / innerWidth),
