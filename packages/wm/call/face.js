@@ -1,5 +1,5 @@
 // where your face is in your camera's picture, so faces can be shown centred
-// on it. it's found in your own camera, a couple of times a second while it's
+// on it. it's found in your own camera, four times a second while it's
 // on, and goes to everyone else in the call with the rest of what you say
 // (call.js), so nobody finds anyone else's.
 //
@@ -9,9 +9,13 @@
 const MEDIAPIPE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 const MODEL =
   "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
-const EVERY = 500;
-// how far it has to move (a fraction of the picture) to be said again
-const MOVED = 0.02;
+const EVERY = 250;
+// how far it has to move (a fraction of the picture) to be said again: a
+// face held still holds still
+const MOVED = 0.01;
+// how much of the way to where it's just been found each look goes: the
+// rest's where it was, so a jittery find comes out steady
+const EASE = 0.4;
 
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
 
@@ -84,8 +88,11 @@ export function watchFace(stream, onFace) {
             y: clamp01((box.y + box.height / 2) / video.videoHeight),
             size: clamp01(box.height / video.videoHeight),
           };
-          // eased, so a face held still holds still
-          const next = said ? { x: (said.x + face.x) / 2, y: (said.y + face.y) / 2, size: (said.size + face.size) / 2 } : face;
+          // eased (and everyone's picture glides there: wm.css)
+          const toward = (from, to) => from + (to - from) * EASE;
+          const next = said
+            ? { x: toward(said.x, face.x), y: toward(said.y, face.y), size: toward(said.size, face.size) }
+            : face;
           if (!said || Math.abs(next.x - said.x) > MOVED || Math.abs(next.y - said.y) > MOVED) {
             said = next;
             onFace({ x: round(next.x), y: round(next.y), size: round(next.size) });

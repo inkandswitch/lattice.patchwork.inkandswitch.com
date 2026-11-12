@@ -1213,6 +1213,13 @@
 		height: 100%;
 		border-radius: inherit;
 		object-fit: cover;
+		/* centred on their face (face.js), which is said four times a second:
+		   it glides there between, rather than jumping */
+		transition: object-position 400ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+		}
 	}
 
 	&[data-mine] video {
@@ -1599,8 +1606,10 @@
 		background-color: transparent;
 		font-size: 96px;
 
+		/* all of the picture, so nothing to centre */
 		& video {
 			object-fit: contain;
+			object-position: center !important;
 		}
 	}
 
