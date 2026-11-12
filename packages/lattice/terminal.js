@@ -13,6 +13,8 @@ const LOST_AFTER = 7000
 const LINE_HEIGHT = 1.25
 const MAX_FONT_SIZE = 14
 const PAD = 8
+// history is asked for this many lines at a time
+const HISTORY_CHUNK = 200
 
 // how a run looks (latticex/screen.js)
 const BOLD = 1
@@ -159,6 +161,62 @@ export default function LatticexTerminalTool(handle, element) {
 	let lastHeard = 0
 	let lastHello = 0
 
+	// scrolled back: the line at the top of the view, as latticex numbers
+	// them (the screen's top row is screen.top), or null to follow the screen.
+	// each viewer scrolls on its own
+	let viewTop = null
+	// history lines latticex has sent, for this host and epoch
+	const history = new Map()
+	let historyOf = ""
+	// chunk start → when it was asked for
+	const asked = new Map()
+	let wanting = false
+
+	const scrollable = () =>
+		Boolean(screen && Number.isInteger(screen.top) && screen.history > 0 && !screen.alternate)
+	const firstLine = () => screen.top - screen.history
+
+	function scrollTo(line) {
+		viewTop = !scrollable() || line >= screen.top ? null : Math.max(firstLine(), line)
+		setStatus(status)
+		draw()
+	}
+	const scrollBy = lines => scrollTo((viewTop ?? screen.top) + lines)
+
+	// a new latticex, or one that's started counting again, has other lines
+	function keepHistory() {
+		const of = `${screen.host} ${screen.epoch}`
+		if (of !== historyOf) {
+			historyOf = of
+			history.clear()
+			asked.clear()
+			viewTop = null
+			return
+		}
+		if (!scrollable()) viewTop = null
+		else if (viewTop != null) viewTop = Math.max(firstLine(), viewTop)
+		for (const line of history.keys()) if (line < firstLine()) history.delete(line)
+	}
+
+	function askHistory(start, end) {
+		const now = Date.now()
+		// and a chunk above, ready for scrolling further
+		for (let chunk = Math.floor(start / HISTORY_CHUNK - 1) * HISTORY_CHUNK; chunk < end; chunk += HISTORY_CHUNK) {
+			const from = Math.max(chunk, firstLine())
+			const to = Math.min(chunk + HISTORY_CHUNK, screen.top)
+			if (from >= to || now - (asked.get(chunk) ?? 0) < 1000) continue
+			asked.set(chunk, now)
+			handle.broadcast({latticex: "need-history", from: viewer, epoch: screen.epoch, start: from, end: to})
+		}
+	}
+
+	function onHistory(message) {
+		if (message.to !== viewer || message.host !== screen?.host || message.epoch !== screen.epoch) return
+		if (!Array.isArray(message.lines) || !Number.isInteger(message.start)) return
+		message.lines.forEach((runs, i) => history.set(message.start + i, runs))
+		if (viewTop != null) draw()
+	}
+
 	function hello() {
 		lastHello = Date.now()
 		handle.broadcast({latticex: "hello"})
@@ -169,11 +227,12 @@ export default function LatticexTerminalTool(handle, element) {
 		root.dataset.status = status
 		const size = screen ? `${screen.cols}×${screen.rows}` : ""
 		const title = screen?.title || "terminal"
+		const back = viewTop == null ? "" : ` · ${screen.top - viewTop} lines back`
 		state.textContent = {
 			waiting: "waiting for latticex",
-			live: `${title} · ${size}${screen?.readonly ? " · read only" : ""}`,
-			lost: `${title} · latticex went quiet`,
-			ended: `${title} · ended${exitStatus == null ? "" : ` (status ${exitStatus})`}`,
+			live: `${title} · ${size}${screen?.readonly ? " · read only" : ""}${back}`,
+			lost: `${title} · latticex went quiet${back}`,
+			ended: `${title} · ended${exitStatus == null ? "" : ` (status ${exitStatus})`}${back}`,
 		}[status]
 		waiting.hidden = status === "live" || status === "lost"
 		waitingWhat.textContent =
@@ -194,6 +253,10 @@ export default function LatticexTerminalTool(handle, element) {
 			title: message.title,
 			modes: message.modes,
 			readonly: message.readonly,
+			top: message.top,
+			history: message.history,
+			epoch: message.epoch,
+			alternate: message.alternate,
 		})
 	}
 
@@ -230,6 +293,7 @@ export default function LatticexTerminalTool(handle, element) {
 			early.set(message.seq, message)
 		}
 		catchUp()
+		keepHistory()
 		lastHeard = Date.now()
 		setStatus("live")
 		draw()
@@ -239,6 +303,8 @@ export default function LatticexTerminalTool(handle, element) {
 		if (!message || typeof message !== "object") return
 		if (message.latticex === "screen") {
 			onScreen(message)
+		} else if (message.latticex === "history") {
+			onHistory(message)
 		} else if (message.latticex === "alive") {
 			if (message.host !== screen?.host) return hello()
 			lastHeard = Date.now()
@@ -254,6 +320,8 @@ export default function LatticexTerminalTool(handle, element) {
 	// ── drawing ──────────────────────────────────────────────────────────
 
 	let frameRequest = null
+	// a row's height as last drawn, for turning a wheel's pixels into rows
+	let rowHeight = 16
 	function draw() {
 		frameRequest ??= requestAnimationFrame(paint)
 	}
@@ -280,6 +348,7 @@ export default function LatticexTerminalTool(handle, element) {
 		)
 		const cellWidth = size * advance
 		const cellHeight = Math.ceil(size * LINE_HEIGHT)
+		rowHeight = cellHeight
 		const width = Math.ceil(cols * cellWidth)
 		const height = rows * cellHeight
 		canvas.style.width = `${width}px`
@@ -293,9 +362,24 @@ export default function LatticexTerminalTool(handle, element) {
 
 		const cursor = screen.cursor
 		const focused = document.activeElement === canvas
-		const showCursor = cursor?.visible && status === "live"
+		// scrolled back, the screen's rows are further down the view
+		const down = viewTop == null ? 0 : screen.top - viewTop
+		const cursorRow = cursor ? cursor.y + down : -1
+		const showCursor = cursor?.visible && status === "live" && cursorRow >= 0 && cursorRow < rows
+		let missing = null
 		for (let y = 0; y < rows; y++) {
-			const runs = screen.lines[y] ?? []
+			let runs
+			if (y >= down) {
+				runs = screen.lines[y - down] ?? []
+			} else {
+				const line = viewTop + y
+				runs = history.get(line)
+				if (!runs) {
+					missing ??= [line, line + 1]
+					missing[1] = line + 1
+					runs = []
+				}
+			}
 			const top = y * cellHeight
 			for (const [x, text, fgColour, bgColour, look] of runs) {
 				let fg = colourOf(fgColour, theme.colours, theme.fg)
@@ -319,9 +403,11 @@ export default function LatticexTerminalTool(handle, element) {
 				context.globalAlpha = 1
 			}
 		}
+		wanting = Boolean(missing)
+		if (missing) askHistory(...missing)
 		if (showCursor) {
 			const left = cursor.x * cellWidth
-			const top = cursor.y * cellHeight
+			const top = cursorRow * cellHeight
 			context.fillStyle = context.strokeStyle = theme.cursor
 			if (focused) {
 				context.globalAlpha = 0.5
@@ -344,6 +430,8 @@ export default function LatticexTerminalTool(handle, element) {
 	let typingTimer = null
 	function send(input) {
 		if (status !== "live" || screen?.readonly) return
+		// typing goes back to the screen, as a terminal does
+		if (viewTop != null) scrollTo(screen.top)
 		typing.push(input)
 		typingTimer ??= setTimeout(() => {
 			typingTimer = null
@@ -355,6 +443,13 @@ export default function LatticexTerminalTool(handle, element) {
 	function onKeyDown(event) {
 		// ⌘ is the browser's (⌘v pastes, below)
 		if (event.metaKey || event.isComposing) return
+		// shift-page up and down scroll back here, as a terminal's do
+		if (event.shiftKey && (event.key === "PageUp" || event.key === "PageDown") && scrollable()) {
+			event.preventDefault()
+			const page = Math.max(1, screen.rows - 1)
+			scrollBy(event.key === "PageUp" ? -page : page)
+			return
+		}
 		const input = inputFor(event)
 		if (input == null) return
 		event.preventDefault()
@@ -368,7 +463,30 @@ export default function LatticexTerminalTool(handle, element) {
 		send({paste: text})
 	}
 
+	// the wheel scrolls back through history. a program with the whole screen
+	// (vim, less) has none, so there it's the arrow keys, as most terminals do
+	let wheelRows = 0
+	function onWheel(event) {
+		if (!screen || status === "waiting") return
+		const alternate = screen.alternate && status === "live" && !screen.readonly
+		if (!alternate && !scrollable()) return
+		event.preventDefault()
+		wheelRows +=
+			event.deltaMode === 1
+				? event.deltaY
+				: event.deltaMode === 2
+					? event.deltaY * screen.rows
+					: event.deltaY / rowHeight
+		const rows = Math.trunc(wheelRows)
+		if (!rows) return
+		wheelRows -= rows
+		if (!alternate) return scrollBy(rows)
+		const key = {key: rows < 0 ? "up" : "down"}
+		for (let i = 0; i < Math.min(Math.abs(rows), screen.rows); i++) send(key)
+	}
+
 	canvas.addEventListener("keydown", onKeyDown)
+	screenBox.addEventListener("wheel", onWheel, {passive: false})
 	canvas.addEventListener("paste", onPaste)
 	canvas.addEventListener("focus", draw)
 	canvas.addEventListener("blur", draw)
@@ -381,6 +499,8 @@ export default function LatticexTerminalTool(handle, element) {
 		const quiet = Date.now() - lastHeard
 		if (status === "live" && quiet > LOST_AFTER) setStatus("lost")
 		if ((status === "waiting" || status === "lost") && Date.now() - lastHello >= HELLO_EVERY) hello()
+		// history that was asked for and hasn't come is asked for again
+		if (wanting && viewTop != null) draw()
 	}, 500)
 	const resizeObserver = new ResizeObserver(draw)
 	resizeObserver.observe(screenBox)

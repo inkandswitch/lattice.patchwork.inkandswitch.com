@@ -1,5 +1,6 @@
 import {spawn, spawnSync} from "node:child_process"
-import {existsSync, readFileSync} from "node:fs"
+import {existsSync, readFileSync, watch} from "node:fs"
+import {createServer} from "node:net"
 import {dirname, join, relative, resolve, sep} from "node:path"
 import {fileURLToPath} from "node:url"
 import {stripVTControlCharacters} from "node:util"
@@ -12,6 +13,11 @@ const processGroups = process.platform !== "win32"
 // --no-tunnel (or LATTICE_TUNNEL=0)
 const tunnel =
 	!process.argv.includes("--no-tunnel") && process.env.LATTICE_TUNNEL !== "0"
+// with LATTICE_TUNNEL_HOST, the tunnel is a named one (LATTICE_TUNNEL_NAME,
+// lattice-dev unless said) routed to that hostname, so the link to send is
+// the same every time. setting one up is in the readme
+const tunnelHost = process.env.LATTICE_TUNNEL_HOST
+const tunnelName = process.env.LATTICE_TUNNEL_NAME ?? "lattice-dev"
 const SITE = "https://lattice.patchwork.inkandswitch.com"
 const footerLines = tunnel ? 10 : 7
 const footer = process.stdout.isTTY && process.stdout.rows > footerLines
@@ -132,6 +138,10 @@ function checkout(variables) {
 }
 
 function packageVersion(name) {
+	// read through node_modules first, not the resolver: node remembers where
+	// a package resolved to, and an install moves it
+	const installed = join(root, "node_modules", name, "package.json")
+	if (existsSync(installed)) return JSON.parse(readFileSync(installed, "utf8")).version
 	let entry
 	try {
 		entry = import.meta.resolve(`${name}/package.json`)
@@ -177,7 +187,7 @@ function run(name, command, args, cwd, env = process.env) {
 	}
 	children.push(child)
 	child.on("exit", (code, signal) => {
-		if (stopping) return
+		if (stopping || child.replaced) return
 		process.exitCode = code ?? (signal ? 1 : 0)
 		stop()
 	})
@@ -213,22 +223,27 @@ function ensureBase(directory) {
 	}
 }
 
-// cloudflared prints the quick tunnel's url among its logs. the tunnel going
-// away (or not starting) leaves the dev server running
+// cloudflared prints the quick tunnel's url among its logs (a named tunnel's
+// is known; it's up once a connection's registered). the tunnel going away
+// (or not starting) leaves the dev server running
 function startTunnel(url) {
 	const child = spawn(
 		"cloudflared",
-		["tunnel", "--no-autoupdate", "--url", url],
+		tunnelHost
+			? ["tunnel", "--no-autoupdate", "--url", url, "run", tunnelName]
+			: ["tunnel", "--no-autoupdate", "--url", url],
 		{stdio: ["ignore", "pipe", "pipe"], detached: processGroups}
 	)
 	children.push(child)
 	let output = ""
 	const read = chunk => {
 		output = `${output}${chunk}`.slice(-4096)
-		const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)
-		if (!match || match[0] === tunnelURL) return
+		const found = tunnelHost
+			? /Registered tunnel connection/.test(output) && `https://${tunnelHost}`
+			: output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/)?.[0]
+		if (!found || found === tunnelURL) return
 		stopSpinner()
-		tunnelURL = match[0]
+		tunnelURL = found
 		devLink = `${SITE}/?dev=${tunnelURL}`
 		console.log(
 			`\n  tunnel: ${tunnelURL}\n\n  ${bold("send her this link:")}\n  ${link(devLink)}\n\n  \x1b[2m(anyone with it can use this dev server)\x1b[0m\n`
@@ -252,6 +267,9 @@ function startTunnel(url) {
 		if (stopping || tunnelURL.startsWith("needs")) return
 		tunnelURL = `closed (cloudflared exited ${code})`
 		devLink = ""
+		// what it said last, which for a named tunnel not set up says why
+		const error = output.split("\n").filter(line => / ERR /.test(line)).at(-1)
+		if (error) console.error(`tunnel: ${error.trim()}`)
 		showFooter()
 	})
 }
@@ -341,22 +359,85 @@ if (base) run("base", "pnpm", ["watch"], base, watchEnv)
 // packages/versions is built (its dist is what's served), so it's rebuilt as
 // it changes
 run("versions", "pnpm", ["--filter", "@lattice/versions", "dev"], root, watchEnv)
-const site = run("site", "pnpm", ["exec", "vite"], root, watchEnv)
-let siteOutput = ""
-site.stdout?.on("data", chunk => {
-	siteOutput = `${siteOutput}${stripVTControlCharacters(chunk.toString())}`
-	const match = siteOutput.match(/Local:\s+(https?:\/\/\S+)/)
-	if (match) {
-		if (tunnel && devURL === "starting…") {
-			startSpinner()
-			startTunnel(match[1])
+// args, after the first start: the same port again, or the tunnel's lost it
+function startSite(args = []) {
+	const child = run("site", "pnpm", ["exec", "vite", ...args], root, watchEnv)
+	let siteOutput = ""
+	child.stdout?.on("data", chunk => {
+		siteOutput = `${siteOutput}${stripVTControlCharacters(chunk.toString())}`
+		const match = siteOutput.match(/Local:\s+(https?:\/\/\S+)/)
+		if (match) {
+			if (tunnel && devURL === "starting…") {
+				startSpinner()
+				startTunnel(match[1])
+			}
+			devURL = match[1]
+			setStatus("ready")
+			siteOutput = ""
+		} else {
+			siteOutput = siteOutput.slice(-2048)
 		}
-		devURL = match[1]
-		setStatus("ready")
-		siteOutput = ""
-	} else {
-		siteOutput = siteOutput.slice(-2048)
+	})
+	return child
+}
+
+// a port's free once something can listen on it
+function portFree(port, host) {
+	return new Promise(done => {
+		const probe = createServer()
+		probe.once("error", () => done(false))
+		probe.listen(port, host, () => probe.close(() => done(true)))
+	})
+}
+
+// vite only finds where packages are when it starts, so after an install
+// (pnpm update, a new pkg-base) the site starts again. everything else, the
+// tunnel too, stays: the link that was sent still works
+let site = startSite()
+let restarting = false
+async function restartSite() {
+	if (stopping || restarting) return
+	restarting = true
+	setStatus("restarting site: packages changed")
+	const {port, hostname} = new URL(devURL)
+	const old = site
+	old.replaced = true
+	const exited = new Promise(done =>
+		old.exitCode !== null || old.signalCode !== null ? done() : old.once("exit", done)
+	)
+	try {
+		if (processGroups) process.kill(-old.pid, "SIGTERM")
+		else old.kill("SIGTERM")
+	} catch (error) {
+		if (error.code !== "ESRCH") throw error
 	}
-})
+	await exited
+	// pnpm can go before its vite does
+	for (let tries = 0; !(await portFree(port, hostname)); tries++) {
+		if (tries === 25) {
+			try {
+				if (processGroups) process.kill(-old.pid, "SIGKILL")
+			} catch {}
+		}
+		await new Promise(done => setTimeout(done, 200))
+	}
+	if (stopping) return
+	basePackages = base ? basePackages : packageVersion("@inkandswitch/patchwork-pkg-base")
+	corePackages = core ? corePackages : packageVersion("@inkandswitch/patchwork")
+	site = startSite(["--port", port, "--strictPort"])
+	restarting = false
+}
+
+// pnpm writes node_modules/.modules.yaml last, once an install's done
+let installTimer
+try {
+	watch(join(root, "node_modules"), (_, filename) => {
+		if (filename !== ".modules.yaml" || devURL === "starting…") return
+		clearTimeout(installTimer)
+		installTimer = setTimeout(restartSite, 1000)
+	})
+} catch (error) {
+	console.error(`not watching for installs: ${error.message}`)
+}
 process.stdout.on("resize", showFooter)
 showFooter()

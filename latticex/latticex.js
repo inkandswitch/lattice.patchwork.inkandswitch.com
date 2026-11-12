@@ -17,6 +17,7 @@ import {randomUUID} from "node:crypto"
 import {accessSync, chmodSync, constants, existsSync} from "node:fs"
 import {createRequire} from "node:module"
 import {dirname, join} from "node:path"
+import {history} from "./history.js"
 import {encodeInput, parseTyped} from "./keys.js"
 import {rowRuns, screenText} from "./screen.js"
 
@@ -25,6 +26,10 @@ const SERVER = "wss://subduction.sync.inkandswitch.com"
 const FRAME_DELAY = 30
 // how often a host says it's still there, with the seq it's up to
 const ALIVE_EVERY = 2000
+// lines kept above the screen, for viewers scrolling back
+const SCROLLBACK = 5000
+// the most history lines one message carries
+const HISTORY_MAX = 500
 
 const USAGE = `latticex: share a program on a pty over an automerge doc
 
@@ -86,7 +91,7 @@ async function share(url, command, {server, readonly, size, quiet}) {
 	const handle = await open(url, server, "host")
 	const local = Boolean(process.stdin.isTTY && process.stdout.isTTY)
 	let [cols, rows] = local ? [process.stdout.columns, process.stdout.rows] : size
-	const term = new xterm.Terminal({cols, rows, scrollback: 0, allowProposedApi: true})
+	const term = new xterm.Terminal({cols, rows, scrollback: SCROLLBACK, allowProposedApi: true})
 	let program
 	try {
 		makeSpawnHelperExecutable()
@@ -119,8 +124,27 @@ async function share(url, command, {server, readonly, size, quiet}) {
 	let timer = null
 	let full = true
 
+	// what's scrolled off the top, numbered, for viewers scrolling back
+	const scrollback = history(term)
+
+	function sendHistory({from, epoch, start, end}) {
+		if (typeof from !== "string" || epoch !== scrollback.epoch) return
+		if (!Number.isInteger(start) || !Number.isInteger(end)) return
+		const [begin, lines] = scrollback.lines(start, end, HISTORY_MAX)
+		if (begin == null) return
+		handle.broadcast({
+			latticex: "history",
+			host,
+			to: from,
+			epoch,
+			start: begin,
+			lines: lines.map(line => rowRuns(line, cols, cell)),
+		})
+	}
+
 	function frame() {
 		timer = null
+		scrollback.mark()
 		const buffer = term.buffer.active
 		const lines = {}
 		let changed = false
@@ -143,7 +167,14 @@ async function share(url, command, {server, readonly, size, quiet}) {
 			applicationCursorKeysMode: term.modes.applicationCursorKeysMode,
 			bracketedPasteMode: term.modes.bracketedPasteMode,
 		}
-		const rest = JSON.stringify([cursor, title, modes])
+		const alternate = buffer.type === "alternate"
+		const history = {
+			top: scrollback.top(),
+			history: alternate ? 0 : scrollback.count(),
+			epoch: scrollback.epoch,
+			alternate,
+		}
+		const rest = JSON.stringify([cursor, title, modes, history])
 		if (!full && !changed && rest === sentRest) return
 		sentRest = rest
 		handle.broadcast({
@@ -158,6 +189,7 @@ async function share(url, command, {server, readonly, size, quiet}) {
 			title,
 			readonly,
 			modes,
+			...history,
 		})
 		full = false
 	}
@@ -211,6 +243,7 @@ async function share(url, command, {server, readonly, size, quiet}) {
 	messages(handle, message => {
 		if (message.latticex === "hello") schedule(true)
 		if (message.latticex === "keys" && !readonly) typed(message)
+		if (message.latticex === "need-history") sendHistory(message)
 	})
 
 	const alive = setInterval(() => handle.broadcast({latticex: "alive", host, seq}), ALIVE_EVERY)
@@ -220,6 +253,8 @@ async function share(url, command, {server, readonly, size, quiet}) {
 		rows = nextRows
 		program.resize(cols, rows)
 		term.resize(cols, rows)
+		// rewrapped, so numbered again
+		scrollback.forget()
 		sent = []
 		schedule(true)
 	}

@@ -101,6 +101,7 @@ export const plugins = [
       id,
       name,
       icon,
+      unlisted: true,
       async load() {
         const { datatypeFor } = await import("./profile-docs.js");
         return datatypeFor(id);

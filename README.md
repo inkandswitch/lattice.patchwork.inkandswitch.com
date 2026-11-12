@@ -26,6 +26,24 @@ pnpm test
 pnpm build
 ```
 
+an install while `pnpm dev`'s running (a new pkg-base, say) starts the site
+again, on the same port, and the tunnel stays where it is.
+
+the tunnel's a new `trycloudflare.com` address each time. for one that
+stays the same, make a named tunnel on a domain your cloudflare account has,
+once:
+
+```
+cloudflared tunnel login
+cloudflared tunnel create lattice-dev
+cloudflared tunnel route dns lattice-dev lattice-dev.example.com
+```
+
+then `LATTICE_TUNNEL_HOST=lattice-dev.example.com pnpm dev` (export it from
+your shell's profile to have it always), and the link to send is the same
+every time. `LATTICE_TUNNEL_NAME` is the tunnel's name, if it isn't
+`lattice-dev`.
+
 ## who made it
 
 lattice is by chee and Mimi Reyburn, at [ink & switch](https://www.inkandswitch.com), on
