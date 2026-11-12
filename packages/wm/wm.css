@@ -1229,6 +1229,38 @@
 	}
 }
 
+/* a row of faces longer than its room (ui/along.js): it scrolls sideways,
+   no bar, and fades out at whichever end there's more past. outside
+   .lattice-wm, as the call bar's one too */
+.lattice-wm-along {
+	--lattice-wm-along-fade: 16px;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	overflow-y: hidden;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+
+	&[data-more="end"] {
+		mask-image: linear-gradient(to right, #000 calc(100% - var(--lattice-wm-along-fade)), transparent);
+	}
+	&[data-more="start"] {
+		mask-image: linear-gradient(to left, #000 calc(100% - var(--lattice-wm-along-fade)), transparent);
+	}
+	&[data-more="both"] {
+		mask-image: linear-gradient(
+			to right,
+			transparent,
+			#000 var(--lattice-wm-along-fade),
+			#000 calc(100% - var(--lattice-wm-along-fade)),
+			transparent
+		);
+	}
+}
+
 /* ── a call (call/): faces, the question before you're in one, and faces
       floating or down a sidebar. outside .lattice-wm, as an app shows them
       too ─────────────────────────────────────────────────────────────────── */
@@ -2000,11 +2032,18 @@
 	}
 
 	/* who else is here, by the project's name. one's pressed while it's
-	   being followed */
+	   being followed. more than there's room for, they scroll along
+	   (.lattice-wm-along), leaving the name half. the padding's room for a
+	   pressed one's ring, which the scrolling would cut off */
 	& .lattice-wm-faces {
 		display: flex;
-		flex: none;
+		flex: 0 1 auto;
 		gap: 2px;
+		min-width: 0;
+		max-width: 50%;
+		margin: -3px;
+		padding: 3px;
+		--lattice-wm-along-fade: 12px;
 	}
 
 	& .lattice-wm-face {

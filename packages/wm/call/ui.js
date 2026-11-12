@@ -14,6 +14,7 @@ import { faceImage } from "../presence.js";
 import { centreOn } from "./face.js";
 import { colourFor } from "../pointer.js";
 import { icon } from "../ui/icons.js";
+import { bringAlong } from "../ui/along.js";
 
 const initial = (name) => (String(name ?? "")[0] ?? "?").toUpperCase();
 
@@ -250,13 +251,12 @@ const EASE_MOVE = "cubic-bezier(0.77, 0, 0.175, 1)";
 const EASE_OUT = "cubic-bezier(0.23, 1, 0.32, 1)";
 const reducedMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// someone's face in the call bar (or, past the ones it has room for, the
-// count of the rest): where their floating face goes to, and comes from
+// someone's face in the call bar: where their floating face goes to, and
+// comes from. scrolled along out of sight, it's brought back into it first
 function inBar(id) {
-  return (
-    document.querySelector(`.lattice-call [data-call-face="${CSS.escape(id)}"]`) ??
-    (id === "me" ? null : document.querySelector(".lattice-call .lattice-call-more"))
-  );
+  const face = document.querySelector(`.lattice-call [data-call-face="${CSS.escape(id)}"]`);
+  bringAlong(face);
+  return face;
 }
 
 // the transform that puts `float`'s picture over `target`, and the origin it's

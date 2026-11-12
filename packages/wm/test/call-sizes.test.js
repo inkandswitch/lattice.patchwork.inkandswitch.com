@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SPEAKING_AFTER, QUIET_AFTER, levelOf, speakingStep, tilesFor, videoFor, shownInBar } from "../call/sizes.js";
+import { SPEAKING_AFTER, QUIET_AFTER, levelOf, speakingStep, tilesFor, videoFor } from "../call/sizes.js";
 
 test("the sidebar's tiles: big while there are few, chips when there are many", () => {
   assert.equal(tilesFor(1), "tiles");
@@ -9,12 +9,6 @@ test("the sidebar's tiles: big while there are few, chips when there are many", 
   assert.equal(tilesFor(9), "grid");
   assert.equal(tilesFor(10), "chips");
   assert.equal(tilesFor(20), "chips");
-});
-
-test("the call bar: up to six faces, and how many more", () => {
-  assert.deepEqual(shownInBar(["a", "b"]), { shown: ["a", "b"], more: 0 });
-  const twenty = Array.from({ length: 20 }, (_, i) => i);
-  assert.deepEqual(shownInBar(twenty), { shown: [0, 1, 2, 3, 4, 5], more: 14 });
 });
 
 test("video sent: less of it, the more people there are to send it to", () => {

@@ -14,14 +14,6 @@ export function tilesFor(count) {
   return "chips";
 }
 
-// how many faces the call bar has room for
-export const BAR_FACES = 6;
-
-/** the faces the call bar shows of `list`, and how many more there are */
-export function shownInBar(list, room = BAR_FACES) {
-  return { shown: list.slice(0, room), more: Math.max(0, list.length - room) };
-}
-
 /**
  * a video sender's encoding for a call of `count` people (you too), or null
  * for as it comes

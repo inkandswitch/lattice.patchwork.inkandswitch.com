@@ -3,7 +3,7 @@
 // share) and hanging up. its menu says how faces are shown (floating, or in
 // the sidebar, and on cursors too or not) and which mic and camera. not in
 // one, it says when there's one on in the project you're in, to join
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import html from "solid-js/html";
 import {
   FACES,
@@ -24,7 +24,7 @@ import {
 } from "../wm/call/call.js";
 import { download, DOWNLOAD_BYTES, NOISE } from "../wm/call/noise.js";
 import { DragOut, Face, StageButton, names } from "../wm/call/ui.js";
-import { shownInBar } from "../wm/call/sizes.js";
+import { scrollsAlong } from "../wm/ui/along.js";
 import { icon } from "../wm/ui/icons.js";
 
 /** `props.inspector` is the inspector's sidebar state: shown for faces in it */
@@ -74,17 +74,6 @@ export function CallBar(props) {
     <//>`;
   }
 
-  // the others the bar has room for, you being one of its six. when they
-  // don't all fit, whoever's speaking, or spoke last, gets the room (while
-  // they do, nobody moves)
-  const bar = createMemo(() => {
-    let others = call.peers();
-    if (others.length > 5) {
-      others = [...others].sort((a, b) => (b.speaking ? 1 : 0) - (a.speaking ? 1 : 0) || (b.spoke ?? 0) - (a.spoke ?? 0));
-    }
-    return shownInBar(others, 5);
-  });
-
   const In = () => html`<div class="lattice-call" role="group" aria-label="the call">
     <div class="lattice-call-head">
       <span class="lattice-call-phone">${icon("phone", 12)}</span>
@@ -102,15 +91,10 @@ export function CallBar(props) {
       </button>
     </div>
     <div class="lattice-call-row">
-      <span class="lattice-call-faces">
+      <span class="lattice-call-faces" ref=${scrollsAlong}>
         <${DragOut} id="me"><${Face} id="me" size=${26} /><//>
-        <${For} each=${() => bar().shown}>
+        <${For} each=${call.peers}>
           ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-call-face-button"><${Face} id=${peer.id} size=${26} /><//>`}
-        <//>
-        <${Show} when=${() => bar().more}>
-          <span class="lattice-call-more" title=${() => names(call.peers().slice(bar().shown.length).map((peer) => peer.name))}
-            >+${() => bar().more}</span
-          >
         <//>
       </span>
       <span class="lattice-call-buttons">

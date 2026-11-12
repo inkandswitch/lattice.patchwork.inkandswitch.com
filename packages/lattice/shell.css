@@ -392,14 +392,18 @@
 		justify-content: space-between;
 		gap: 6px;
 	}
+	/* everyone's faces, you first. more than there's room for, they scroll
+	   along (.lattice-wm-along). the padding's room for a speaking ring and
+	   a muted badge, which the scrolling would cut off */
 	& .lattice-call-faces {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
 		gap: 3px;
 		min-width: 0;
+		margin: -4px;
+		padding: 4px;
 	}
-	/* a face to fill the panes with, and the rest, counted */
+	/* a face to fill the panes with */
 	& .lattice-call-face-button {
 		display: inline-grid;
 		border-radius: 50%;
@@ -407,17 +411,6 @@
 		&[data-staged] .lattice-wm-call-face {
 			border-color: var(--lattice-shell-primary);
 		}
-	}
-	& .lattice-call-more {
-		display: inline-grid;
-		place-items: center;
-		min-width: 26px;
-		height: 26px;
-		padding: 0 4px;
-		box-sizing: border-box;
-		border-radius: 13px;
-		background: var(--lattice-shell-chrome-fill-offset-20, var(--lattice-rule));
-		font: 600 11px/1 var(--lattice-wm-sans, inherit);
 	}
 	& .lattice-call-buttons {
 		display: flex;

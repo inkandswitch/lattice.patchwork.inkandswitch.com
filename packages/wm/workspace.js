@@ -23,6 +23,7 @@ import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
 import { holdSecret, secret } from "./ui/secret.js";
+import { scrollsAlong } from "./ui/along.js";
 import { createInk } from "./ink.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
@@ -2556,7 +2557,7 @@ export function mountWorkspace(
   // again (or escape) stops
   function Faces() {
     return html`<${Show} when=${() => people.length}>
-      <span class="lattice-wm-faces" role="group" aria-label="who's here">
+      <span class="lattice-wm-faces" role="group" aria-label="who's here" ref=${scrollsAlong}>
         <${For} each=${() => people}>
           ${(person) => {
             const image = () => faceImage(person.avatar);
