@@ -361,60 +361,65 @@ export function CallFloating() {
 }
 
 // a face dragged out (of the call bar) and let go somewhere else: their
-// floating face is back, there. only while faces are floating. returns the
-// handlers for what's dragged, and whether what just happened was a drag
-// (so it's not a click too)
+// floating face is back, there. only while faces are floating. from the
+// press, the whole window's listened to (a little face is soon left behind
+// by the pointer), and the browser's own dragging is kept out of it.
+// returns the handler for the press, and whether what just happened was a
+// drag (so it's not a click too)
 const DRAG_FROM = 5;
+const GHOST_SIZE = 56;
 function dragOut(id) {
-  let start = null;
-  let ghost = null;
   let dragged = false;
   function onPointerDown(event) {
     if (event.button !== 0 || call.mode() !== "floating") return;
-    start = { x: event.clientX, y: event.clientY, from: event.currentTarget };
+    const from = event.target.closest("[data-call-face]");
+    if (!from) return;
+    // no text selected, no picture dragged by the browser
+    event.preventDefault();
     dragged = false;
-  }
-  function onPointerMove(event) {
-    if (!start) return;
-    if (!ghost) {
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < DRAG_FROM) return;
-      start.from.setPointerCapture(event.pointerId);
-      // what's dragged: a copy of their face, pictures and all
-      const face = start.from.querySelector(".lattice-wm-call-face");
-      ghost = face.cloneNode(true);
-      const video = face.querySelector("video");
-      const copy = ghost.querySelector("video");
-      if (video && copy) {
-        copy.srcObject = video.srcObject;
-        copy.muted = true;
-        copy.play().catch(() => {});
+    const start = { x: event.clientX, y: event.clientY };
+    let ghost = null;
+    const move = (moved) => {
+      if (moved.pointerId !== event.pointerId) return;
+      if (!ghost) {
+        if (Math.hypot(moved.clientX - start.x, moved.clientY - start.y) < DRAG_FROM) return;
+        ghost = ghostOf(from.querySelector(".lattice-wm-call-face"));
       }
-      ghost.classList.add("lattice-wm-call-ghost");
-      document.body.append(ghost);
-    }
-    ghost.style.left = `${event.clientX}px`;
-    ghost.style.top = `${event.clientY}px`;
-  }
-  function onPointerUp(event) {
-    if (ghost) {
-      ghost.remove();
-      ghost = null;
+      ghost.style.left = `${moved.clientX}px`;
+      ghost.style.top = `${moved.clientY}px`;
+    };
+    const stop = () => {
+      removeEventListener("pointermove", move, true);
+      removeEventListener("pointerup", up, true);
+      removeEventListener("pointercancel", cancel, true);
+      ghost?.remove();
+    };
+    const cancel = (ended) => {
+      if (ended.pointerId === event.pointerId) stop();
+    };
+    const up = (ended) => {
+      if (ended.pointerId !== event.pointerId) return;
+      const was = !!ghost;
+      stop();
+      if (!was) return;
       dragged = true;
-      // let go on what it came from: never mind
-      if (!start.from.closest(".lattice-call")?.contains(document.elementFromPoint(event.clientX, event.clientY))) {
-        const width = call.settings.floating[call.floatKey(id)]?.width ?? FLOAT_WIDTH;
-        dropped.add(call.floatKey(id));
-        showFloating(call.floatKey(id), {
-          x: Math.max(0, (event.clientX - width / 2) / innerWidth),
-          y: Math.max(0, (event.clientY - 24) / innerHeight),
-          width,
-        });
-      }
-    }
-    start = null;
+      // let go back over the call bar: never mind
+      if (from.closest(".lattice-call")?.contains(document.elementFromPoint(ended.clientX, ended.clientY))) return;
+      const key = call.floatKey(id);
+      const width = call.settings.floating[key]?.width ?? FLOAT_WIDTH;
+      dropped.add(key);
+      showFloating(key, {
+        x: Math.max(0, (ended.clientX - width / 2) / innerWidth),
+        y: Math.max(0, (ended.clientY - (width * 0.75) / 2) / innerHeight),
+        width,
+      });
+    };
+    addEventListener("pointermove", move, true);
+    addEventListener("pointerup", up, true);
+    addEventListener("pointercancel", cancel, true);
   }
   return {
-    handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp },
+    onPointerDown,
     // (once: the click after a drag)
     wasDrag: () => {
       const was = dragged;
@@ -424,18 +429,54 @@ function dragOut(id) {
   };
 }
 
-/** `props.id`'s face (props.children), to drag out of where it is into a floating face */
+// what's dragged: a copy of the face, pictures and all, under the pointer.
+// its look is its own, so nothing it's dragged over or out of shapes it
+function ghostOf(face) {
+  const ghost = face.cloneNode(true);
+  const video = face.querySelector("video");
+  const copy = ghost.querySelector("video");
+  if (video && copy) {
+    copy.srcObject = video.srcObject;
+    copy.muted = true;
+    copy.play().catch(() => {});
+  }
+  ghost.classList.add("lattice-wm-call-ghost");
+  Object.assign(ghost.style, {
+    position: "fixed",
+    zIndex: "2147483000",
+    width: `${GHOST_SIZE}px`,
+    height: `${GHOST_SIZE}px`,
+    translate: "-50% -50%",
+    pointerEvents: "none",
+    margin: "0",
+  });
+  ghost.style.setProperty("--lattice-wm-call-size", `${GHOST_SIZE}px`);
+  document.body.append(ghost);
+  return ghost;
+}
+
+// someone minimised (floating, put away): their floating face back where it
+// was, out of the call bar. whether they were
+function restore(id) {
+  const key = call.floatKey(id);
+  if (call.mode() !== "floating" || !call.settings.floating[key]?.hidden) return false;
+  showFloating(key, {});
+  return true;
+}
+
+/**
+ * `props.id`'s face (props.children), to drag out of where it is into a
+ * floating face, or, minimised, click to have it back
+ */
 export function DragOut(props) {
   const drag = dragOut(props.id);
   return html`<span
     class="lattice-wm-call-drag"
     data-call-face=${() => props.id}
-    title=${() => (call.mode() === "floating" ? "drag out to float" : undefined)}
-    onPointerDown=${drag.handlers.onPointerDown}
-    onPointerMove=${drag.handlers.onPointerMove}
-    onPointerUp=${drag.handlers.onPointerUp}
-    onPointerCancel=${drag.handlers.onPointerCancel}
-    onClick=${() => drag.wasDrag()}
+    title=${() => (call.mode() === "floating" ? "drag out to float (minimised: click to have it back)" : undefined)}
+    onPointerDown=${drag.onPointerDown}
+    onDragStart=${(event) => event.preventDefault()}
+    onClick=${() => !drag.wasDrag() && restore(props.id)}
   >
     ${props.children}
   </span>`;
@@ -443,7 +484,8 @@ export function DragOut(props) {
 
 /**
  * a face to click to fill the panes with them (again: the panes back), or,
- * floating, drag out to float. `props.id`; the rest's what's in it
+ * floating, drag out to float, and minimised, click to have back where it
+ * was. `props.id`; the rest's what's in it
  */
 export function StageButton(props) {
   const drag = dragOut(props.id);
@@ -458,11 +500,9 @@ export function StageButton(props) {
         : call.mode() === "floating"
           ? "fill the panes with them (or drag out to float)"
           : "fill the panes with them"}
-    onPointerDown=${drag.handlers.onPointerDown}
-    onPointerMove=${drag.handlers.onPointerMove}
-    onPointerUp=${drag.handlers.onPointerUp}
-    onPointerCancel=${drag.handlers.onPointerCancel}
-    onClick=${() => !drag.wasDrag() && toggleStage(props.id)}
+    onPointerDown=${drag.onPointerDown}
+    onDragStart=${(event) => event.preventDefault()}
+    onClick=${() => !drag.wasDrag() && !restore(props.id) && toggleStage(props.id)}
   >
     ${props.children}
   </button>`;

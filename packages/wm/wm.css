@@ -1707,14 +1707,10 @@
 	touch-action: none;
 }
 
-/* what's dragged out: a copy of the face, under the pointer */
+/* what's dragged out: a copy of the face, under the pointer (its place and
+   size are its own: ui.js's ghostOf) */
 .lattice-wm-call-ghost {
-	--lattice-wm-call-size: 56px !important;
-	position: fixed;
-	z-index: 60;
-	translate: -50% -50%;
-	box-shadow: 2px 2px 0 var(--lattice-wm-line);
-	pointer-events: none;
+	box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
 }
 
 /* one face filling the sidebar's box, you in its corner */
