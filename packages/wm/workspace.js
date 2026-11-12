@@ -2376,46 +2376,17 @@ export function mountWorkspace(
   }
 
   // a file's menu (ui/context-menu.js), as a project's is in lattice's
-  // sidebar: what else it could be shown with, copying its url, renaming it,
+  // sidebar: renaming it,
   // and taking it out of the project, which asks twice. delete on the file
   // opens it asking already
   let fileMenu;
   const [fileMenuFor, setFileMenuFor] = createSignal(null);
   const [fileMenuOpen, setFileMenuOpen] = createSignal(false);
   const [fileRemoving, setFileRemoving] = createSignal(false);
-  const [fileCopied, setFileCopied] = createSignal(false);
-  let fileCopiedTimer;
   function openFileMenu(at, url, { removing = false } = {}) {
-    clearTimeout(fileCopiedTimer);
     setFileMenuFor(url);
     setFileRemoving(removing);
-    setFileCopied(false);
     showMenuAt(fileMenu, at);
-  }
-
-  // in a new tab, in the pane last used, with that
-  function openWith(url, choice) {
-    fileMenu.hidePopover();
-    if (following()) follow(null);
-    const groupId = findGroup(lastGroupId()) ? lastGroupId() : null;
-    const [made] = updateLayout((nodes) =>
-      Layout.openPanels(nodes, groupId, "center", [Layout.newPanel(url, choice.tool, choice.patchworkTool)]),
-    );
-    activate(made);
-  }
-
-  // copying: it says so, a moment, before the menu goes
-  async function copyFileUrl(url) {
-    try {
-      await navigator.clipboard.writeText(url);
-    } catch (error) {
-      console.error("[wm] couldn't copy it", error);
-      fileMenu.hidePopover();
-      return;
-    }
-    setFileCopied(true);
-    clearTimeout(fileCopiedTimer);
-    fileCopiedTimer = setTimeout(() => fileMenu.hidePopover(), 600);
   }
 
   function removeFromMenu(url) {
@@ -2590,7 +2561,6 @@ export function mountWorkspace(
 
   function FileMenu(props) {
     const url = fileMenuFor;
-    const choices = () => (url() ? toolChoices(url()) : []);
     return html`<div
       class="lattice-wm-menu lattice-wm-file-menu"
       popover="auto"
@@ -2599,29 +2569,10 @@ export function mountWorkspace(
       onToggle=${(event) => {
         setFileMenuOpen(event.newState === "open");
         if (event.newState === "closed") {
-          clearTimeout(fileCopiedTimer);
           setFileRemoving(false);
         }
       }}
     >
-      <${Show} when=${() => choices().length > 1}>
-        <div class="lattice-wm-menu-heading">open with</div>
-        <${For} each=${choices}>
-          ${(choice) => html`<button
-            class="lattice-wm-menu-item"
-            role="menuitem"
-            title=${choice.title}
-            onClick=${() => openWith(url(), choice)}
-          >
-            ${choice.name}
-          </button>`}
-        <//>
-        <div class="lattice-wm-menu-rule"></div>
-      <//>
-      <button class="lattice-wm-menu-item" role="menuitem" onClick=${() => copyFileUrl(url())}>
-        ${() => icon(fileCopied() ? "check" : "copy")} copy url
-        <${Show} when=${fileCopied}><small class="lattice-wm-copied">copied</small><//>
-      </button>
       <button
         class="lattice-wm-menu-item"
         role="menuitem"
@@ -2878,7 +2829,6 @@ export function mountWorkspace(
     offCalls();
     offCallProject();
     clearTimeout(noticeTimer);
-    clearTimeout(fileCopiedTimer);
     clearInterval(ticker);
     offPatchworkTools();
     for (const [id, host] of hosts) destroyHost(id, host);
