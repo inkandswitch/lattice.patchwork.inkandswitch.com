@@ -16,12 +16,16 @@ export function shareUrl(filesUrl, name) {
 
 // "js", "k", or whatever else the file says it is. a latticex terminal isn't
 // a file, nor is a machine, a yarn or a swatch (profile-docs.js), but each
-// opens in a tool of ours as if it were
+// opens in a tool of ours as if it were. any other doc that isn't a file
+// (markdown, say) goes by its datatype: notes.markdown
 export function fileExtension(doc) {
-  if (doc?.["@patchwork"]?.type === "latticex") return "latticex";
+  const type = doc?.["@patchwork"]?.type;
+  if (type === "latticex") return "latticex";
   const kind = profileKind(doc);
   if (kind) return kind;
-  return fileExtensionOf(doc);
+  const own = fileExtensionOf(doc);
+  if (own || !type || type === "file") return own;
+  return String(type).toLowerCase();
 }
 
 // the first tool that fits a file is the one it opens in

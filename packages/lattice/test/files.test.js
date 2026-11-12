@@ -10,6 +10,17 @@ test("a profile's extension is its kind", () => {
 	assert.equal(fileExtension({name: "pattern.k"}), "k")
 })
 
+test("a doc that isn't a file goes by its datatype", () => {
+	assert.equal(fileExtension({"@patchwork": {type: "markdown"}, content: "# hi"}), "markdown")
+	assert.equal(fileExtension({"@patchwork": {type: "tldraw"}}), "tldraw")
+	// a file's is its own, and one with none has none
+	assert.equal(fileExtension({"@patchwork": {type: "file"}, name: "notes.md"}), "md")
+	assert.equal(fileExtension({"@patchwork": {type: "file"}, name: "README"}), "")
+	// one that says what it is, says
+	assert.equal(fileExtension({"@patchwork": {type: "markdown"}, extension: "md"}), "md")
+	assert.equal(fileExtension({}), "")
+})
+
 test("each kind opens in its own editor", () => {
 	assert.equal(toolsFor("machine")[0].id, "machine")
 	assert.equal(toolsFor("yarn")[0].id, "yarn")
