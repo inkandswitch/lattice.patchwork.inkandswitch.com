@@ -86,7 +86,12 @@ To latticex:
   are), `{key: "C-c"}` and `{paste: "text"}`. Ephemeral messages can arrive
   out of order, so each viewer numbers its own from 1 (again for each new
   `host`) and latticex types them in that order. A viewer missing a `screen`
-  `seq` waits a moment for it, then says `hello`.
+  `seq` waits a moment for it, then says `hello`. `{mouse: {action, button,
+  x, y, ctrl, alt, shift}}` is the mouse, for a program that's asked for it
+  (`modes.mouseTrackingMode` isn't `none`): action is `down`, `up`, `move`,
+  `wheelup` or `wheeldown`, button 0 left, 1 middle, 2 right, and x and y
+  the cell from 0. latticex says it the way the program asked (x10, vt200,
+  sgr…), or not at all if it didn't ask for that kind.
 - `need-history`: `{from, epoch, start, end}`: send me history lines `start`
   up to `end` (at most 500 come back)
 
@@ -96,3 +101,9 @@ In lattice, the wheel (or shift-page up and down) scrolls back through the
 history. Each viewer scrolls on its own, and typing goes back to the bottom.
 In a program with the whole screen (vim, less) the wheel types the up and
 down arrows instead.
+
+## the mouse, and selecting
+
+Dragging selects text, and ⌘C copies it. A program that asks for the mouse
+(tmux, claude, vim with `mouse=a`) gets clicks, drags and the wheel instead;
+hold alt to select or scroll here anyway.

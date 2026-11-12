@@ -110,8 +110,31 @@ const TOOL_TYPE = "application/x-lattice-wm-tool";
 const LAYOUT_TYPES = [PANEL_TYPE, TOOL_TYPE];
 const DOC_TYPES = ["text/x-patchwork-dnd", "text/x-patchwork-urls", "text/uri-list"];
 
+// files from the computer (the finder, the desktop): each is made a file doc
+const FILES_TYPE = "Files";
+// bigger than this and it's not made a doc: it'd be a long while syncing
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
+
 function isOurDrag(dataTransfer) {
-  return [...LAYOUT_TYPES, ...DOC_TYPES].some((type) => dataTransfer?.types.includes(type));
+  return [...LAYOUT_TYPES, ...DOC_TYPES, FILES_TYPE].some((type) => dataTransfer?.types.includes(type));
+}
+
+// files, and only files: not docs, which a page's image dragged in has too
+function onlyFiles(dataTransfer) {
+  const types = dataTransfer?.types ?? [];
+  return types.includes(FILES_TYPE) && ![...LAYOUT_TYPES, "text/x-patchwork-dnd", "text/x-patchwork-urls"].some((type) => types.includes(type));
+}
+
+// a file's content as a doc keeps it: text as text (so .js, .k and .md open
+// in an editor), anything else as bytes, as pasting an image into markdown
+// keeps it (codemirror-markdown's embed.ts)
+function fileContent(bytes, mimeType) {
+  if (/^(image|audio|video|font)\//.test(mimeType) || bytes.includes(0)) return bytes;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    return bytes;
+  }
 }
 
 // [{url, name?}], read the same way the sidebar reads its own drops
@@ -284,6 +307,11 @@ export function mountWorkspace(
   const theirs = new Map();
   const followKept = keptFollow(roomHandle && `lattice-wm:following:${roomHandle.url}`);
   const [following, setFollowingNow] = createSignal(followKept.initial);
+  // following, what pressing on their panes does: "draw" ink on them
+  // (ink.js), or "use" them, editing and typing in them as they are yours,
+  // while the panes, tabs and scrolling still follow along
+  const [followMode, setFollowMode] = createSignal("draw");
+  const drawing = () => !!following() && followMode() === "draw";
   const setFollowing = (peer) => {
     followKept.set(peer);
     setFollowingNow(peer);
@@ -493,8 +521,9 @@ export function mountWorkspace(
 
   // ── ink (ink.js): following someone, pressing and dragging over their
   //    panes draws, for them to see too. their panes are inert while you
-  //    follow, so it's drawn on a sheet over them (InkSheet). following
-  //    goes on till you press their face again
+  //    draw, so it's drawn on a sheet over them (InkSheet); switched to
+  //    using them (followMode), the sheet lets presses through to the
+  //    panes. following goes on till you press their face again
   const inkPanes = new Map();
   const ink = createInk({
     panes: () =>
@@ -704,6 +733,30 @@ export function mountWorkspace(
     const fileHandle = await repo.create2({ ...newFileDoc(unique), ...extra });
     addFiles([fileHandle.url]);
     return fileHandle.url;
+  }
+
+  // files from the computer, each a file doc in the project. their urls; what
+  // couldn't be, it says so in the pane (groupId)
+  async function importFiles(files, groupId) {
+    const urls = [];
+    const refused = [];
+    for (const file of files) {
+      if (file.size > MAX_FILE_BYTES) {
+        refused.push(`${file.name} (it's over ${MAX_FILE_BYTES / 1024 / 1024}MB)`);
+        continue;
+      }
+      try {
+        const content = fileContent(new Uint8Array(await file.arrayBuffer()), file.type);
+        // a text file with no type of its own gets newFileDoc's
+        const mimeType = file.type || (typeof content === "string" ? null : "application/octet-stream");
+        urls.push(await createFile(file.name || "untitled", mimeType ? { content, mimeType } : { content }));
+      } catch (error) {
+        console.error("[lattice-wm] couldn't bring in", file.name, error);
+        refused.push(file.name);
+      }
+    }
+    if (refused.length) notify(groupId, `couldn't bring in ${refused.join(", ")}`);
+    return urls;
   }
 
   // ── links: hovering anything that shows a doc lights up every pane that
@@ -1191,6 +1244,16 @@ export function mountWorkspace(
     return dataTransfer.types.includes(PANEL_TYPE) ? "move" : "copy";
   }
 
+  // files over the text of a text editor are the editor's, as anywhere else:
+  // markdown makes an image dropped into it an embed. the pane's edges, its
+  // tabs and anywhere not text still place them as panes
+  function intoEditor(event) {
+    if (!onlyFiles(event.dataTransfer) || outerEdgeAt(event)) return false;
+    const target = dropTargetAt(event);
+    if (!target || target.outer || target.zone !== "center" || target.onTabs) return false;
+    return event.composedPath().some((node) => node instanceof Element && node.classList.contains("cm-content"));
+  }
+
   function onRootDragEnter(event) {
     if (!isOurDrag(event.dataTransfer)) return;
     // safari only lets an element be dropped on if it cancels dragenter as
@@ -1233,6 +1296,11 @@ export function mountWorkspace(
 
   function onRootDragOver(event) {
     if (!isOurDrag(event.dataTransfer)) return;
+    if (intoEditor(event)) {
+      setOuterZone(null);
+      setDropTarget(null);
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     event.dataTransfer.dropEffect = dropEffectFor(event.dataTransfer);
@@ -1244,6 +1312,10 @@ export function mountWorkspace(
 
   function onRootDrop(event) {
     if (!isOurDrag(event.dataTransfer)) return;
+    if (intoEditor(event)) {
+      stopDragging();
+      return;
+    }
     event.preventDefault();
     event.stopPropagation();
     const target = dropTargetAt(event);
@@ -1279,6 +1351,14 @@ export function mountWorkspace(
       return;
     }
     const docs = droppedDocs(dataTransfer);
+    // files from the computer: made docs, then opened there like any other.
+    // read now, as the drop's data goes once it's over
+    const files = !docs.length && dataTransfer.types.includes(FILES_TYPE) ? [...dataTransfer.files] : [];
+    if (files.length) {
+      const at = zone === "code" ? "center" : zone;
+      importFiles(files, groupId).then((urls) => urls.length && openDocs(urls, groupId, at));
+      return;
+    }
     if (zone === "code") {
       hosts.get(activePanel?.id)?.el.dropInto?.drop(docs, event.clientX, event.clientY);
       return;
@@ -1633,10 +1713,16 @@ export function mountWorkspace(
       const onTabs = tabs.contains(event.target);
       const rect = body.getBoundingClientRect();
       // over code that docs can be imported into, most of it is for that
-      const into = placing ? null : hosts.get(active()?.id)?.el.dropInto;
+      // (not files from the computer: they're no docs yet)
+      const into = placing || onlyFiles(event.dataTransfer) ? null : hosts.get(active()?.id)?.el.dropInto;
       // over the tabs, it joins them (at the end), which the tab bar shows
       if (onTabs) return { zone: "center", lineTop: null, onTabs: true };
-      const zone = zoneAt(event, rect, into ? CODE_EDGE : undefined);
+      // files over an editor's text are mostly its (intoEditor), as code is
+      // an importer's: just a thin band along each edge splits
+      const overText =
+        onlyFiles(event.dataTransfer) &&
+        event.composedPath().some((node) => node instanceof Element && node.classList.contains("cm-content"));
+      const zone = zoneAt(event, rect, into || overText ? CODE_EDGE : undefined);
       if (zone === "center" && into) {
         const line = into.lineAt(event.clientX, event.clientY);
         if (line) return { zone: "code", lineTop: line.top - rect.top };
@@ -1666,8 +1752,9 @@ export function mountWorkspace(
       onPointerDown=${() => setLastGroupId(group.id)}
       onFocusIn=${() => setLastGroupId(group.id)}
       onPointerMove=${(event) => {
+        // following and drawing, the ink sheet's over this and says where
         const panel = active();
-        if (!panel || following()) return;
+        if (!panel || drawing()) return;
         const rect = body.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
         const fraction = (n) => Math.round(Math.min(2, Math.max(-1, n)) * 10000) / 10000;
@@ -2288,10 +2375,28 @@ export function mountWorkspace(
         element.querySelector(`.lattice-wm-file[data-url="${url}"] .lattice-wm-file-open`)?.focus({ preventScroll: true }),
       );
     }
+    // files from the computer, dropped here: into the project, not opened
+    const [filesOver, setFilesOver] = createSignal(false);
     return html`<nav
       class="lattice-wm-files"
       aria-label="files"
+      data-drop=${() => (filesOver() ? "" : undefined)}
       style=${() => ({ width: `${filesSidebar.width()}px` })}
+      onDragOver=${(event) => {
+        if (!onlyFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setFilesOver(true);
+      }}
+      onDragLeave=${(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setFilesOver(false);
+      }}
+      onDrop=${(event) => {
+        setFilesOver(false);
+        if (!onlyFiles(event.dataTransfer)) return;
+        event.preventDefault();
+        importFiles([...event.dataTransfer.files], lastGroupId());
+      }}
     >
       <${Resizer} sidebar=${filesSidebar} />
       <div class="lattice-wm-sidebar-content">
@@ -2451,11 +2556,21 @@ export function mountWorkspace(
       }
       return null;
     }
+    const modeButton = (mode, label, title) => html`<button
+      class="lattice-wm-follow-mode"
+      aria-pressed=${() => String(followMode() === mode)}
+      title=${title}
+      onPointerDown=${(event) => event.stopPropagation()}
+      onClick=${() => setFollowMode(mode)}
+    >
+      ${label}
+    </button>`;
     return html`<div
       class="lattice-wm-ink-sheet"
+      data-mode=${followMode}
       style=${box}
       onPointerDown=${(event) => {
-        if (ink.start(event)) event.currentTarget.setPointerCapture(event.pointerId);
+        if (followMode() === "draw" && ink.start(event)) event.currentTarget.setPointerCapture(event.pointerId);
       }}
       onPointerMove=${(event) => {
         ink.move(event);
@@ -2466,15 +2581,23 @@ export function mountWorkspace(
       onLostPointerCapture=${() => ink.end()}
       onPointerLeave=${offPanes}
     >
-      <button
+      <div
         class="lattice-wm-following-tag"
         style=${() => ({ "--lattice-wm-button-fill": followingColour() })}
-        title="stop following"
-        onPointerDown=${(event) => event.stopPropagation()}
-        onClick=${() => follow(null)}
       >
-        following ${() => leader()?.name ?? "someone"}
-      </button>
+        <button
+          class="lattice-wm-following-who"
+          title="stop following"
+          onPointerDown=${(event) => event.stopPropagation()}
+          onClick=${() => follow(null)}
+        >
+          following ${() => leader()?.name ?? "someone"}
+        </button>
+        <span class="lattice-wm-follow-modes" role="group" aria-label="pressing on their panes">
+          ${modeButton("draw", "draw", "draw on their panes, for them to see")}
+          ${modeButton("use", "type", "use their panes: edit, select, and type in terminals, still following")}
+        </span>
+      </div>
     </div>`;
   }
 
@@ -2552,7 +2675,7 @@ export function mountWorkspace(
           }}
           data-resizing=${resizing}
           data-following=${() => (following() ? "" : undefined)}
-          inert=${() => !!following()}
+          inert=${drawing}
           style=${() => ({ "--lattice-wm-following": followingColour() })}
         >
           ${() => (layout.root ? html`<${Node} node=${layout.root} />` : html`<${Empty} />`)}

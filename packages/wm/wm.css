@@ -834,24 +834,66 @@
 		z-index: 40;
 		cursor: crosshair;
 		touch-action: none;
+
+		/* using their panes, it's only the tag: the rest goes through to them */
+		&[data-mode="use"] {
+			pointer-events: none;
+			cursor: auto;
+			touch-action: auto;
+
+			& .lattice-wm-following-tag {
+				pointer-events: auto;
+			}
+		}
 	}
 
 	/* who you're following, hanging from the top left of the line round
-	   their panes, in their colour */
+	   their panes, in their colour, and what pressing on them does */
 	& .lattice-wm-following-tag {
 		position: absolute;
 		top: 0;
 		left: 0;
-		padding: 2px 8px 3px;
-		border: none;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 2px 4px 3px 8px;
 		border-radius: 0 0 6px 0;
 		background: var(--lattice-wm-button-fill);
 		color: var(--lattice-wm-button-ink, white);
 		font: 600 11px/1.3 var(--lattice-wm-sans);
-		cursor: pointer;
+		cursor: default;
 
-		&:hover {
-			text-decoration: underline;
+		& button {
+			padding: 0;
+			border: none;
+			background: none;
+			color: inherit;
+			font: inherit;
+			cursor: pointer;
+		}
+	}
+	& .lattice-wm-following-who:hover {
+		text-decoration: underline;
+	}
+	& .lattice-wm-follow-modes {
+		display: flex;
+		padding: 1px;
+		border-radius: 4px;
+		background: color-mix(in oklch, currentColor 18%, transparent);
+
+		& .lattice-wm-follow-mode {
+			padding: 0 6px;
+			border-radius: 3px;
+			opacity: 0.75;
+
+			&:hover {
+				opacity: 1;
+			}
+			&[aria-pressed="true"] {
+				background: var(--lattice-wm-button-ink, white);
+				color: var(--lattice-wm-button-fill);
+				opacity: 1;
+			}
 		}
 	}
 
@@ -1475,6 +1517,21 @@
 			transition: none;
 		}
 	}
+	/* speaking: their sound, their face's border bumping out all the way
+	   round (ui.js: Wiggle), from behind it. it's the ring, so not that too
+	   (but with reduced motion, it's the ring) */
+	& .lattice-wm-call-wiggle {
+		position: absolute;
+		inset: -32px;
+		width: calc(100% + 64px);
+		height: calc(100% + 64px);
+		pointer-events: none;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		& .lattice-wm-call-float-picture .lattice-wm-call-face[data-speaking] {
+			outline-color: transparent;
+		}
+	}
 	& .lattice-wm-call-size {
 		position: absolute;
 		right: 3px;
@@ -1511,6 +1568,8 @@
 	}
 
 	& .lattice-wm-call-float-name {
+		/* over the wiggle */
+		position: relative;
 		padding: 1px 6px;
 		border-radius: var(--lattice-wm-round);
 		background: var(--lattice-wm-sheet);
@@ -1855,6 +1914,18 @@
 		color: var(--lattice-wm-ink);
 		font-family: var(--lattice-wm-path-family);
 		font-size: 12px;
+
+		/* files from the computer over it, to go into the project */
+		&[data-drop]::after {
+			content: "";
+			position: absolute;
+			inset: 4px;
+			z-index: 20;
+			border: 2px dashed var(--lattice-wm-accent);
+			border-radius: 3px;
+			background: color-mix(in oklab, var(--lattice-wm-accent) 10%, transparent);
+			pointer-events: none;
+		}
 	}
 
 	/* what scrolls, so the resizer beside it doesn't */

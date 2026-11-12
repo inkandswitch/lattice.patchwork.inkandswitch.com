@@ -324,7 +324,7 @@ function listenMine(track) {
   if (!track) return;
   now.stopLevel = listen(new MediaStream([track]), (speaking) => {
     if (live.session === now) setState("call", "speaking", speaking);
-  });
+  }, "me");
 }
 
 // your face, in your camera's pictures (face.js), while it's on: said to
@@ -826,6 +826,7 @@ function connect(id, conn) {
     if (event.track.kind === "audio" && !peer.stopLevel) {
       peer.stopLevel = listen(stream, (speaking) =>
         showPeer(id, speaking ? { speaking, spoke: Date.now() } : { speaking }),
+        id,
       );
     }
     event.track.onunmute = bump;

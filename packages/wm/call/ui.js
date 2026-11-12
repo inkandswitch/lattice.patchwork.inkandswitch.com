@@ -8,6 +8,8 @@ import { createEffect, createMemo, createSignal, For, Show, onCleanup } from "so
 import html from "solid-js/html";
 import { call, onCallIn, join, setFloating, hideFloating, showFloating, toggleStage, setFull, closeStage } from "./call.js";
 import { tilesFor } from "./sizes.js";
+import { hearing } from "./speaking.js";
+import { ringWave, louder, wiggle, WIGGLE_HEARD, WIGGLE_HOLD } from "./wiggle.js";
 import { faceImage } from "../presence.js";
 import { centreOn } from "./face.js";
 import { colourFor } from "../pointer.js";
@@ -313,6 +315,102 @@ function arrive(float, id, key, index) {
   );
 }
 
+// ── the wiggle round a floating face, while they're speaking ───────────
+
+const WIGGLE_POINTS = 160;
+// how much of their sound goes round (of the analyser's 2048: about 20ms)
+const WIGGLE_SPAN = 1024;
+// how far past the picture it can go (the canvas is that much bigger)
+const WIGGLE_PAD = 32;
+// a face's border (wm.css): the line that wiggles
+const FACE_BORDER = 2;
+// a floating face's corners, as a picture (wm.css)
+const TILE_ROUND = 10;
+let stillMotion = null;
+
+/**
+ * their sound's waveform, all the way round their floating face (in its
+ * picture's box): its border, bumping out from where it is, as soon as
+ * there's sound, and while `props.speaking`. behind the face, so still it's
+ * the border. not with reduced motion (the ring's shown then, as elsewhere)
+ */
+function Wiggle(props) {
+  const canvas = document.createElement("canvas");
+  canvas.className = "lattice-wm-call-wiggle";
+  canvas.setAttribute("aria-hidden", "true");
+  stillMotion ??= matchMedia("(prefers-reduced-motion: reduce)");
+  let frame = requestAnimationFrame(draw);
+  onCleanup(() => cancelAnimationFrame(frame));
+  // how much it's shown (0 to 1), and whether there's anything to clear
+  let shown = 0;
+  let drawn = false;
+  let samples = null;
+  let loudest = 0;
+  let heardAt = -Infinity;
+  let colour = null;
+  let colourAt = -Infinity;
+
+  function draw(now) {
+    frame = requestAnimationFrame(draw);
+    const analyser = !stillMotion.matches && hearing(props.id);
+    if (analyser) {
+      if (samples?.length !== analyser.fftSize) samples = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(samples);
+      let sum = 0;
+      for (const sample of samples) sum += sample * sample;
+      if (Math.sqrt(sum / samples.length) >= WIGGLE_HEARD) heardAt = now;
+    }
+    const wanted = !!analyser && (now - heardAt < WIGGLE_HOLD || !!props.speaking);
+    shown += ((wanted ? 1 : 0) - shown) * (wanted ? 0.6 : 0.3);
+    if (shown < 0.01 && !drawn) return;
+    const picture = canvas.parentElement;
+    const face = picture?.querySelector(".lattice-wm-call-face");
+    if (!face) return;
+    const g = canvas.getContext("2d");
+    const dpr = devicePixelRatio || 1;
+    const width = picture.offsetWidth + 2 * WIGGLE_PAD;
+    const height = picture.offsetHeight + 2 * WIGGLE_PAD;
+    if (canvas.width !== Math.round(width * dpr) || canvas.height !== Math.round(height * dpr)) {
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+    }
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, width, height);
+    drawn = false;
+    if (shown < 0.01 || !analyser) return;
+
+    const heard = louder(ringWave(samples, WIGGLE_POINTS, WIGGLE_SPAN), loudest);
+    loudest = heard.loudest;
+    // the face's box, and its corners: between a picture's and a circle's
+    // as its width goes from the whole picture to round (wm.css)
+    const w = face.offsetWidth;
+    const h = face.offsetHeight;
+    const round = Math.max(0, Math.min(1, (picture.offsetWidth - w) / (picture.offsetWidth * 0.25)));
+    const r = TILE_ROUND + (Math.min(w, h) / 2 - TILE_ROUND) * round;
+    // out from the middle of the border, either way of the sound as out
+    const swing = Math.max(4, Math.min(9, Math.min(w, h) * 0.07)) * shown;
+    const points = wiggle(w, h, r, heard.values.map(Math.abs), -FACE_BORDER / 2, swing);
+
+    if (now - colourAt > 500) {
+      colour = getComputedStyle(face).borderTopColor;
+      colourAt = now;
+    }
+    g.translate(WIGGLE_PAD + face.offsetLeft + w / 2, WIGGLE_PAD + face.offsetTop + h / 2);
+    g.beginPath();
+    g.moveTo(...points[0]);
+    for (const point of points) g.lineTo(...point);
+    g.closePath();
+    g.strokeStyle = colour;
+    g.globalAlpha = shown;
+    g.lineWidth = FACE_BORDER;
+    g.lineJoin = "round";
+    g.stroke();
+    g.globalAlpha = 1;
+    drawn = true;
+  }
+  return canvas;
+}
+
 /**
  * everyone's faces, floating over everything, each where you put it and the
  * size you made it (to start with, near `props.panes`, an element): dragged to move, and by its corner to size. each is a
@@ -384,6 +482,7 @@ export function CallFloating(props) {
             onPointerCancel=${onPointerUp}
           >
             <span class="lattice-wm-call-float-picture">
+              <${Wiggle} id=${id} speaking=${() => (mine ? call.get()?.speaking : peer()?.speaking)} />
               <${Face} id=${id} shape="tile" muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
             </span>

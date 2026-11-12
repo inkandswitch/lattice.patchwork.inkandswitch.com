@@ -66,6 +66,14 @@
 	& canvas {
 		display: block;
 		outline: none;
+		cursor: text;
+		/* a drag selects, here, rather than scrolling or panning the page */
+		touch-action: none;
+		user-select: none;
+	}
+	/* the program has the mouse */
+	&[data-mouse] canvas {
+		cursor: default;
 	}
 
 	& .latticex-waiting {

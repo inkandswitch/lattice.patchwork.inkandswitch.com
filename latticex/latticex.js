@@ -19,6 +19,7 @@ import {createRequire} from "node:module"
 import {dirname, join} from "node:path"
 import {history} from "./history.js"
 import {encodeInput, parseTyped} from "./keys.js"
+import {mouse} from "./mouse.js"
 import {rowRuns, screenText} from "./screen.js"
 
 const SERVER = "wss://subduction.sync.inkandswitch.com"
@@ -166,6 +167,8 @@ async function share(url, command, {server, readonly, size, quiet}) {
 		const modes = {
 			applicationCursorKeysMode: term.modes.applicationCursorKeysMode,
 			bracketedPasteMode: term.modes.bracketedPasteMode,
+			// none, or the mouse events the program wants
+			mouseTrackingMode: term.modes.mouseTrackingMode,
 		}
 		const alternate = buffer.type === "alternate"
 		const history = {
@@ -209,9 +212,17 @@ async function share(url, command, {server, readonly, size, quiet}) {
 		term.write(data, () => schedule())
 	})
 
+	const encodeMouse = mouse(term)
 	function typeInput(input) {
-		const bytes = encodeInput(input, term.modes)
-		if (bytes) program.write(bytes)
+		for (const item of Array.isArray(input) ? input : [input]) {
+			if (item && typeof item === "object" && "mouse" in item) {
+				const bytes = encodeMouse(item.mouse)
+				if (bytes.length) program.write(bytes)
+				continue
+			}
+			const bytes = encodeInput(item, term.modes)
+			if (bytes) program.write(bytes)
+		}
 	}
 
 	// ephemeral messages can arrive out of order, so each viewer numbers what

@@ -73,8 +73,30 @@ function palette(element) {
 		bg: read("--text-editor-fill") || read("--studio-fill") || (dark ? "#282c34" : "#fafafa"),
 		cursor:
 			read("--text-editor-cursor-fill") || read("--studio-primary") || (dark ? "#528bff" : "#526fff"),
+		selection:
+			read("--text-editor-selection-fill") ||
+			read("--editor-selection-fill") ||
+			read("--studio-primary") ||
+			(dark ? "#528bff" : "#526fff"),
 		family: read("--studio-family-code") || "ui-monospace, Menlo, monospace",
 	}
+}
+
+// a row's runs as one character a column ("" for the second half of a wide
+// one), for copying
+function rowChars(runs, cols) {
+	const chars = Array(cols).fill(" ")
+	for (const [x, text, , , look] of runs) {
+		if (look & WIDE) {
+			chars[x] = text
+			if (x + 1 < cols) chars[x + 1] = ""
+			continue
+		}
+		Array.from(text).forEach((char, i) => {
+			if (x + i < cols) chars[x + i] = char
+		})
+	}
+	return chars
 }
 
 function colourOf(colour, colours, fallback) {
@@ -175,6 +197,36 @@ export default function LatticexTerminalTool(handle, element) {
 	const scrollable = () =>
 		Boolean(screen && Number.isInteger(screen.top) && screen.history > 0 && !screen.alternate)
 	const firstLine = () => screen.top - screen.history
+	// the line numbers rows are at (from 0 for a latticex that doesn't number
+	// them), and a line's runs: undefined for history that hasn't come yet
+	const screenTop = () => (Number.isInteger(screen.top) ? screen.top : 0)
+	const viewLine = row => (viewTop ?? screenTop()) + row
+	function runsOf(line) {
+		const row = line - screenTop()
+		return row >= 0 ? (screen.lines[row] ?? []) : history.get(line)
+	}
+
+	// what's selected, from anchor to head: each {line, col}, a col being the
+	// edge before that column. by line number, so it stays on what it's on as
+	// the screen scrolls
+	let selection = null
+	let selecting = false
+	function ordered() {
+		const {anchor, head} = selection
+		const before = anchor.line < head.line || (anchor.line === head.line && anchor.col <= head.col)
+		return before ? [anchor, head] : [head, anchor]
+	}
+	function selectedText() {
+		const [start, end] = ordered()
+		const lines = []
+		for (let line = start.line; line <= end.line; line++) {
+			const chars = rowChars(runsOf(line) ?? [], screen.cols)
+			const from = line === start.line ? start.col : 0
+			const to = line === end.line ? end.col : screen.cols
+			lines.push(chars.slice(from, to).join("").trimEnd())
+		}
+		return lines.join("\n")
+	}
 
 	function scrollTo(line) {
 		viewTop = !scrollable() || line >= screen.top ? null : Math.max(firstLine(), line)
@@ -191,6 +243,7 @@ export default function LatticexTerminalTool(handle, element) {
 			history.clear()
 			asked.clear()
 			viewTop = null
+			selection = null
 			return
 		}
 		if (!scrollable()) viewTop = null
@@ -320,8 +373,10 @@ export default function LatticexTerminalTool(handle, element) {
 	// ── drawing ──────────────────────────────────────────────────────────
 
 	let frameRequest = null
-	// a row's height as last drawn, for turning a wheel's pixels into rows
+	// a cell's size as last drawn, for turning a wheel's pixels into rows and
+	// the pointer into a cell
 	let rowHeight = 16
+	let colWidth = 8
 	function draw() {
 		frameRequest ??= requestAnimationFrame(paint)
 	}
@@ -349,6 +404,8 @@ export default function LatticexTerminalTool(handle, element) {
 		const cellWidth = size * advance
 		const cellHeight = Math.ceil(size * LINE_HEIGHT)
 		rowHeight = cellHeight
+		colWidth = cellWidth
+		root.toggleAttribute("data-mouse", reporting())
 		const width = Math.ceil(cols * cellWidth)
 		const height = rows * cellHeight
 		canvas.style.width = `${width}px`
@@ -405,6 +462,19 @@ export default function LatticexTerminalTool(handle, element) {
 		}
 		wanting = Boolean(missing)
 		if (missing) askHistory(...missing)
+		if (selection) {
+			const [start, end] = ordered()
+			context.fillStyle = theme.selection
+			context.globalAlpha = 0.35
+			for (let y = 0; y < rows; y++) {
+				const line = viewLine(y)
+				if (line < start.line || line > end.line) continue
+				const from = line === start.line ? start.col : 0
+				const to = line === end.line ? end.col : cols
+				if (to > from) context.fillRect(from * cellWidth, y * cellHeight, (to - from) * cellWidth, cellHeight)
+			}
+			context.globalAlpha = 1
+		}
 		if (showCursor) {
 			const left = cursor.x * cellWidth
 			const top = cursorRow * cellHeight
@@ -432,6 +502,10 @@ export default function LatticexTerminalTool(handle, element) {
 		if (status !== "live" || screen?.readonly) return
 		// typing goes back to the screen, as a terminal does
 		if (viewTop != null) scrollTo(screen.top)
+		if (selection && !selecting) {
+			selection = null
+			draw()
+		}
 		typing.push(input)
 		typingTimer ??= setTimeout(() => {
 			typingTimer = null
@@ -441,6 +515,17 @@ export default function LatticexTerminalTool(handle, element) {
 	}
 
 	function onKeyDown(event) {
+		// ⌘c (or ctrl-shift-c) copies what's selected: there's no selection
+		// for the browser to copy, it's a canvas
+		if (
+			selection &&
+			(event.metaKey || (event.ctrlKey && event.shiftKey)) &&
+			event.key.toLowerCase() === "c"
+		) {
+			event.preventDefault()
+			navigator.clipboard?.writeText(selectedText())
+			return
+		}
 		// ⌘ is the browser's (⌘v pastes, below)
 		if (event.metaKey || event.isComposing) return
 		// shift-page up and down scroll back here, as a terminal's do
@@ -463,13 +548,97 @@ export default function LatticexTerminalTool(handle, element) {
 		send({paste: text})
 	}
 
+	// ── the mouse ────────────────────────────────────────────────────────
+
+	// a program that's asked for the mouse (tmux, claude, vim's mouse=a) gets
+	// it, but with alt held: then it's this terminal's, to select and scroll
+	const reporting = () =>
+		status === "live" && !screen?.readonly && (screen?.modes?.mouseTrackingMode ?? "none") !== "none"
+	const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
+
+	// the cell under the pointer: with edge, the nearest edge between cells
+	function cellAt(event, edge = false) {
+		const rect = canvas.getBoundingClientRect()
+		const x = (event.clientX - rect.left) / colWidth
+		const y = (event.clientY - rect.top) / rowHeight
+		return {
+			x: edge ? clamp(Math.round(x), 0, screen.cols) : clamp(Math.floor(x), 0, screen.cols - 1),
+			y: clamp(Math.floor(y), 0, screen.rows - 1),
+		}
+	}
+	const pointAt = event => ({line: viewLine(cellAt(event).y), col: cellAt(event, true).x})
+
+	function sendMouse(action, event, button) {
+		const {x, y} = cellAt(event)
+		// scrolled back, the program's rows are further down
+		const row = y - (viewTop == null ? 0 : screen.top - viewTop)
+		if (row < 0) return
+		const mods = {ctrl: event.ctrlKey, alt: event.altKey, shift: event.shiftKey}
+		send({mouse: {action, button, x, y: row, ...mods}})
+	}
+
+	// the button held for the program, and the cell it last heard of
+	let pressed = null
+	let lastMoved = ""
+
+	function onPointerDown(event) {
+		if (!screen) return
+		if (reporting() && !event.altKey) {
+			pressed = event.button
+			lastMoved = ""
+			canvas.setPointerCapture(event.pointerId)
+			sendMouse("down", event, event.button)
+			return
+		}
+		if (event.button !== 0) return
+		const at = pointAt(event)
+		selection = {anchor: at, head: at}
+		selecting = true
+		canvas.setPointerCapture(event.pointerId)
+		draw()
+	}
+
+	function onPointerMove(event) {
+		if (!screen) return
+		if (selecting) {
+			selection.head = pointAt(event)
+			draw()
+			return
+		}
+		if (!reporting()) return
+		const mode = screen.modes.mouseTrackingMode
+		if (!(mode === "any" || (mode === "drag" && pressed != null))) return
+		const {x, y} = cellAt(event)
+		if (`${x} ${y}` === lastMoved) return
+		lastMoved = `${x} ${y}`
+		sendMouse("move", event, pressed ?? 3)
+	}
+
+	function onPointerUp(event) {
+		if (selecting) {
+			selecting = false
+			const [start, end] = ordered()
+			// a click, not a drag: nothing's selected
+			if (start.line === end.line && start.col === end.col) {
+				selection = null
+				draw()
+			}
+			return
+		}
+		if (pressed == null) return
+		if (reporting()) sendMouse("up", event, pressed)
+		pressed = null
+	}
+
 	// the wheel scrolls back through history. a program with the whole screen
-	// (vim, less) has none, so there it's the arrow keys, as most terminals do
+	// (vim, less) has none, so there it's the arrow keys, as most terminals do;
+	// one that's asked for the mouse gets the wheel itself
 	let wheelRows = 0
 	function onWheel(event) {
 		if (!screen || status === "waiting") return
-		const alternate = screen.alternate && status === "live" && !screen.readonly
-		if (!alternate && !scrollable()) return
+		const report = reporting() && !event.altKey
+		const alternate = !report && screen.alternate && status === "live" && !screen.readonly
+		if (!report && !alternate && !scrollable()) return
 		event.preventDefault()
 		wheelRows +=
 			event.deltaMode === 1
@@ -480,6 +649,11 @@ export default function LatticexTerminalTool(handle, element) {
 		const rows = Math.trunc(wheelRows)
 		if (!rows) return
 		wheelRows -= rows
+		if (report) {
+			const action = rows < 0 ? "wheelup" : "wheeldown"
+			for (let i = 0; i < Math.min(Math.abs(rows), screen.rows); i++) sendMouse(action, event)
+			return
+		}
 		if (!alternate) return scrollBy(rows)
 		const key = {key: rows < 0 ? "up" : "down"}
 		for (let i = 0; i < Math.min(Math.abs(rows), screen.rows); i++) send(key)
@@ -487,6 +661,14 @@ export default function LatticexTerminalTool(handle, element) {
 
 	canvas.addEventListener("keydown", onKeyDown)
 	screenBox.addEventListener("wheel", onWheel, {passive: false})
+	canvas.addEventListener("pointerdown", onPointerDown)
+	canvas.addEventListener("pointermove", onPointerMove)
+	canvas.addEventListener("pointerup", onPointerUp)
+	canvas.addEventListener("pointercancel", onPointerUp)
+	// a right click is the program's, when it's asked for the mouse
+	canvas.addEventListener("contextmenu", event => {
+		if (reporting() && !event.altKey) event.preventDefault()
+	})
 	canvas.addEventListener("paste", onPaste)
 	canvas.addEventListener("focus", draw)
 	canvas.addEventListener("blur", draw)
