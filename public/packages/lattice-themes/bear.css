@@ -1,100 +1,161 @@
-/* Bear — after the Bear app's default "Red Graphite": clean warm near-white,
-   soft charcoal ink, and Bear's signature red for markers, headings and links */
+/* Bear — the Bear app's default "Red Graphite": white paper and graphite ink
+   (#292c2e, hue 204°), a dark graphite left column, and Bear red for the
+   cursor, links and bullets. Greys are one cool graphite ramp, not neutral
+   grey; values follow seanwcom/Red-Graphite-for-Obsidian's derivation. */
 [theme="bear"] {
 	color-scheme: light;
-	--studio-fill: #ffffff;
-	--studio-line: #4c4c4c;
-	--studio-primary: #d34d42; /* Bear red */
-	--studio-secondary: #6b7a86; /* graphite slate */
-	--studio-danger: #d34d42;
-	--studio-warning: #c9761a;
-	--studio-added: #5a9a4a;
-	--studio-deleted: #d34d42;
-	--studio-modified: #6b7a86;
-	--studio-link: #d34d42;
-	--studio-selection-fill: #fbe0dd;
 
-	/* ink on a red/slate surface reads as the paper white */
-	--studio-primary-line: #ffffff;
-	--studio-danger-line: #ffffff;
-	--studio-secondary-line: #ffffff;
+	/* Bear 2 sets in Bear Sans (a custom Clarika, not distributable), drawn
+	   to keep the geometric feel of Avenir Next, Bear 1's face */
+	--studio-family-sans: "Bear Sans", "Avenir Next", "Avenir", system-ui,
+		-apple-system, "Helvetica Neue", sans-serif;
+	--studio-family-ui: var(--studio-family-sans);
+	/* the project tree is set in the heading face, as Bear's tags are */
+	--lattice-heading-family: var(--studio-family-sans);
 
-	--text-editor-fill: #ffffff;
-	--text-editor-cursor-fill: #d34d42;
-	--text-editor-gutter-fill: #fafafa;
-	--text-editor-gutter-line: #b9b9b9;
-	--text-editor-gutter-border: #ededed;
+	/* red graphite: accent hsl(2 56% 54%), base hsl(204 6% 17%) ramp */
+	--bear-red: #cb4c48;
+	--bear-graphite: #292c2e; /* ink */
+	--bear-muted: #71797f; /* 47% — text-muted */
+	--bear-faint: #8b9398; /* 57% — text-faint */
+	--bear-rule: #c9cdcf; /* 80% */
+	--bear-border: #e4e6e7; /* 90% */
+	--bear-wash: #f7f7f8; /* 97% */
+	--bear-paper: #ffffff;
+	--bear-selection: #f5dbda; /* red at 20% on paper */
 
-	--syntax-comment: #a3a3a3;
+	/* the dark column: the same graphite ramp, stepped up from the ink */
+	--bear-column: #292c2e; /* 17% */
+	--bear-column-2: #303436; /* 20% — hover */
+	--bear-column-3: #35393b; /* 22% — dividers, the filter well */
+	--bear-column-4: #3c4144; /* 25% — the selected row */
+	--bear-column-5: #43484c; /* 28% */
+	--bear-column-6: #545a5f; /* 35% */
+	--bear-column-ink: #dcdee0; /* 87% */
+	--bear-column-ink-2: #c9cdcf; /* 80% */
+	--bear-column-ink-3: #aeb3b7; /* 70% */
+	--bear-column-ink-4: #9ba2a6; /* 63% */
+	--bear-column-muted: #8b9398; /* 57% — icons, placeholders */
+
+	--bear-green: #5a9a4a;
+	--bear-orange: #c9761a;
+	--bear-blue: #3d7ab0;
+	--bear-teal: #4a7a86;
+
+	--studio-fill: var(--bear-paper);
+	--studio-line: var(--bear-graphite);
+
+	/* the toolbar is paper, a hair off the editor; the left column is Bear's
+	   dark graphite tag column (the rule below) */
+	--studio-chrome-fill: var(--bear-wash);
+	--studio-chrome-line: var(--bear-graphite);
+
+	--studio-primary: var(--bear-red);
+	--studio-secondary: var(--bear-muted);
+	--studio-link: var(--bear-red);
+	--studio-danger: var(--bear-red);
+	--studio-warning: var(--bear-orange);
+	--studio-added: var(--bear-green);
+	--studio-deleted: var(--bear-red);
+	--studio-modified: var(--bear-orange);
+	--studio-selection-fill: var(--bear-selection);
+
+	--studio-primary-line: var(--bear-paper);
+	--studio-danger-line: var(--bear-paper);
+	--studio-secondary-line: var(--bear-paper);
+
+	--text-editor-fill: var(--bear-paper);
+	--text-editor-cursor-fill: var(--bear-red);
+	--text-editor-gutter-fill: var(--bear-paper);
+	--text-editor-gutter-line: var(--bear-rule);
+	--text-editor-gutter-border: var(--bear-border);
+
+	--syntax-comment: var(--bear-faint);
 	--syntax-style-comment: italic;
 
-	--syntax-doc-comment: #9aa4ac;
+	--syntax-doc-comment: var(--bear-faint);
 	--syntax-style-doc-comment: italic;
 
-	--syntax-meta: #6b7a86;
-	--syntax-invalid: #d34d42;
+	--syntax-meta: var(--bear-muted);
+	--syntax-invalid: var(--bear-red);
 
-	--syntax-operator: #6b7a86;
-	--syntax-punctuation: #a0a7ad;
+	--syntax-operator: var(--bear-muted);
+	--syntax-punctuation: var(--bear-faint);
+	--syntax-angle-bracket: var(--bear-faint);
 
-	--syntax-bool: #d34d42;
-	--syntax-weight-bool: normal;
-
-	--syntax-atom: #d34d42;
-	--syntax-weight-atom: normal;
-
-	--syntax-keyword: #d34d42;
+	--syntax-keyword: var(--bear-red);
 	--syntax-weight-keyword: bold;
 
-	--syntax-type-name: #4a7a86;
-	--syntax-class-name: #4a7a86;
+	--syntax-bool: var(--bear-red);
+	--syntax-weight-bool: normal;
 
-	--syntax-type-operator: #6b7a86;
+	--syntax-atom: var(--bear-red);
+	--syntax-weight-atom: normal;
 
-	--syntax-function--variable-name: #3d7ab0;
-	--syntax-function--property-name: #4c4c4c;
+	--syntax-type-name: var(--bear-teal);
+	--syntax-class-name: var(--bear-teal);
+	--syntax-type-operator: var(--bear-muted);
+	--syntax-namespace: var(--bear-teal);
 
-	--syntax-variable-name: #4c4c4c;
-	--syntax-definition--variable-name: #3d7ab0;
+	--syntax-function--variable-name: var(--bear-blue);
+	--syntax-function--property-name: var(--bear-graphite);
 
-	--syntax-string: #5a9a4a;
+	--syntax-variable-name: var(--bear-graphite);
+	--syntax-definition--variable-name: var(--bear-blue);
+
+	--syntax-string: var(--bear-green);
 	--syntax-fill-string: transparent;
+	--syntax-special--string: var(--bear-green);
+	--syntax-regexp: var(--bear-green);
 
-	--syntax-number: #c9761a;
-	--syntax-integer: #c9761a;
-	--syntax-float: #c9761a;
+	--syntax-number: var(--bear-orange);
+	--syntax-integer: var(--bear-orange);
+	--syntax-float: var(--bear-orange);
+	--syntax-escape: var(--bear-orange);
 
-	--syntax-escape: #c9761a;
-	--syntax-regexp: #5a9a4a;
-	--syntax-special--string: #5a9a4a;
-
-	--syntax-tag-name: #d34d42;
-	--syntax-angle-bracket: #a0a7ad;
-
-	--syntax-attribute-name: #c9761a;
+	--syntax-tag-name: var(--bear-red);
+	--syntax-attribute-name: var(--bear-orange);
 	--syntax-style-attribute-name: normal;
 
-	--syntax-namespace: #4a7a86;
-
-	--syntax-strong: #3a3a3a;
+	--syntax-strong: var(--bear-graphite);
 	--syntax-weight-strong: bold;
 
-	--syntax-emphasis: #3a3a3a;
+	--syntax-emphasis: var(--bear-graphite);
 	--syntax-style-emphasis: italic;
 
 	--syntax-heading: var(--text-editor-line);
 	--syntax-weight-heading: bold;
 
-	--syntax-link: #d34d42;
+	--syntax-link: var(--bear-red);
 	--syntax-style-link: underline;
 
 	--syntax-quote: var(--text-editor-line);
 	--syntax-style-quote: var(--text-editor-text-style);
 	--syntax-list: var(--text-editor-line);
+	/* bullets (and the quote bar) in pure Bear red, not the default
+	   primary-mixed-into-ink, which comes out maroon */
+	--syntax-list-marker: var(--bear-red);
 
-	--syntax-inserted: #5a9a4a;
-	--syntax-deleted: #d34d42;
-	--syntax-changed: #6b7a86;
+	--syntax-inserted: var(--bear-green);
+	--syntax-deleted: var(--bear-red);
+	--syntax-changed: var(--bear-orange);
 
-	--syntax-content-separator: #ededed;
+	--syntax-content-separator: var(--bear-border);
+}
+
+/* Bear's dark graphite tag column, as lattice's project tree. The shell
+   derives its rule, muted ink and current-row wash from the chrome at the
+   root, so each one is set again here against the dark. */
+[theme="bear"] .lattice-sidebar {
+	background: var(--bear-column);
+	color: var(--bear-column-ink);
+
+	--lattice-shell-chrome-fill: var(--bear-column);
+	--lattice-shell-chrome-line: var(--bear-column-ink);
+	--lattice-shell-chrome-fill-offset-20: var(--bear-column-2);
+	--lattice-shell-chrome-fill-offset-30: var(--bear-column-3);
+	--lattice-rule: var(--bear-column-3);
+	--lattice-muted: var(--bear-column-muted);
+	/* the open project: a lighter graphite row, keeping lattice's red edge */
+	--lattice-current: var(--bear-column-4);
 }
