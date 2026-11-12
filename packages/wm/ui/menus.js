@@ -18,9 +18,11 @@ function onToggle(event) {
   if (event.newState === "open") {
     const opener = document.activeElement;
     if (opener && opener !== document.body && !menu.contains(opener)) openers.set(menu, opener);
+    // the one it says is first (data-first: a remove, already asking), or
     // its first button, rather than a box to type in: what's in a menu is
     // mostly what it does
-    const first = items(menu).find((item) => item.matches("button")) ?? items(menu)[0];
+    const all = items(menu);
+    const first = all.find((item) => item.matches("[data-first]")) ?? all.find((item) => item.matches("button")) ?? all[0];
     first?.focus({ preventScroll: true });
     return;
   }

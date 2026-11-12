@@ -641,6 +641,7 @@ export function StageButton(props) {
     class=${() => `lattice-wm-call-stage-button ${props.class ?? ""}`}
     data-call-face=${() => props.id}
     data-staged=${() => (call.stage() === props.id ? "" : undefined)}
+    data-arriving=${props.arriving}
     aria-pressed=${() => String(call.stage() === props.id)}
     title=${() =>
       call.stage() === props.id

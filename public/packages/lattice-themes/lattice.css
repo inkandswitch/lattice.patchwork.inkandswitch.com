@@ -131,7 +131,7 @@
 	--syntax-style-comment: italic;
 	--syntax-doc-comment: var(--lattice-ink-faint);
 	--syntax-style-doc-comment: italic;
-	--syntax-quote: var(--lattice-ink-faint);
+	--syntax-quote: var(--text-editor-line);
 
 	--syntax-meta: var(--lattice-ink-mute);
 	--syntax-invalid: var(--lattice-red);
@@ -139,7 +139,7 @@
 	--syntax-operator: var(--lattice-cyan);
 	--syntax-punctuation: var(--lattice-ink);
 	--syntax-angle-bracket: var(--lattice-ink);
-	--syntax-list: var(--lattice-ink);
+	--syntax-list: var(--text-editor-line);
 
 	--syntax-keyword: var(--lattice-pink);
 	--syntax-control-keyword: var(--lattice-pink);
@@ -175,7 +175,7 @@
 	--syntax-emphasis: var(--lattice-purple);
 	--syntax-style-emphasis: italic;
 
-	--syntax-heading: var(--lattice-pink);
+	--syntax-heading: var(--text-editor-line);
 	--syntax-weight-heading: bold;
 
 	--syntax-link: var(--lattice-blue);

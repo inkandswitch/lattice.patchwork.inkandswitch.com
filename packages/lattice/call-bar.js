@@ -25,6 +25,7 @@ import {
 import { download, DOWNLOAD_BYTES, NOISE } from "../wm/call/noise.js";
 import { DragOut, Face, StageButton, names } from "../wm/call/ui.js";
 import { scrollsAlong } from "../wm/ui/along.js";
+import { arrivals } from "../wm/ui/arriving.js";
 import { icon } from "../wm/ui/icons.js";
 
 /** `props.inspector` is the inspector's sidebar state: shown for faces in it */
@@ -40,6 +41,8 @@ export function CallBar(props) {
     menu.style.left = `${Math.max(8, box.left)}px`;
     menu.style.bottom = `${innerHeight - box.top + 4}px`;
     menu.style.top = "auto";
+    // it grows up out of its button
+    menu.style.transformOrigin = "0 100%";
     menu.showPopover();
     setFound(await devices());
   }
@@ -74,7 +77,11 @@ export function CallBar(props) {
     <//>`;
   }
 
-  const In = () => html`<div class="lattice-call" role="group" aria-label="the call">
+  const In = () => {
+    // someone joining while you're in it comes in (ui/arriving.js): not
+    // whoever was there when you joined
+    const arriving = arrivals();
+    return html`<div class="lattice-call" role="group" aria-label="the call">
     <div class="lattice-call-head">
       <span class="lattice-call-phone">${icon("phone", 12)}</span>
       <span class="lattice-call-where">
@@ -94,7 +101,9 @@ export function CallBar(props) {
       <span class="lattice-call-faces" ref=${scrollsAlong}>
         <${DragOut} id="me"><${Face} id="me" size=${26} /><//>
         <${For} each=${call.peers}>
-          ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-call-face-button"><${Face} id=${peer.id} size=${26} /><//>`}
+          ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-call-face-button" arriving=${arriving(peer.id)}>
+            <${Face} id=${peer.id} size=${26} />
+          <//>`}
         <//>
       </span>
       <span class="lattice-call-buttons">
@@ -178,6 +187,7 @@ export function CallBar(props) {
       <${Devices} kind="video" />
     </div>
   </div>`;
+  };
 
   // DeepFilterNet's download, in its line of the menu and under the call
   // while it's going: what it is till it's here, how far it's got, or why not

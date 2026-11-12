@@ -286,9 +286,22 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		/* a long press is its menu (wm's ui/context-menu.js), not the system's */
+		-webkit-touch-callout: none;
 
-		&:hover {
+		/* or its menu's open */
+		&:hover,
+		&[data-menu] {
 			background: var(--lattice-shell-chrome-fill-offset-20);
+		}
+
+		/* made or added while you're here (wm's ui/arriving.js) */
+		&[data-arriving] {
+			animation: lattice-wm-arrive-row 180ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+
+			@media (prefers-reduced-motion: reduce) {
+				animation-name: lattice-wm-arrive-fade;
+			}
 		}
 	}
 

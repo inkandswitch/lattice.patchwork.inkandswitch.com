@@ -1102,6 +1102,26 @@
 		box-shadow: 2px 2px 0 var(--lattice-wm-line);
 		color: var(--lattice-wm-ink);
 		font: calc(12 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
+		/* it grows out of where it was asked for (the click: ui/context-
+		   menu.js sets the origin; else its top left, under its button),
+		   quickly, as it's opened many times a day. it goes at once */
+		transform-origin: 0 0;
+		transition:
+			opacity 150ms cubic-bezier(0.23, 1, 0.32, 1),
+			scale 150ms cubic-bezier(0.23, 1, 0.32, 1);
+
+		@starting-style {
+			opacity: 0;
+			scale: 0.97;
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: opacity 150ms ease-out;
+
+			@starting-style {
+				scale: none;
+			}
+		}
 	}
 
 	& .lattice-wm-menu-heading {
@@ -1134,6 +1154,21 @@
 		&:hover {
 			background: var(--lattice-wm-highlighter);
 			color: var(--lattice-wm-ink);
+		}
+
+		/* a remove, asking to be pressed again */
+		&[data-danger],
+		&[data-danger]:hover {
+			color: var(--lattice-wm-danger);
+		}
+	}
+
+	/* copied: the word fades in beside it */
+	& .lattice-wm-copied {
+		transition: opacity 160ms ease-out;
+
+		@starting-style {
+			opacity: 0;
 		}
 	}
 
@@ -1226,6 +1261,26 @@
 	& ::placeholder {
 		color: var(--lattice-wm-muted);
 		opacity: 1;
+	}
+}
+
+/* something arriving while you're looking (ui/arriving.js): a face grows
+   in, a row comes down into its place. less motion: they fade in */
+@keyframes lattice-wm-arrive {
+	from {
+		opacity: 0;
+		scale: 0.9;
+	}
+}
+@keyframes lattice-wm-arrive-row {
+	from {
+		opacity: 0;
+		translate: 0 -3px;
+	}
+}
+@keyframes lattice-wm-arrive-fade {
+	from {
+		opacity: 0;
 	}
 }
 
@@ -1627,6 +1682,15 @@ lattice-pane {
 	font: inherit;
 	text-align: inherit;
 	cursor: pointer;
+
+	/* someone joining while you're in the call (ui/arriving.js) */
+	&[data-arriving] {
+		animation: lattice-wm-arrive 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+
+		@media (prefers-reduced-motion: reduce) {
+			animation-name: lattice-wm-arrive-fade;
+		}
+	}
 }
 
 /* the faces down a sidebar: one across while there are few, two across when
@@ -2064,10 +2128,25 @@ lattice-pane {
 		color: inherit;
 		font: 600 calc(9 * var(--lattice-px, 1px))/1 var(--lattice-wm-sans);
 		cursor: pointer;
+		transition: scale 120ms ease-out;
 
 		&[aria-pressed="true"] {
 			outline: 2px solid var(--lattice-wm-face);
 			outline-offset: 1px;
+		}
+
+		/* pressed: following them, or not */
+		&:active {
+			scale: 0.95;
+		}
+
+		/* someone coming while you're here (ui/arriving.js) */
+		&[data-arriving] {
+			animation: lattice-wm-arrive 200ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+
+			@media (prefers-reduced-motion: reduce) {
+				animation-name: lattice-wm-arrive-fade;
+			}
 		}
 	}
 
@@ -2095,10 +2174,26 @@ lattice-pane {
 		display: flex;
 		align-items: center;
 		color: var(--lattice-wm-ink-soft);
+		/* a long press is its menu (ui/context-menu.js), not the system's */
+		-webkit-touch-callout: none;
 
 		&[data-showing] {
 			color: var(--lattice-wm-ink);
 			font-weight: 600;
+		}
+
+		/* its menu's open */
+		&[data-menu] .lattice-wm-file-open {
+			background: var(--lattice-wm-chrome);
+		}
+
+		/* made or added while you're here (ui/arriving.js) */
+		&[data-arriving] {
+			animation: lattice-wm-arrive-row 180ms cubic-bezier(0.23, 1, 0.32, 1) backwards;
+
+			@media (prefers-reduced-motion: reduce) {
+				animation-name: lattice-wm-arrive-fade;
+			}
 		}
 	}
 
@@ -2163,38 +2258,6 @@ lattice-pane {
 		}
 	}
 
-	/* shown on hover, or while it's asking to be pressed again: over the end
-	   of the row, so it takes no room from the name when it's not there */
-	& .lattice-wm-file-remove {
-		position: absolute;
-		top: 50%;
-		right: calc(6 * var(--lattice-px, 1px));
-		display: inline-grid;
-		place-items: center;
-		visibility: hidden;
-		padding: 0 calc(5 * var(--lattice-px, 1px));
-		border: none;
-		border-radius: var(--lattice-wm-radius);
-		background: var(--lattice-wm-fill);
-		color: var(--lattice-wm-ink-soft);
-		font-family: var(--lattice-wm-sans);
-		translate: 0 -50%;
-		cursor: pointer;
-
-		&:hover {
-			background: color-mix(in oklab, var(--lattice-wm-fill), var(--lattice-wm-ink) 8%);
-			color: var(--lattice-wm-danger);
-		}
-	}
-	& .lattice-wm-file:hover .lattice-wm-file-remove,
-	& .lattice-wm-file:focus-within .lattice-wm-file-remove,
-	& .lattice-wm-file[data-removing] .lattice-wm-file-remove {
-		visibility: visible;
-	}
-	& .lattice-wm-file[data-removing] .lattice-wm-file-remove {
-		background: var(--lattice-wm-danger-fill);
-		color: var(--lattice-wm-danger-ink);
-	}
 }
 
 /* along a sidebar's right edge, over its border */

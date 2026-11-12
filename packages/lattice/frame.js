@@ -20,6 +20,8 @@ import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.j
 import { icon } from "../wm/ui/icons.js";
 import { tooltips } from "../wm/ui/tooltip.js";
 import { menuKeys } from "../wm/ui/menus.js";
+import { rowMenu, showMenuAt } from "../wm/ui/context-menu.js";
+import { arrivals } from "../wm/ui/arriving.js";
 import { holdSecret, secret } from "../wm/ui/secret.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
@@ -721,8 +723,11 @@ function Frame(props) {
     </header>`;
   }
 
+  // a project made or added while you're here comes in (ui/arriving.js)
+  const projectArriving = arrivals();
   function ProjectItem(props) {
     const project = props.project;
+    const arriving = projectArriving(project.url);
     return () =>
       renaming() === project.url
         ? html`<input
@@ -742,7 +747,9 @@ function Frame(props) {
             title="double click to rename · right click for menu"
             onClick=${() => choose(project.url)}
             onDblClick=${() => setRenaming(project.url)}
-            onContextMenu=${(event) => openProjectMenu(event, project)}
+            data-menu=${() => (projectMenuOpen() && menuProject() === project ? "" : undefined)}
+            data-arriving=${arriving}
+            ref=${rowMenu((at, event) => openProjectMenu(at, event, project))}
           >
             <span class="lattice-tree-name">${project.name}</span>
           </button>`;
@@ -868,9 +875,9 @@ function Frame(props) {
     document.removeEventListener("keyup", onMenuAlt);
   });
 
-  function openProjectMenu(event, project) {
-    event.preventDefault();
-    setMenuAlt(event.altKey);
+  // where it was asked for (ui/context-menu.js), and with alt held or not
+  function openProjectMenu(at, event, project) {
+    setMenuAlt(!!event.altKey);
     setMenuProject(project);
     setPacking(null);
     setRemoving(false);
@@ -881,9 +888,7 @@ function Frame(props) {
         if (menuProject() === project && isValidAutomergeUrl(files)) setMenuFiles(files);
       });
     }
-    projectMenu.style.top = `${Math.min(event.clientY, innerHeight - 140)}px`;
-    projectMenu.style.left = `${Math.min(event.clientX, innerWidth - 320)}px`;
-    projectMenu.showPopover();
+    showMenuAt(projectMenu, at);
   }
 
   // copying: it says so, a moment, before the menu goes
@@ -920,6 +925,8 @@ function Frame(props) {
 
   // removing asks twice, as a project's files do: the first press arms it
   const [removing, setRemoving] = createSignal(false);
+  // whose menu it is shows on their row, while it's open
+  const [projectMenuOpen, setProjectMenuOpen] = createSignal(false);
   function removeFromMenu() {
     if (!removing()) return setRemoving(true);
     setRemoving(false);
@@ -932,6 +939,7 @@ function Frame(props) {
       class="lattice-wm-menu lattice-context-menu"
       popover="auto"
       ref=${(el) => (projectMenu = el)}
+      onToggle=${(event) => setProjectMenuOpen(event.newState === "open")}
     >
       <${Show} when=${() => menuAlt() || copied()}>
         <button
@@ -954,7 +962,11 @@ function Frame(props) {
         download
         <${Show} when=${packing}><small>${packing}</small><//>
       </button>
-      <button class="lattice-wm-menu-item" onClick=${removeFromMenu}>
+      <button
+        class="lattice-wm-menu-item"
+        data-danger=${() => (removing() ? "" : undefined)}
+        onClick=${removeFromMenu}
+      >
         ${icon("close")}
         ${() => (removing() ? "remove?" : "remove")}
       </button>

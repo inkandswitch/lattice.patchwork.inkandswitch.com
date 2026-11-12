@@ -24,6 +24,8 @@ import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
 import { holdSecret, secret } from "./ui/secret.js";
 import { scrollsAlong } from "./ui/along.js";
+import { rowMenu, showMenuAt } from "./ui/context-menu.js";
+import { arrivals } from "./ui/arriving.js";
 import { createInk } from "./ink.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
@@ -2373,18 +2375,53 @@ export function mountWorkspace(
     });
   }
 
-  // removing asks twice: the first press arms it for a few seconds
-  const [removing, setRemoving] = createSignal(null);
-  let removingTimer;
-  function askToRemove(url) {
-    clearTimeout(removingTimer);
-    if (removing() === url) {
-      setRemoving(null);
-      removeFile(url);
+  // a file's menu (ui/context-menu.js), as a project's is in lattice's
+  // sidebar: what else it could be shown with, copying its url, renaming it,
+  // and taking it out of the project, which asks twice. delete on the file
+  // opens it asking already
+  let fileMenu;
+  const [fileMenuFor, setFileMenuFor] = createSignal(null);
+  const [fileMenuOpen, setFileMenuOpen] = createSignal(false);
+  const [fileRemoving, setFileRemoving] = createSignal(false);
+  const [fileCopied, setFileCopied] = createSignal(false);
+  let fileCopiedTimer;
+  function openFileMenu(at, url, { removing = false } = {}) {
+    clearTimeout(fileCopiedTimer);
+    setFileMenuFor(url);
+    setFileRemoving(removing);
+    setFileCopied(false);
+    showMenuAt(fileMenu, at);
+  }
+
+  // in a new tab, in the pane last used, with that
+  function openWith(url, choice) {
+    fileMenu.hidePopover();
+    if (following()) follow(null);
+    const groupId = findGroup(lastGroupId()) ? lastGroupId() : null;
+    const [made] = updateLayout((nodes) =>
+      Layout.openPanels(nodes, groupId, "center", [Layout.newPanel(url, choice.tool, choice.patchworkTool)]),
+    );
+    activate(made);
+  }
+
+  // copying: it says so, a moment, before the menu goes
+  async function copyFileUrl(url) {
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      console.error("[wm] couldn't copy it", error);
+      fileMenu.hidePopover();
       return;
     }
-    setRemoving(url);
-    removingTimer = setTimeout(() => setRemoving(null), 3000);
+    setFileCopied(true);
+    clearTimeout(fileCopiedTimer);
+    fileCopiedTimer = setTimeout(() => fileMenu.hidePopover(), 600);
+  }
+
+  function removeFromMenu(url) {
+    if (!fileRemoving()) return setFileRemoving(true);
+    fileMenu.hidePopover();
+    removeFile(url);
   }
 
   // when a doc was last done something to: what an extension says (built,
@@ -2426,6 +2463,8 @@ export function mountWorkspace(
     }
     // files from the computer, dropped here: into the project, not opened
     const [filesOver, setFilesOver] = createSignal(false);
+    // a file made or added while you're here comes in (ui/arriving.js)
+    const arriving = arrivals();
     return html`<nav
       class="lattice-wm-files"
       aria-label="files"
@@ -2486,8 +2525,10 @@ export function mountWorkspace(
             data-url=${file.url}
             data-colour=${docColour(file.url)}
             data-showing=${() => (findShowing(file.url) ? "" : undefined)}
-            data-removing=${() => (removing() === file.url ? "" : undefined)}
+            data-menu=${() => (fileMenuFor() === file.url && fileMenuOpen() ? "" : undefined)}
+            data-arriving=${arriving(file.url)}
             draggable="true"
+            ref=${rowMenu((at) => openFileMenu(at, file.url))}
             onDragStart=${(event) => {
               event.dataTransfer.setData(
                 "text/x-patchwork-dnd",
@@ -2517,13 +2558,17 @@ export function mountWorkspace(
                 : html`<button
                     class="lattice-wm-file-open"
                     title=${() =>
-                      [file.name, touchedWhen(file.url), "click to open it, or drag it onto a pane · double click to rename"]
+                      [file.name, touchedWhen(file.url), "click to open it, or drag it onto a pane · double click to rename · right click for menu"]
                         .filter(Boolean)
                         .join("\n")}
                     onClick=${() => open(file.url)}
                     onDblClick=${() => setRenamingFile(file.url)}
                     onKeyDown=${(event) => {
-                      if (event.key === "Delete" || event.key === "Backspace") askToRemove(file.url);
+                      if (event.key === "Delete" || event.key === "Backspace") {
+                        event.preventDefault();
+                        const box = event.currentTarget.getBoundingClientRect();
+                        openFileMenu({ x: box.left + 10, y: box.bottom - 4 }, file.url, { removing: true });
+                      }
                       if (event.key === "F2") {
                         event.preventDefault();
                         setRenamingFile(file.url);
@@ -2536,26 +2581,76 @@ export function mountWorkspace(
                       <span>${() => lastTouched(file.url)}</span>
                     </span>
                   </button>`}
-            <button
-                class="lattice-wm-file-remove"
-                aria-label=${() => `remove ${file.name} from ${projectName()}`}
-                title=${() =>
-                  removing() === file.url
-                    ? "click again to remove it"
-                    : `remove it from ${projectName()} (the doc itself stays)`}
-                onClick=${() => askToRemove(file.url)}
-              >
-                ${() => (removing() === file.url ? "remove?" : icon("close", 12))}
-              </button>
           </div>`}
         <//>
       </div>
+      <${FileMenu} rename=${setRenamingFile} />
     </nav>`;
+  }
+
+  function FileMenu(props) {
+    const url = fileMenuFor;
+    const choices = () => (url() ? toolChoices(url()) : []);
+    return html`<div
+      class="lattice-wm-menu lattice-wm-file-menu"
+      popover="auto"
+      role="menu"
+      ref=${(el) => (fileMenu = el)}
+      onToggle=${(event) => {
+        setFileMenuOpen(event.newState === "open");
+        if (event.newState === "closed") {
+          clearTimeout(fileCopiedTimer);
+          setFileRemoving(false);
+        }
+      }}
+    >
+      <${Show} when=${() => choices().length > 1}>
+        <div class="lattice-wm-menu-heading">open with</div>
+        <${For} each=${choices}>
+          ${(choice) => html`<button
+            class="lattice-wm-menu-item"
+            role="menuitem"
+            title=${choice.title}
+            onClick=${() => openWith(url(), choice)}
+          >
+            ${choice.name}
+          </button>`}
+        <//>
+        <div class="lattice-wm-menu-rule"></div>
+      <//>
+      <button class="lattice-wm-menu-item" role="menuitem" onClick=${() => copyFileUrl(url())}>
+        ${() => icon(fileCopied() ? "check" : "copy")} copy url
+        <${Show} when=${fileCopied}><small class="lattice-wm-copied">copied</small><//>
+      </button>
+      <button
+        class="lattice-wm-menu-item"
+        role="menuitem"
+        onClick=${() => {
+          const at = url();
+          fileMenu.hidePopover();
+          props.rename(at);
+        }}
+      >
+        ${icon("pencil")} rename
+      </button>
+      <button
+        class="lattice-wm-menu-item"
+        role="menuitem"
+        data-first=${() => (fileRemoving() ? "" : undefined)}
+        data-danger=${() => (fileRemoving() ? "" : undefined)}
+        title=${() => `take it out of ${projectName()} (the doc itself stays)`}
+        onClick=${() => removeFromMenu(url())}
+      >
+        ${icon("close")} ${() => (fileRemoving() ? "remove?" : "remove")}
+      </button>
+    </div>`;
   }
 
   // who else is here: a face each. clicking one follows them, clicking it
   // again (or escape) stops
   function Faces() {
+    // someone coming while you're here comes in (ui/arriving.js)
+    const arriving = arrivals();
     return html`<${Show} when=${() => people.length}>
       <span class="lattice-wm-faces" role="group" aria-label="who's here" ref=${scrollsAlong}>
         <${For} each=${() => people}>
@@ -2563,6 +2658,7 @@ export function mountWorkspace(
             const image = () => faceImage(person.avatar);
             return html`<button
               class="lattice-wm-face"
+              data-arriving=${arriving(person.peer)}
               style=${() => ({
                 "--lattice-wm-face": person.colour || null,
                 "background-image": image() ? `url("${image()}")` : null,
@@ -2782,7 +2878,7 @@ export function mountWorkspace(
     offCalls();
     offCallProject();
     clearTimeout(noticeTimer);
-    clearTimeout(removingTimer);
+    clearTimeout(fileCopiedTimer);
     clearInterval(ticker);
     offPatchworkTools();
     for (const [id, host] of hosts) destroyHost(id, host);
