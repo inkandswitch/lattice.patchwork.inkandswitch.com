@@ -89,4 +89,10 @@
 	--syntax-changed: #4385be;
 
 	--syntax-content-separator: #282726;
+
+	/* type: Atkinson Hyperlegible Next for the ui and headings, Victor Mono
+	   in the editor (both lattice's own, packages/lattice/fonts) */
+	--studio-family-ui: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+	--lattice-heading-family: "Atkinson Hyperlegible Next", system-ui, sans-serif;
+	--editor-family-code: "Victor Mono", ui-monospace, Menlo, monospace;
 }
