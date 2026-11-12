@@ -28,11 +28,15 @@ export const plugins = [
       return projectDatatype();
     },
   },
+  // unlisted: not offered in "open with". a project in lattice is what the
+  // frame's for (which mounts it itself, not by this tool); elsewhere it opens
+  // in knitoutjs's. still here for whatever was opened with it before
   {
     type: "patchwork:tool",
     id: "lattice:project",
     name: "Lattice Project",
     icon: "Shirt",
+    unlisted: true,
     supportedDatatypes: [
       "lattice:project",
       "knitoutjs-project",

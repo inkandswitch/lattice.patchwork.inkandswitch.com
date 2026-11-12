@@ -50,14 +50,18 @@ const PATHS = {
 
 /**
  * a line icon, as an <svg> element: goes into html`` templates and plain dom
- * alike. `size` is anything an svg's width takes; by default it's as big as
- * the text around it, and sits on its line like a letter
+ * alike. `size` is anything an svg's width takes, or a number of the ui's
+ * px (--lattice-px: bigger with the ui); by default it's as big as the text
+ * around it, and sits on its line like a letter
  */
 export function icon(name, size = "1em") {
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("viewBox", "0 0 16 16");
   svg.setAttribute("width", size);
   svg.setAttribute("height", size);
+  if (typeof size === "number") {
+    svg.style.width = svg.style.height = `calc(${size} * var(--lattice-px, 1px))`;
+  }
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("class", `icon icon-${name}`);
   svg.style.flex = "none";

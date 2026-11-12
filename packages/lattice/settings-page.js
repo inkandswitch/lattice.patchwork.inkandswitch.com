@@ -46,6 +46,11 @@ const FONTS = [
   { key: "--editor-family-code", label: "editor font" },
 ];
 const EDITOR_SIZE = "--text-editor-font-size";
+// the ui's size (shell.css's --lattice-px): what it is, and that over the
+// 13px it's drawn at, which everything in the chrome's scaled by
+const UI_SIZE = "--lattice-ui-size";
+const UI_SCALE = "--lattice-ui-scale";
+const UI_BASE = 13;
 // the fonts, in the picker: lattice's own, then the ones on this computer
 const FONT_GROUPS = [
   ["lattice", true],
@@ -331,9 +336,31 @@ export function SettingsPage(props) {
     // what the theme had, under anything of yours
     const theirs = (key) => themeValue(own.base(), key);
     const size = () => parseFloat(string(own.variables()[EDITOR_SIZE])) || "";
+    const uiSize = () => parseFloat(string(own.variables()[UI_SIZE])) || "";
+    // the theme's own size, or blank, is the theme's: nothing of yours
+    function setUiSize(n) {
+      const set = n > 0 && n !== (parseFloat(theirs(UI_SIZE)) || UI_BASE);
+      own.set(UI_SIZE, set ? `${n}px` : "");
+      own.set(UI_SCALE, set ? String(Math.round((n / UI_BASE) * 10000) / 10000) : "", { now: true });
+    }
 
     return html`<div class="lattice-theme-edit">
       <${For} each=${FONTS}>${(field) => FontField({ own, ...field })}<//>
+      <label class="lattice-setting">
+        <span class="lattice-settings-label">ui size</span>
+        <span class="lattice-size">
+          <input
+            type="number"
+            min="10"
+            max="20"
+            step="1"
+            value=${uiSize}
+            placeholder=${() => parseFloat(theirs(UI_SIZE)) || UI_BASE}
+            onChange=${(event) => setUiSize(parseFloat(event.currentTarget.value))}
+          />
+          px
+        </span>
+      </label>
       <label class="lattice-setting">
         <span class="lattice-settings-label">editor size</span>
         <span class="lattice-size">

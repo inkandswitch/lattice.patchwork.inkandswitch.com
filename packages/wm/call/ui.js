@@ -58,7 +58,7 @@ function videoOf(stream, face) {
 /**
  * someone in the call (`props.id`, or "me" for you), as a round face: their
  * pictures while their camera's on, else their avatar, or their initial.
- * `props.size` is in px; `props.shape` "round" (the default) or "tile";
+ * `props.size` is in the ui's px (--lattice-px); `props.shape` "round" (the default) or "tile";
  * `props.muted` false leaves out saying they're muted (it's said beside
  * their name instead)
  */
@@ -81,7 +81,7 @@ export function Face(props) {
     style=${() => ({
       // theirs, or one for them, as presence would give them
       "--lattice-wm-face": person() ? person().colour || colourFor(person().contact || props.id) : null,
-      "--lattice-wm-call-size": props.size ? `${props.size}px` : null,
+      "--lattice-wm-call-size": props.size ? `calc(${props.size} * var(--lattice-px, 1px))` : null,
       "background-image": !stream() && image() ? `url("${image()}")` : null,
     })}
     title=${() => (props.title === false ? undefined : mine() ? "you" : person()?.name)}

@@ -85,11 +85,11 @@
 		box-sizing: border-box;
 		width: 100%;
 		height: 100%;
-		padding: 4px;
+		padding: calc(4 * var(--lattice-px, 1px));
 		overflow: hidden;
 		background: var(--lattice-wm-paper);
 		color: var(--lattice-wm-ink);
-		font: 12px/1.4 var(--lattice-wm-sans);
+		font: calc(12 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 
 		& *,
 		& *::before,
@@ -173,11 +173,11 @@
 		touch-action: none;
 
 		[data-direction="row"] > & {
-			width: 4px;
+			width: calc(4 * var(--lattice-px, 1px));
 			cursor: col-resize;
 		}
 		[data-direction="column"] > & {
-			height: 4px;
+			height: calc(4 * var(--lattice-px, 1px));
 			cursor: row-resize;
 		}
 
@@ -189,12 +189,12 @@
 			background: var(--lattice-wm-line-soft);
 		}
 		[data-direction="row"] > &::after {
-			width: 2px;
-			height: 40px;
+			width: calc(2 * var(--lattice-px, 1px));
+			height: calc(40 * var(--lattice-px, 1px));
 		}
 		[data-direction="column"] > &::after {
-			width: 40px;
-			height: 2px;
+			width: calc(40 * var(--lattice-px, 1px));
+			height: calc(2 * var(--lattice-px, 1px));
 		}
 
 		&:hover::after,
@@ -218,7 +218,7 @@
 		border-radius: var(--lattice-wm-radius);
 		background: var(--lattice-wm-sheet);
 		/* how far a selected tab's feet curve out */
-		--lattice-wm-tab-flare: 6px;
+		--lattice-wm-tab-flare: calc(6 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-tabs {
@@ -227,10 +227,10 @@
 		/* the tabs stand on the bar's bottom edge, the selected one opening
 		   into its tool below, no rule between */
 		align-items: flex-end;
-		gap: 8px;
-		height: 34px;
+		gap: calc(8 * var(--lattice-px, 1px));
+		height: calc(34 * var(--lattice-px, 1px));
 		/* room for the first tab's flare */
-		padding-left: 10px;
+		padding-left: calc(10 * var(--lattice-px, 1px));
 		overflow-x: auto;
 		scrollbar-width: none;
 		background: var(--lattice-wm-chrome);
@@ -249,12 +249,12 @@
 		display: flex;
 		flex: none;
 		align-items: stretch;
-		max-width: 300px;
-		height: 26px;
-		border-radius: 6px 6px 0 0;
+		max-width: calc(300 * var(--lattice-px, 1px));
+		height: calc(26 * var(--lattice-px, 1px));
+		border-radius: calc(6 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px)) 0 0;
 		background: var(--lattice-wm-tab-fill);
 		/* the name and its tool share this, so they shrink together */
-		font-size: 11px;
+		font-size: calc(11 * var(--lattice-px, 1px));
 		white-space: nowrap;
 		cursor: var(--lattice-wm-cursor);
 		user-select: none;
@@ -339,9 +339,9 @@
 	}
 	& .lattice-wm-tab-slot {
 		flex: none;
-		width: 72px;
-		height: 26px;
-		border-radius: 6px 6px 0 0;
+		width: calc(72 * var(--lattice-px, 1px));
+		height: calc(26 * var(--lattice-px, 1px));
+		border-radius: calc(6 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px)) 0 0;
 		background: color-mix(in oklab, var(--lattice-wm-accent) 22%, var(--lattice-wm-sheet));
 		box-shadow: inset 0 2px 0 var(--lattice-wm-accent);
 		pointer-events: none;
@@ -380,9 +380,9 @@
 		display: inline-flex;
 		flex: 0 1 auto;
 		align-items: center;
-		gap: 6px;
+		gap: calc(6 * var(--lattice-px, 1px));
 		min-width: 0;
-		padding: 0 8px;
+		padding: 0 calc(8 * var(--lattice-px, 1px));
 		outline: none;
 	}
 	& .lattice-wm-tab:has(> .lattice-wm-tab-title:focus-visible) {
@@ -397,9 +397,9 @@
 
 	& .lattice-wm-rename {
 		width: 14ch;
-		padding: 0 2px;
+		padding: 0 calc(2 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-sheet);
 		color: inherit;
 		font: inherit;
@@ -411,13 +411,13 @@
 		display: inline-flex;
 		flex: none;
 		align-items: center;
-		gap: 6px;
+		gap: calc(6 * var(--lattice-px, 1px));
 		/* its hover is a pill inside the tab, clear of its edges and the
 		   colour line along its top */
-		margin: 4px 0 3px;
-		padding: 0 6px;
+		margin: calc(4 * var(--lattice-px, 1px)) 0 calc(3 * var(--lattice-px, 1px));
+		padding: 0 calc(6 * var(--lattice-px, 1px));
 		border: none;
-		border-radius: 4px;
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: none;
 		color: var(--lattice-wm-ink);
 		/* the tab name's own type and line box, just boxed, so the two sit on
@@ -431,8 +431,8 @@
 		& .lattice-wm-tab-tool-arrow {
 			display: block;
 			flex: none;
-			width: 9px;
-			height: 5.5px;
+			width: calc(9 * var(--lattice-px, 1px));
+			height: calc(5.5 * var(--lattice-px, 1px));
 		}
 
 		&:hover {
@@ -446,12 +446,12 @@
 		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: 18px;
+		width: calc(18 * var(--lattice-px, 1px));
 		/* a pill inside the tab, as the tool's is */
-		margin: 4px 3px 3px 0;
+		margin: calc(4 * var(--lattice-px, 1px)) calc(3 * var(--lattice-px, 1px)) calc(3 * var(--lattice-px, 1px)) 0;
 		padding: 0;
 		border: none;
-		border-radius: 4px;
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: none;
 		color: inherit;
 		opacity: 0.7;
@@ -473,12 +473,12 @@
 		flex: none;
 		align-items: center;
 		justify-content: center;
-		width: 24px;
-		height: 26px;
+		width: calc(24 * var(--lattice-px, 1px));
+		height: calc(26 * var(--lattice-px, 1px));
 		margin: 0;
 		padding: 0;
 		border: none;
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: none;
 		color: inherit;
 		cursor: pointer;
@@ -500,8 +500,8 @@
 
 	& .lattice-wm-swatch {
 		flex: none;
-		width: 8px;
-		height: 8px;
+		width: calc(8 * var(--lattice-px, 1px));
+		height: calc(8 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
 		background: var(--lattice-wm-doc);
 		transition: box-shadow 0.15s;
@@ -518,16 +518,16 @@
 		flex: none;
 		overflow: hidden;
 		align-items: center;
-		gap: 10px;
-		height: 24px;
-		padding: 0 6px;
-		font-size: 11px;
+		gap: calc(10 * var(--lattice-px, 1px));
+		height: calc(24 * var(--lattice-px, 1px));
+		padding: 0 calc(6 * var(--lattice-px, 1px));
+		font-size: calc(11 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
+		gap: calc(5 * var(--lattice-px, 1px));
 		min-width: 0;
 		overflow: hidden;
 		padding: 0;
@@ -552,7 +552,7 @@
 	& .lattice-wm-link-name {
 		overflow: hidden;
 		color: var(--lattice-wm-ink);
-		font: italic 12px var(--lattice-wm-aside-family);
+		font: italic calc(12 * var(--lattice-px, 1px)) var(--lattice-wm-aside-family);
 		text-overflow: ellipsis;
 	}
 
@@ -565,7 +565,7 @@
 		display: inline-flex;
 		flex: none;
 		align-items: center;
-		gap: 4px;
+		gap: calc(4 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
 		white-space: nowrap;
 
@@ -634,7 +634,7 @@
 	& .lattice-wm-ring {
 		--lattice-wm-ring: 0px;
 		position: absolute;
-		inset: calc(var(--lattice-wm-ring-top, 34px) - var(--lattice-wm-ring)) 0 0;
+		inset: calc(var(--lattice-wm-ring-top, calc(34 * var(--lattice-px, 1px))) - var(--lattice-wm-ring)) 0 0;
 		z-index: 5;
 		border-radius: 0 0 var(--lattice-wm-radius) var(--lattice-wm-radius);
 		pointer-events: none;
@@ -680,12 +680,12 @@
 	}
 
 	& .lattice-wm-tool[data-state="broken"] {
-		padding: 12px;
+		padding: calc(12 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-danger);
 	}
 
 	& .lattice-wm-tool[data-state="waiting"] {
-		padding: 12px;
+		padding: calc(12 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
 	}
 
@@ -699,9 +699,9 @@
 
 	& .lattice-wm-drop-hint {
 		position: absolute;
-		inset: 4px;
+		inset: calc(4 * var(--lattice-px, 1px));
 		border: 2px dashed var(--lattice-wm-accent);
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: color-mix(in oklab, var(--lattice-wm-accent) 12%, transparent);
 		transition: inset 0.08s;
 		pointer-events: none;
@@ -720,7 +720,7 @@
 		position: absolute;
 		z-index: 20;
 		border: 2px dashed var(--lattice-wm-accent);
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: color-mix(in oklab, var(--lattice-wm-accent) 10%, transparent);
 		pointer-events: none;
 
@@ -739,26 +739,26 @@
 
 		& span {
 			position: absolute;
-			top: -9px;
-			right: 8px;
-			padding: 0 5px;
+			top: calc(-9 * var(--lattice-px, 1px));
+			right: calc(8 * var(--lattice-px, 1px));
+			padding: 0 calc(5 * var(--lattice-px, 1px));
 			border: 1px solid var(--lattice-wm-line);
 			background: var(--lattice-wm-highlighter);
 			color: var(--lattice-wm-ink);
-			font: 10px/14px var(--lattice-wm-mono);
+			font: calc(10 * var(--lattice-px, 1px))/calc(14 * var(--lattice-px, 1px)) var(--lattice-wm-mono);
 			transform: skewX(-10deg);
 		}
 	}
 
 	& .lattice-wm-notice {
 		position: absolute;
-		right: 8px;
-		bottom: 8px;
-		left: 8px;
+		right: calc(8 * var(--lattice-px, 1px));
+		bottom: calc(8 * var(--lattice-px, 1px));
+		left: calc(8 * var(--lattice-px, 1px));
 		z-index: 12;
-		padding: 5px 9px;
+		padding: calc(5 * var(--lattice-px, 1px)) calc(9 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-highlighter);
 		box-shadow: 1px 1px 0 var(--lattice-wm-line);
 		color: var(--lattice-wm-ink);
@@ -806,13 +806,13 @@
 
 	& .lattice-wm-pointer-name {
 		position: absolute;
-		top: 16px;
-		left: 10px;
-		padding: 1px 6px;
+		top: calc(16 * var(--lattice-px, 1px));
+		left: calc(10 * var(--lattice-px, 1px));
+		padding: calc(1 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px));
 		border-radius: var(--lattice-wm-round);
 		background: var(--lattice-wm-button-fill);
 		color: var(--lattice-wm-button-ink);
-		font: 600 10.5px/1.4 var(--lattice-wm-sans);
+		font: 600 calc(10.5 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 		white-space: nowrap;
 	}
 
@@ -855,12 +855,12 @@
 		left: 0;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		padding: 2px 4px 3px 8px;
-		border-radius: 0 0 6px 0;
+		gap: calc(6 * var(--lattice-px, 1px));
+		padding: calc(2 * var(--lattice-px, 1px)) calc(4 * var(--lattice-px, 1px)) calc(3 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
+		border-radius: 0 0 calc(6 * var(--lattice-px, 1px)) 0;
 		background: var(--lattice-wm-button-fill);
 		color: var(--lattice-wm-button-ink, white);
-		font: 600 11px/1.3 var(--lattice-wm-sans);
+		font: 600 calc(11 * var(--lattice-px, 1px))/1.3 var(--lattice-wm-sans);
 		cursor: default;
 
 		& button {
@@ -877,13 +877,13 @@
 	}
 	& .lattice-wm-follow-modes {
 		display: flex;
-		padding: 1px;
-		border-radius: 4px;
+		padding: calc(1 * var(--lattice-px, 1px));
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: color-mix(in oklch, currentColor 18%, transparent);
 
 		& .lattice-wm-follow-mode {
-			padding: 0 6px;
-			border-radius: 3px;
+			padding: 0 calc(6 * var(--lattice-px, 1px));
+			border-radius: calc(3 * var(--lattice-px, 1px));
 			opacity: 0.75;
 
 			&:hover {
@@ -900,9 +900,9 @@
 	/* their face, under their name, while you're in a call with them */
 	& .lattice-wm-pointer-face {
 		position: absolute;
-		top: 36px;
-		left: 8px;
-		--lattice-wm-call-size: 44px;
+		top: calc(36 * var(--lattice-px, 1px));
+		left: calc(8 * var(--lattice-px, 1px));
+		--lattice-wm-call-size: calc(44 * var(--lattice-px, 1px));
 	}
 
 	@media (prefers-reduced-motion: reduce) {
@@ -914,9 +914,9 @@
 	/* ── buttons: a 1px line and a 1px shadow, lifting on hover ───────────── */
 
 	& .lattice-wm-button {
-		padding: 2px 10px;
+		padding: calc(2 * var(--lattice-px, 1px)) calc(10 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-sheet);
 		box-shadow: 1px 1px 0 var(--lattice-wm-line);
 		color: inherit;
@@ -956,16 +956,16 @@
 		display: grid;
 		flex: 1;
 		place-items: center;
-		padding: 16px;
+		padding: calc(16 * var(--lattice-px, 1px));
 	}
 
 	/* a doc's datatype, on a "no tool for this" card */
 	& .lattice-wm-empty-type {
-		padding: 1px 5px;
+		padding: calc(1 * var(--lattice-px, 1px)) calc(5 * var(--lattice-px, 1px));
 		border-radius: var(--lattice-wm-radius);
 		background: var(--lattice-wm-highlighter);
 		color: var(--lattice-wm-ink);
-		font: 11px var(--lattice-wm-mono);
+		font: calc(11 * var(--lattice-px, 1px)) var(--lattice-wm-mono);
 	}
 
 	& .lattice-wm-empty-card {
@@ -986,8 +986,8 @@
 			}
 		}
 
-		max-width: 320px;
-		padding: 24px 28px 20px;
+		max-width: calc(320 * var(--lattice-px, 1px));
+		padding: calc(24 * var(--lattice-px, 1px)) calc(28 * var(--lattice-px, 1px)) calc(20 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
 		border-radius: 0.5em;
 		background: var(--lattice-wm-sheet);
@@ -995,7 +995,7 @@
 		text-align: center;
 
 		& p {
-			margin: 0 0 12px;
+			margin: 0 0 calc(12 * var(--lattice-px, 1px));
 			color: var(--lattice-wm-muted);
 		}
 	}
@@ -1003,18 +1003,18 @@
 	& .lattice-wm-empty-actions {
 		display: flex;
 		justify-content: center;
-		gap: 8px;
+		gap: calc(8 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-empty-notice {
-		margin: 12px 0 0 !important;
+		margin: calc(12 * var(--lattice-px, 1px)) 0 0 !important;
 		color: var(--lattice-wm-danger) !important;
 	}
 
 	/* the serif is drawn by hand, a little; it wobbles while you're near */
 	& .lattice-wm-heading {
-		margin: 0 0 6px;
-		font: 400 28px/1.1 var(--lattice-wm-heading-family);
+		margin: 0 0 calc(6 * var(--lattice-px, 1px));
+		font: 400 calc(28 * var(--lattice-px, 1px))/1.1 var(--lattice-wm-heading-family);
 		filter: var(--lattice-wm-heading-filter);
 
 		.lattice-wm-empty-card:hover & {
@@ -1055,16 +1055,16 @@
 
 		&[data-edge="n"],
 		&[data-edge="s"] {
-			left: 10px;
-			right: 10px;
-			height: 5px;
+			left: calc(10 * var(--lattice-px, 1px));
+			right: calc(10 * var(--lattice-px, 1px));
+			height: calc(5 * var(--lattice-px, 1px));
 			cursor: ns-resize;
 		}
 		&[data-edge="e"],
 		&[data-edge="w"] {
-			top: 10px;
-			bottom: 10px;
-			width: 5px;
+			top: calc(10 * var(--lattice-px, 1px));
+			bottom: calc(10 * var(--lattice-px, 1px));
+			width: calc(5 * var(--lattice-px, 1px));
 			cursor: ew-resize;
 		}
 		&[data-edge="n"] { top: 0; }
@@ -1076,8 +1076,8 @@
 		&[data-edge="se"],
 		&[data-edge="sw"],
 		&[data-edge="nw"] {
-			width: 10px;
-			height: 10px;
+			width: calc(10 * var(--lattice-px, 1px));
+			height: calc(10 * var(--lattice-px, 1px));
 		}
 		&[data-edge="ne"] { top: 0; right: 0; cursor: nesw-resize; }
 		&[data-edge="sw"] { bottom: 0; left: 0; cursor: nesw-resize; }
@@ -1093,21 +1093,21 @@
 	&[popover] {
 		position: fixed;
 		inset: auto;
-		width: 260px;
+		width: calc(260 * var(--lattice-px, 1px));
 		margin: 0;
-		padding: 4px;
+		padding: calc(4 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-sheet);
 		box-shadow: 2px 2px 0 var(--lattice-wm-line);
 		color: var(--lattice-wm-ink);
-		font: 12px/1.4 var(--lattice-wm-sans);
+		font: calc(12 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 	}
 
 	& .lattice-wm-menu-heading {
-		padding: 6px 8px 2px;
+		padding: calc(6 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px)) calc(2 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
-		font-size: 10px;
+		font-size: calc(10 * var(--lattice-px, 1px));
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 	}
@@ -1115,11 +1115,11 @@
 	& .lattice-wm-menu-item {
 		display: flex;
 		align-items: center;
-		gap: 6px;
+		gap: calc(6 * var(--lattice-px, 1px));
 		width: 100%;
-		padding: 4px 8px;
+		padding: calc(4 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
 		border: none;
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: none;
 		color: inherit;
 		font: inherit;
@@ -1128,7 +1128,7 @@
 
 		& small {
 			color: var(--lattice-wm-muted);
-			font-size: 11px;
+			font-size: calc(11 * var(--lattice-px, 1px));
 		}
 
 		&:hover {
@@ -1151,13 +1151,13 @@
 
 	/* a tab's tool menu: each tool, and a way to open it in a new tab */
 	&.lattice-wm-tool-menu[popover] {
-		width: 200px;
+		width: calc(200 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-tool-option {
 		display: flex;
 		align-items: center;
-		gap: 2px;
+		gap: calc(2 * var(--lattice-px, 1px));
 
 		& .lattice-wm-menu-item {
 			flex: 1;
@@ -1176,11 +1176,11 @@
 		display: grid;
 		flex: none;
 		place-items: center;
-		width: 24px;
-		height: 24px;
+		width: calc(24 * var(--lattice-px, 1px));
+		height: calc(24 * var(--lattice-px, 1px));
 		padding: 0;
 		border: none;
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: none;
 		color: var(--lattice-wm-muted);
 		cursor: pointer;
@@ -1192,7 +1192,7 @@
 	}
 
 	& .lattice-wm-menu-empty {
-		padding: 4px 8px;
+		padding: calc(4 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
 	}
 
@@ -1201,24 +1201,24 @@
 	& .lattice-wm-menu-url input {
 		box-sizing: border-box;
 		width: 100%;
-		margin: 6px 0 2px;
-		padding: 4px 6px;
+		margin: calc(6 * var(--lattice-px, 1px)) 0 calc(2 * var(--lattice-px, 1px));
+		padding: calc(4 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line-soft);
-		border-radius: 2px;
+		border-radius: calc(2 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-sheet);
 		color: inherit;
-		font: 11px var(--lattice-wm-mono);
+		font: calc(11 * var(--lattice-px, 1px)) var(--lattice-wm-mono);
 	}
 
 	& .lattice-wm-menu-hint {
-		margin: 2px 8px 4px;
+		margin: calc(2 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px)) calc(4 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
-		font: italic 11.5px var(--lattice-wm-aside-family);
+		font: italic calc(11.5 * var(--lattice-px, 1px)) var(--lattice-wm-aside-family);
 	}
 
 	& .lattice-wm-menu-rule {
 		height: 1px;
-		margin: 4px 0;
+		margin: calc(4 * var(--lattice-px, 1px)) 0;
 		background: var(--lattice-wm-line-soft);
 	}
 
@@ -1229,11 +1229,17 @@
 	}
 }
 
+/* a pane's tool is its own size, whatever the ui's (--lattice-px, lattice's
+   shell.css): its icons too */
+lattice-pane {
+	--lattice-px: 1px;
+}
+
 /* a row of faces longer than its room (ui/along.js): it scrolls sideways,
    no bar, and fades out at whichever end there's more past. outside
    .lattice-wm, as the call bar's one too */
 .lattice-wm-along {
-	--lattice-wm-along-fade: 16px;
+	--lattice-wm-along-fade: calc(16 * var(--lattice-px, 1px));
 	flex-wrap: nowrap;
 	overflow-x: auto;
 	overflow-y: hidden;
@@ -1268,7 +1274,7 @@
 /* someone's face: their pictures while their camera's on, else their
    avatar, or their initial. yours is as a mirror shows you */
 .lattice-wm-call-face {
-	--lattice-wm-call-size: 24px;
+	--lattice-wm-call-size: calc(24 * var(--lattice-px, 1px));
 	position: relative;
 	display: inline-grid;
 	flex: none;
@@ -1316,18 +1322,18 @@
 		width: 100%;
 		height: auto;
 		aspect-ratio: 4 / 3;
-		border-radius: 6px;
-		font-size: 28px;
+		border-radius: calc(6 * var(--lattice-px, 1px));
+		font-size: calc(28 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-call-muted {
 		position: absolute;
-		right: -3px;
-		bottom: -3px;
+		right: calc(-3 * var(--lattice-px, 1px));
+		bottom: calc(-3 * var(--lattice-px, 1px));
 		display: grid;
 		place-items: center;
-		width: 14px;
-		height: 14px;
+		width: calc(14 * var(--lattice-px, 1px));
+		height: calc(14 * var(--lattice-px, 1px));
 		border-radius: 50%;
 		background: var(--lattice-wm-danger-fill);
 		color: var(--lattice-wm-danger-ink);
@@ -1336,29 +1342,29 @@
 	/* sharing their screen: a little screen, top left */
 	& .lattice-wm-call-sharing {
 		position: absolute;
-		left: -3px;
-		top: -3px;
+		left: calc(-3 * var(--lattice-px, 1px));
+		top: calc(-3 * var(--lattice-px, 1px));
 		display: grid;
 		place-items: center;
-		width: 16px;
-		height: 16px;
-		border-radius: 4px;
+		width: calc(16 * var(--lattice-px, 1px));
+		height: calc(16 * var(--lattice-px, 1px));
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-accent);
 		color: var(--lattice-wm-accent-ink);
 	}
 
 	&[data-shape="tile"] .lattice-wm-call-sharing {
-		left: 6px;
-		top: 6px;
-		width: 20px;
-		height: 20px;
+		left: calc(6 * var(--lattice-px, 1px));
+		top: calc(6 * var(--lattice-px, 1px));
+		width: calc(20 * var(--lattice-px, 1px));
+		height: calc(20 * var(--lattice-px, 1px));
 	}
 
 	&[data-shape="tile"] .lattice-wm-call-muted {
-		right: 6px;
-		bottom: 6px;
-		width: 18px;
-		height: 18px;
+		right: calc(6 * var(--lattice-px, 1px));
+		bottom: calc(6 * var(--lattice-px, 1px));
+		width: calc(18 * var(--lattice-px, 1px));
+		height: calc(18 * var(--lattice-px, 1px));
 	}
 }
 
@@ -1367,15 +1373,15 @@
 		position: fixed;
 		inset: auto;
 		box-sizing: border-box;
-		width: 260px;
+		width: calc(260 * var(--lattice-px, 1px));
 		margin: 0;
-		padding: 10px 12px;
+		padding: calc(10 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-sheet);
 		box-shadow: 2px 2px 0 var(--lattice-wm-line);
 		color: var(--lattice-wm-ink);
-		font: 12px/1.4 var(--lattice-wm-sans);
+		font: calc(12 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 		transition:
 			opacity 160ms cubic-bezier(0.23, 1, 0.32, 1),
 			scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
@@ -1394,30 +1400,30 @@
 	& .lattice-wm-call-prompt-who {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: calc(8 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-call-prompt-faces {
 		display: flex;
 
 		& .lattice-wm-call-face + .lattice-wm-call-face {
-			margin-left: -6px;
+			margin-left: calc(-6 * var(--lattice-px, 1px));
 		}
 	}
 
 	& .lattice-wm-call-prompt-title {
-		font: 600 13px/1.3 var(--lattice-wm-heading-family);
+		font: 600 calc(13 * var(--lattice-px, 1px))/1.3 var(--lattice-wm-heading-family);
 	}
 
 	& .lattice-wm-call-prompt-ask {
-		margin-top: 6px;
+		margin-top: calc(6 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
 	}
 
 	& .lattice-wm-call-prompt-buttons {
 		display: flex;
-		gap: 6px;
-		margin-top: 10px;
+		gap: calc(6 * var(--lattice-px, 1px));
+		margin-top: calc(10 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-call-go {
@@ -1426,13 +1432,13 @@
 		flex: 1;
 		align-items: center;
 		justify-content: center;
-		gap: 5px;
-		padding: 5px 8px;
+		gap: calc(5 * var(--lattice-px, 1px));
+		padding: calc(5 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-wm-line);
-		border-radius: 3px;
+		border-radius: calc(3 * var(--lattice-px, 1px));
 		background: var(--lattice-wm-button-fill);
 		color: var(--lattice-wm-accent-ink);
-		font: 600 12px/1.2 var(--lattice-wm-sans);
+		font: 600 calc(12 * var(--lattice-px, 1px))/1.2 var(--lattice-wm-sans);
 		cursor: pointer;
 		transition: scale 120ms ease-out;
 
@@ -1450,14 +1456,14 @@
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 8px;
-		margin-top: 8px;
+		gap: calc(8 * var(--lattice-px, 1px));
+		margin-top: calc(8 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);
-		font-size: 11px;
+		font-size: calc(11 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-call-not-now {
-		padding: 2px 4px;
+		padding: calc(2 * var(--lattice-px, 1px)) calc(4 * var(--lattice-px, 1px));
 		border: none;
 		background: none;
 		color: var(--lattice-wm-muted);
@@ -1491,7 +1497,7 @@
 		position: absolute;
 		display: grid;
 		justify-items: center;
-		gap: 4px;
+		gap: calc(4 * var(--lattice-px, 1px));
 		pointer-events: auto;
 		cursor: grab;
 		touch-action: none;
@@ -1509,7 +1515,7 @@
 		}
 
 		& .lattice-wm-call-face {
-			border-radius: 10px;
+			border-radius: calc(10 * var(--lattice-px, 1px));
 			box-shadow: 2px 2px 0 var(--lattice-wm-line);
 		}
 	}
@@ -1538,7 +1544,7 @@
 		& .lattice-wm-call-float-picture .lattice-wm-call-face {
 			width: 75%;
 			border-radius: 50%;
-			font-size: 32px;
+			font-size: calc(32 * var(--lattice-px, 1px));
 		}
 		& .lattice-wm-call-size {
 			right: 14%;
@@ -1554,9 +1560,9 @@
 	   (but with reduced motion, it's the ring) */
 	& .lattice-wm-call-wiggle {
 		position: absolute;
-		inset: -32px;
-		width: calc(100% + 64px);
-		height: calc(100% + 64px);
+		inset: calc(-32 * var(--lattice-px, 1px));
+		width: calc(100% + calc(64 * var(--lattice-px, 1px)));
+		height: calc(100% + calc(64 * var(--lattice-px, 1px)));
 		pointer-events: none;
 	}
 	@media (prefers-reduced-motion: no-preference) {
@@ -1566,10 +1572,10 @@
 	}
 	& .lattice-wm-call-size {
 		position: absolute;
-		right: 3px;
-		bottom: 3px;
-		width: 16px;
-		height: 16px;
+		right: calc(3 * var(--lattice-px, 1px));
+		bottom: calc(3 * var(--lattice-px, 1px));
+		width: calc(16 * var(--lattice-px, 1px));
+		height: calc(16 * var(--lattice-px, 1px));
 		cursor: nwse-resize;
 		background: linear-gradient(
 			135deg,
@@ -1590,9 +1596,9 @@
 	& .lattice-wm-call-float-muted {
 		display: inline-grid;
 		place-items: center;
-		width: 14px;
-		height: 14px;
-		margin-left: 3px;
+		width: calc(14 * var(--lattice-px, 1px));
+		height: calc(14 * var(--lattice-px, 1px));
+		margin-left: calc(3 * var(--lattice-px, 1px));
 		border-radius: 50%;
 		background: var(--lattice-wm-danger-fill);
 		color: var(--lattice-wm-danger-ink);
@@ -1602,11 +1608,11 @@
 	& .lattice-wm-call-float-name {
 		/* over the wiggle */
 		position: relative;
-		padding: 1px 6px;
+		padding: calc(1 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px));
 		border-radius: var(--lattice-wm-round);
 		background: var(--lattice-wm-sheet);
 		color: var(--lattice-wm-ink);
-		font: 600 10.5px/1.4 var(--lattice-wm-sans);
+		font: 600 calc(10.5 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 		white-space: nowrap;
 	}
 }
@@ -1628,23 +1634,23 @@
 .lattice-wm-call-tiles {
 	display: grid;
 	grid-template-columns: 1fr;
-	gap: 10px;
-	padding: 8px 12px 12px;
+	gap: calc(10 * var(--lattice-px, 1px));
+	padding: calc(8 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px));
 
 	&[data-layout="grid"] {
 		grid-template-columns: 1fr 1fr;
-		gap: 8px;
+		gap: calc(8 * var(--lattice-px, 1px));
 	}
 
 	&[data-layout="chips"] {
-		gap: 2px;
+		gap: calc(2 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-call-tile {
 		display: grid;
-		gap: 3px;
+		gap: calc(3 * var(--lattice-px, 1px));
 		min-width: 0;
-		border-radius: 8px;
+		border-radius: calc(8 * var(--lattice-px, 1px));
 
 		/* the one filling the panes */
 		&[data-staged] {
@@ -1660,8 +1666,8 @@
 	&[data-layout="chips"] .lattice-wm-call-tile {
 		grid-template-columns: auto 1fr;
 		align-items: center;
-		gap: 8px;
-		padding: 3px 4px;
+		gap: calc(8 * var(--lattice-px, 1px));
+		padding: calc(3 * var(--lattice-px, 1px)) calc(4 * var(--lattice-px, 1px));
 
 		&[data-staged] {
 			background: var(--lattice-wm-chrome);
@@ -1672,14 +1678,14 @@
 	& .lattice-wm-call-tile-name {
 		overflow: hidden;
 		color: var(--lattice-wm-muted);
-		font: 11px/1.3 var(--lattice-wm-sans);
+		font: calc(11 * var(--lattice-px, 1px))/1.3 var(--lattice-wm-sans);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	&[data-layout="chips"] .lattice-wm-call-tile-name {
 		color: var(--lattice-wm-ink);
-		font-size: 12px;
+		font-size: calc(12 * var(--lattice-px, 1px));
 	}
 }
 
@@ -1706,7 +1712,7 @@
 		border: none;
 		border-radius: 0;
 		background-color: transparent;
-		font-size: 96px;
+		font-size: calc(96 * var(--lattice-px, 1px));
 
 		/* all of the picture, so nothing to centre */
 		& video {
@@ -1717,25 +1723,25 @@
 
 	& .lattice-wm-call-stage-name {
 		position: absolute;
-		left: 12px;
-		bottom: 12px;
+		left: calc(12 * var(--lattice-px, 1px));
+		bottom: calc(12 * var(--lattice-px, 1px));
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		padding: 3px 8px;
-		border-radius: 4px;
+		gap: calc(6 * var(--lattice-px, 1px));
+		padding: calc(3 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: rgb(0 0 0 / 0.55);
-		font: 600 13px/1.3 var(--lattice-wm-sans);
+		font: 600 calc(13 * var(--lattice-px, 1px))/1.3 var(--lattice-wm-sans);
 	}
 
 	& .lattice-wm-call-stage-close {
 		position: absolute;
-		top: 10px;
-		right: 10px;
+		top: calc(10 * var(--lattice-px, 1px));
+		right: calc(10 * var(--lattice-px, 1px));
 		display: grid;
 		place-items: center;
-		width: 28px;
-		height: 28px;
+		width: calc(28 * var(--lattice-px, 1px));
+		height: calc(28 * var(--lattice-px, 1px));
 		padding: 0;
 		border: none;
 		border-radius: 50%;
@@ -1753,14 +1759,14 @@
 
 	& .lattice-wm-call-stage-me {
 		position: absolute;
-		right: 12px;
-		bottom: 12px;
-		width: clamp(96px, 18%, 220px);
-		border-radius: 8px;
+		right: calc(12 * var(--lattice-px, 1px));
+		bottom: calc(12 * var(--lattice-px, 1px));
+		width: clamp(calc(96 * var(--lattice-px, 1px)), 18%, calc(220 * var(--lattice-px, 1px)));
+		border-radius: calc(8 * var(--lattice-px, 1px));
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.45);
 
 		& .lattice-wm-call-face {
-			border-radius: 8px;
+			border-radius: calc(8 * var(--lattice-px, 1px));
 		}
 	}
 
@@ -1770,20 +1776,20 @@
 		height: 100% !important;
 
 		& .lattice-wm-call-stage-me {
-			right: 20px;
-			bottom: 20px;
-			width: clamp(160px, 22vw, 440px);
-			border-radius: 12px;
+			right: calc(20 * var(--lattice-px, 1px));
+			bottom: calc(20 * var(--lattice-px, 1px));
+			width: clamp(calc(160 * var(--lattice-px, 1px)), 22vw, calc(440 * var(--lattice-px, 1px)));
+			border-radius: calc(12 * var(--lattice-px, 1px));
 
 			& .lattice-wm-call-face {
-				border-radius: 12px;
+				border-radius: calc(12 * var(--lattice-px, 1px));
 			}
 		}
 
 		& .lattice-wm-call-stage-name {
-			left: 20px;
-			bottom: 20px;
-			font-size: 15px;
+			left: calc(20 * var(--lattice-px, 1px));
+			bottom: calc(20 * var(--lattice-px, 1px));
+			font-size: calc(15 * var(--lattice-px, 1px));
 		}
 	}
 
@@ -1807,24 +1813,24 @@
 }
 .lattice-wm-call-them {
 	position: absolute;
-	top: 12px;
-	left: 12px;
-	width: clamp(72px, 14%, 180px);
-	border-radius: 8px;
+	top: calc(12 * var(--lattice-px, 1px));
+	left: calc(12 * var(--lattice-px, 1px));
+	width: clamp(calc(72 * var(--lattice-px, 1px)), 14%, calc(180 * var(--lattice-px, 1px)));
+	border-radius: calc(8 * var(--lattice-px, 1px));
 	box-shadow: 0 4px 16px rgb(0 0 0 / 0.45);
 
 	& .lattice-wm-call-face {
-		border-radius: 8px;
+		border-radius: calc(8 * var(--lattice-px, 1px));
 	}
 }
 .lattice-wm-call-tiles[data-layout="focus"] .lattice-wm-call-focus > .lattice-wm-call-screen {
 	aspect-ratio: 4 / 3;
-	border-radius: 8px;
+	border-radius: calc(8 * var(--lattice-px, 1px));
 	overflow: hidden;
 }
 .lattice-wm-call-tiles[data-layout="focus"] .lattice-wm-call-them {
-	top: 8px;
-	left: 8px;
+	top: calc(8 * var(--lattice-px, 1px));
+	left: calc(8 * var(--lattice-px, 1px));
 	width: 32%;
 }
 
@@ -1833,12 +1839,12 @@
 .lattice-wm-call-floating .lattice-wm-call-float-close {
 	display: inline-grid;
 	place-items: center;
-	width: 16px;
-	height: 16px;
-	margin: 0 2px 0 -3px;
+	width: calc(16 * var(--lattice-px, 1px));
+	height: calc(16 * var(--lattice-px, 1px));
+	margin: 0 calc(2 * var(--lattice-px, 1px)) 0 calc(-3 * var(--lattice-px, 1px));
 	padding: 0;
 	border: none;
-	border-radius: 3px;
+	border-radius: calc(3 * var(--lattice-px, 1px));
 	background: transparent;
 	color: var(--lattice-wm-muted);
 	vertical-align: -4px;
@@ -1891,27 +1897,27 @@
 
 		& > .lattice-wm-call-face {
 			aspect-ratio: 3 / 4;
-			border-radius: 8px;
+			border-radius: calc(8 * var(--lattice-px, 1px));
 		}
 	}
 
 	& .lattice-wm-call-focus-name {
 		position: absolute;
-		left: 8px;
-		bottom: 8px;
-		padding: 2px 6px;
-		border-radius: 4px;
+		left: calc(8 * var(--lattice-px, 1px));
+		bottom: calc(8 * var(--lattice-px, 1px));
+		padding: calc(2 * var(--lattice-px, 1px)) calc(6 * var(--lattice-px, 1px));
+		border-radius: calc(4 * var(--lattice-px, 1px));
 		background: rgb(0 0 0 / 0.55);
 		color: white;
-		font: 600 11px/1.3 var(--lattice-wm-sans);
+		font: 600 calc(11 * var(--lattice-px, 1px))/1.3 var(--lattice-wm-sans);
 	}
 
 	& .lattice-wm-call-focus-me {
 		position: absolute;
-		right: 8px;
-		bottom: 8px;
+		right: calc(8 * var(--lattice-px, 1px));
+		bottom: calc(8 * var(--lattice-px, 1px));
 		width: 32%;
-		border-radius: 6px;
+		border-radius: calc(6 * var(--lattice-px, 1px));
 		box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
 	}
 }
@@ -1945,16 +1951,16 @@
 		background: var(--lattice-wm-fill);
 		color: var(--lattice-wm-ink);
 		font-family: var(--lattice-wm-path-family);
-		font-size: 12px;
+		font-size: calc(12 * var(--lattice-px, 1px));
 
 		/* files from the computer over it, to go into the project */
 		&[data-drop]::after {
 			content: "";
 			position: absolute;
-			inset: 4px;
+			inset: calc(4 * var(--lattice-px, 1px));
 			z-index: 20;
 			border: 2px dashed var(--lattice-wm-accent);
-			border-radius: 3px;
+			border-radius: calc(3 * var(--lattice-px, 1px));
 			background: color-mix(in oklab, var(--lattice-wm-accent) 10%, transparent);
 			pointer-events: none;
 		}
@@ -1966,7 +1972,7 @@
 		flex: 1;
 		flex-direction: column;
 		min-height: 0;
-		padding: 0 0 8px;
+		padding: 0 0 calc(8 * var(--lattice-px, 1px));
 		overflow: auto;
 	}
 
@@ -1974,9 +1980,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 4px;
-		min-height: 32px;
-		padding: 0 6px 0 12px;
+		gap: calc(4 * var(--lattice-px, 1px));
+		min-height: calc(32 * var(--lattice-px, 1px));
+		padding: 0 calc(6 * var(--lattice-px, 1px)) 0 calc(12 * var(--lattice-px, 1px));
 		border-bottom: 1px solid var(--lattice-wm-rule);
 		font-weight: 600;
 	}
@@ -1989,7 +1995,7 @@
 	}
 
 	& .lattice-wm-files-empty {
-		margin: 4px 12px 4px 24px;
+		margin: calc(4 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px)) calc(4 * var(--lattice-px, 1px)) calc(24 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-quiet);
 	}
 
@@ -1997,14 +2003,14 @@
 		display: grid;
 		flex: none;
 		place-items: center;
-		width: 22px;
-		height: 22px;
+		width: calc(22 * var(--lattice-px, 1px));
+		height: calc(22 * var(--lattice-px, 1px));
 		padding: 0;
 		border: none;
 		border-radius: var(--lattice-wm-radius);
 		background: none;
 		color: var(--lattice-wm-quiet);
-		font-size: 15px;
+		font-size: calc(15 * var(--lattice-px, 1px));
 		cursor: pointer;
 		transition: scale 120ms ease-out;
 
@@ -2038,25 +2044,25 @@
 	& .lattice-wm-faces {
 		display: flex;
 		flex: 0 1 auto;
-		gap: 2px;
+		gap: calc(2 * var(--lattice-px, 1px));
 		min-width: 0;
 		max-width: 50%;
-		margin: -3px;
-		padding: 3px;
-		--lattice-wm-along-fade: 12px;
+		margin: calc(-3 * var(--lattice-px, 1px));
+		padding: calc(3 * var(--lattice-px, 1px));
+		--lattice-wm-along-fade: calc(12 * var(--lattice-px, 1px));
 	}
 
 	& .lattice-wm-face {
 		display: grid;
 		place-items: center;
-		width: 20px;
-		height: 20px;
+		width: calc(20 * var(--lattice-px, 1px));
+		height: calc(20 * var(--lattice-px, 1px));
 		padding: 0;
 		border: 2px solid var(--lattice-wm-face);
 		border-radius: 50%;
 		background: var(--lattice-wm-chrome) center / cover;
 		color: inherit;
-		font: 600 9px/1 var(--lattice-wm-sans);
+		font: 600 calc(9 * var(--lattice-px, 1px))/1 var(--lattice-wm-sans);
 		cursor: pointer;
 
 		&[aria-pressed="true"] {
@@ -2068,8 +2074,8 @@
 	/* the files, shut: a strip down the side to open them again */
 	& .lattice-wm-files-shut {
 		flex: none;
-		width: 22px;
-		padding: 8px 0 0;
+		width: calc(22 * var(--lattice-px, 1px));
+		padding: calc(8 * var(--lattice-px, 1px)) 0 0;
 		border: none;
 		border-right: 1px solid var(--lattice-wm-rule);
 		background: var(--lattice-wm-fill);
@@ -2077,7 +2083,7 @@
 		cursor: pointer;
 		writing-mode: vertical-rl;
 		font-family: var(--lattice-wm-path-family);
-		font-size: 11px;
+		font-size: calc(11 * var(--lattice-px, 1px));
 
 		&:hover {
 			color: inherit;
@@ -2100,10 +2106,10 @@
 		display: flex;
 		flex: 1;
 		align-items: center;
-		gap: 6px;
+		gap: calc(6 * var(--lattice-px, 1px));
 		min-width: 0;
-		min-height: 24px;
-		padding: 0 4px 0 18px;
+		min-height: calc(24 * var(--lattice-px, 1px));
+		padding: 0 calc(4 * var(--lattice-px, 1px)) 0 calc(18 * var(--lattice-px, 1px));
 		border: none;
 		background: none;
 		text-align: left;
@@ -2146,7 +2152,7 @@
 		overflow: hidden;
 		color: var(--lattice-wm-quiet);
 		font-family: var(--lattice-wm-sans);
-		font-size: 10.5px;
+		font-size: calc(10.5 * var(--lattice-px, 1px));
 		line-height: 1.4em;
 		white-space: nowrap;
 
@@ -2162,11 +2168,11 @@
 	& .lattice-wm-file-remove {
 		position: absolute;
 		top: 50%;
-		right: 6px;
+		right: calc(6 * var(--lattice-px, 1px));
 		display: inline-grid;
 		place-items: center;
 		visibility: hidden;
-		padding: 0 5px;
+		padding: 0 calc(5 * var(--lattice-px, 1px));
 		border: none;
 		border-radius: var(--lattice-wm-radius);
 		background: var(--lattice-wm-fill);
@@ -2195,10 +2201,10 @@
 .lattice-wm-resizer {
 	position: absolute;
 	top: 0;
-	right: -3px;
+	right: calc(-3 * var(--lattice-px, 1px));
 	bottom: 0;
 	z-index: 1;
-	width: 6px;
+	width: calc(6 * var(--lattice-px, 1px));
 	cursor: col-resize;
 
 	&:hover,
@@ -2209,7 +2215,7 @@
 	/* a sidebar down the right: its left edge */
 	&[data-side="left"] {
 		right: auto;
-		left: -3px;
+		left: calc(-3 * var(--lattice-px, 1px));
 	}
 }
 
@@ -2221,12 +2227,12 @@
 	width: 100%;
 	height: 100%;
 	background: var(--lattice-wm-paper);
-	font: 14px/1.4 var(--lattice-wm-sans);
+	font: calc(14 * var(--lattice-px, 1px))/1.4 var(--lattice-wm-sans);
 
 	& .lattice-wm-update-heading {
-		margin: 0 0 8px;
+		margin: 0 0 calc(8 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-ink);
-		font: 400 24px/1.1 var(--lattice-wm-heading-family);
+		font: 400 calc(24 * var(--lattice-px, 1px))/1.1 var(--lattice-wm-heading-family);
 	}
 }
 
@@ -2236,15 +2242,15 @@
 	position: fixed;
 	inset: auto;
 	width: max-content;
-	max-width: 280px;
+	max-width: calc(280 * var(--lattice-px, 1px));
 	margin: 0;
-	padding: 4px 7px;
+	padding: calc(4 * var(--lattice-px, 1px)) calc(7 * var(--lattice-px, 1px));
 	border: 1px solid var(--lattice-wm-chrome-ink);
-	border-radius: 3px;
+	border-radius: calc(3 * var(--lattice-px, 1px));
 	background: var(--lattice-wm-paper);
 	box-shadow: 2px 2px 0 var(--lattice-wm-chrome-ink);
 	color: var(--lattice-wm-chrome-ink);
-	font: 11.5px/1.35 var(--lattice-wm-sans);
+	font: calc(11.5 * var(--lattice-px, 1px))/1.35 var(--lattice-wm-sans);
 	white-space: pre-line;
 	overflow-wrap: anywhere;
 	pointer-events: none;

@@ -942,10 +942,7 @@ function Frame(props) {
         >
           ${() => icon(copied() ? "check" : "link")}
           copy link
-          ${() =>
-            copied()
-              ? html`<small class="lattice-copied">copied</small>`
-              : html`<small>a link here · they get their own</small>`}
+          <${Show} when=${copied}><small class="lattice-copied">copied</small><//>
         </button>
       <//>
       <button
@@ -955,12 +952,11 @@ function Frame(props) {
       >
         ${icon("download")}
         download
-        <small>${() => packing() ?? ".latticeproject, files and all"}</small>
+        <${Show} when=${packing}><small>${packing}</small><//>
       </button>
       <button class="lattice-wm-menu-item" onClick=${removeFromMenu}>
         ${icon("close")}
         ${() => (removing() ? "remove?" : "remove")}
-        <small>${() => (removing() ? "click again to remove it" : "from your projects (the project itself stays)")}</small>
       </button>
     </div>`;
   }
