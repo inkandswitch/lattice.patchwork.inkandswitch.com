@@ -39,6 +39,13 @@
 		/* the drawn mouse's eye: near black, whatever the theme */
 		--lattice-shell-mouse-eye: #1c1a17;
 	}
+
+	/* a link, anywhere in the frame: the look's blue (knitoutjs/look.css),
+	   been there or not, rather than the browser's blue and purple. in the
+	   layer and :where()'d, so anything's own colour for its links wins */
+	.lattice-shell :where(a:any-link) {
+		color: var(--lattice-wm-blue, var(--studio-link));
+	}
 }
 
 /* what lattice gives wm: the names of things in its heading font (a theme's
@@ -1381,6 +1388,6 @@
    code is, not a column centred in a field of space */
 .lattice-shell .lattice-wm-tool .cm-content[data-language="markdown"] {
 	max-width: none;
-	margin: 0;
 	padding: 12px 16px 48px;
+	padding-left: 2rem;
 }
