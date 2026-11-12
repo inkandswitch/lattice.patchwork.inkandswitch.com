@@ -3,10 +3,11 @@
 // faces are shown (on cursors, floating, or in the sidebar) and which mic
 // and camera. not in one, it says when there's one on in the project you're
 // in, to join
-import { createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import html from "solid-js/html";
 import { FACES, ask, call, devices, hangUp, onCallIn, setCamera, setDevice, setFaces, setMic } from "../wm/call/call.js";
-import { Face, names } from "../wm/call/ui.js";
+import { Face, StageButton, names } from "../wm/call/ui.js";
+import { shownInBar } from "../wm/call/sizes.js";
 import { icon } from "../wm/ui/icons.js";
 
 /** `props.inspector` is the inspector's sidebar state: shown for faces in it */
@@ -56,6 +57,17 @@ export function CallBar(props) {
     <//>`;
   }
 
+  // the others the bar has room for, you being one of its six. when they
+  // don't all fit, whoever's speaking, or spoke last, gets the room (while
+  // they do, nobody moves)
+  const bar = createMemo(() => {
+    let others = call.peers();
+    if (others.length > 5) {
+      others = [...others].sort((a, b) => (b.speaking ? 1 : 0) - (a.speaking ? 1 : 0) || (b.spoke ?? 0) - (a.spoke ?? 0));
+    }
+    return shownInBar(others, 5);
+  });
+
   const In = () => html`<div class="lattice-call" role="group" aria-label="the call">
     <div class="lattice-call-head">
       <span class="lattice-call-phone">${icon("phone", 12)}</span>
@@ -75,7 +87,14 @@ export function CallBar(props) {
     <div class="lattice-call-row">
       <span class="lattice-call-faces">
         <${Face} id="me" size=${26} />
-        <${For} each=${() => call.peers()}>${(peer) => html`<${Face} id=${peer.id} size=${26} />`}<//>
+        <${For} each=${() => bar().shown}>
+          ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-call-face-button"><${Face} id=${peer.id} size=${26} /><//>`}
+        <//>
+        <${Show} when=${() => bar().more}>
+          <span class="lattice-call-more" title=${() => names(call.peers().slice(bar().shown.length).map((peer) => peer.name))}
+            >+${() => bar().more}</span
+          >
+        <//>
       </span>
       <span class="lattice-call-buttons">
         <button

@@ -26,7 +26,7 @@ import { holdSecret, secret } from "./ui/secret.js";
 import { createInk } from "./ink.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
-import { CallPrompt, CallFloating, Face } from "./call/ui.js";
+import { CallPrompt, CallFloating, CallSelf, CallStage, Face } from "./call/ui.js";
 
 const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
@@ -2567,6 +2567,18 @@ export function mountWorkspace(
         <${Show} when=${() => callProject}>
           <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
           <${CallFloating} />
+          <${CallSelf} panes=${() => root} />
+        <//>
+        <${Show} when=${() => callProject}>
+          <${CallStage}
+            box=${() => {
+              // over the panes: where they are in the project
+              frameSize();
+              return root
+                ? { left: `${root.offsetLeft}px`, top: `${root.offsetTop}px`, width: `${root.offsetWidth}px`, height: `${root.offsetHeight}px` }
+                : { display: "none" };
+            }}
+          />
         <//>
       </div>`;
   }, element);

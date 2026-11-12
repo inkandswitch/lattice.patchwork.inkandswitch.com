@@ -1,9 +1,11 @@
 // a call's faces, and the question before you're in one: for wm's panes, and
 // for an app's own (lattice's frame shows the call down the bottom, and in
-// its sidebar)
+// its sidebar). someone's face, clicked there, fills the panes (CallStage),
+// and double clicked, the screen
 import { createEffect, createMemo, For, Show, onCleanup } from "solid-js";
 import html from "solid-js/html";
-import { call, onCallIn, join, setFloating } from "./call.js";
+import { call, onCallIn, join, setFloating, toggleStage, showStage, setFull, closeStage } from "./call.js";
+import { tilesFor } from "./sizes.js";
 import { faceImage } from "../presence.js";
 import { centreOn } from "./face.js";
 import { colourFor } from "../pointer.js";
@@ -70,6 +72,7 @@ export function Face(props) {
     data-mine=${() => (mine() ? "" : undefined)}
     data-camera=${() => (stream() ? "" : undefined)}
     data-connecting=${() => (!mine() && person()?.connection !== "connected" ? "" : undefined)}
+    data-speaking=${() => ((mine() ? call.get()?.speaking : person()?.speaking) ? "" : undefined)}
     style=${() => ({
       // theirs, or one for them, as presence would give them
       "--lattice-wm-face": person() ? person().colour || colourFor(person().contact || props.id) : null,
@@ -195,11 +198,17 @@ function inWindow({ x, y, width }) {
  * (4:3), none of it cut off (and double clicked again, a circle)
  */
 export function CallFloating() {
+  // you too, last: by id, so each keeps its place as people come and go
+  const ids = createMemo(() => [...call.peers().map((peer) => peer.id), "me"]);
   return html`<${Show} when=${() => call.get() && call.settings.faces === "floating"}>
     <div class="lattice-wm-call-floating">
-      <${For} each=${() => call.peers()}>
-        ${(peer, index) => {
-          const key = () => peer.contact || peer.id;
+      <${For} each=${ids}>
+        ${(id, index) => {
+          const mine = id === "me";
+          const peer = () => (mine ? null : call.peers().find((peer) => peer.id === id));
+          const key = () => (mine ? "me" : peer()?.contact || id);
+          const name = () => (mine ? "you" : peer()?.name);
+          const muted = () => (mine ? !call.get()?.mic : !peer()?.mic);
           const at = () => ({ ...startAt(index()), ...call.settings.floating[key()] });
           let float;
           // what's being done to it: {sizing, dx, dy (or the width it was), at}
@@ -235,6 +244,7 @@ export function CallFloating() {
           return html`<div
             class="lattice-wm-call-float"
             data-shape=${shape}
+            data-mine=${mine ? "" : undefined}
             onDblClick=${() => setFloating(key(), { ...at(), shape: shape() === "round" ? "tile" : "round" })}
             ref=${(el) => (float = el)}
             style=${() => ({ ...inWindow(at()), width: `${at().width}px` })}
@@ -244,12 +254,12 @@ export function CallFloating() {
             onPointerCancel=${onPointerUp}
           >
             <span class="lattice-wm-call-float-picture">
-              <${Face} id=${peer.id} shape="tile" muted=${false} />
+              <${Face} id=${id} shape="tile" muted=${false} />
               <span class="lattice-wm-call-size" title="drag to size"></span>
             </span>
             <span class="lattice-wm-call-float-name">
-              ${() => peer.name}
-              <${Show} when=${() => !peer.mic}>
+              ${name}
+              <${Show} when=${muted}>
                 <span class="lattice-wm-call-float-muted" aria-label="muted">${icon("mic-off", 10)}</span>
               <//>
             </span>
@@ -260,20 +270,182 @@ export function CallFloating() {
   <//>`;
 }
 
-/** everyone's faces, one under another (for a sidebar), and yours last */
+/**
+ * a face to click to fill the panes with them (again: the panes back), or
+ * double click to fill the screen. `props.id`; the rest's what's in it
+ */
+export function StageButton(props) {
+  return html`<button
+    class=${() => `lattice-wm-call-stage-button ${props.class ?? ""}`}
+    data-staged=${() => (call.stage() === props.id ? "" : undefined)}
+    aria-pressed=${() => String(call.stage() === props.id)}
+    title=${() => (call.stage() === props.id ? "back to the panes (double click: the whole screen)" : "fill the panes with them (double click: the whole screen)")}
+    onClick=${(event) => event.detail <= 1 && toggleStage(props.id)}
+    onDblClick=${() => showStage(props.id, { full: true })}
+  >
+    ${props.children}
+  </button>`;
+}
+
+/**
+ * everyone's faces, for a sidebar, yours last: big while there are few, two
+ * across when there are more, and past that a list, whoever spoke last at
+ * the top. each, clicked, fills the panes (StageButton)
+ */
 export function CallTiles() {
-  return html`<div class="lattice-wm-call-tiles">
-    <${For} each=${() => call.peers()}>
-      ${(peer) => html`<figure class="lattice-wm-call-tile">
-        <${Face} id=${peer.id} shape="tile" title=${false} />
-        <figcaption>${() => peer.name}</figcaption>
-      </figure>`}
+  const count = () => call.peers().length + 1;
+  const layout = () => tilesFor(count());
+  const peers = createMemo(() => {
+    const list = call.peers();
+    if (layout() !== "chips") return list;
+    return [...list].sort((a, b) => (b.speaking ? 1 : 0) - (a.speaking ? 1 : 0) || (b.spoke ?? 0) - (a.spoke ?? 0));
+  });
+  return html`<div class="lattice-wm-call-tiles" data-layout=${layout}>
+    <${For} each=${peers}>
+      ${(peer) => html`<${StageButton} id=${peer.id} class="lattice-wm-call-tile">
+        <${Show}
+          when=${() => layout() !== "chips"}
+          fallback=${html`<${Face} id=${peer.id} size=${28} title=${false} />`}
+        >
+          <${Face} id=${peer.id} shape="tile" title=${false} />
+        <//>
+        <span class="lattice-wm-call-tile-name">${() => peer.name}</span>
+      <//>`}
     <//>
     <${Show} when=${() => call.get()}>
-      <figure class="lattice-wm-call-tile">
-        <${Face} id="me" shape="tile" title=${false} />
-        <figcaption>you</figcaption>
-      </figure>
+      <div class="lattice-wm-call-tile" data-mine="">
+        <${Show}
+          when=${() => layout() !== "chips"}
+          fallback=${html`<${Face} id="me" size=${28} title=${false} />`}
+        >
+          <${Face} id="me" shape="tile" title=${false} />
+        <//>
+        <span class="lattice-wm-call-tile-name">you</span>
+      </div>
     <//>
   </div>`;
+}
+
+/**
+ * whoever's been clicked (call.stage()), filling `props.box` (a style: where
+ * the panes are), with you in its corner. double clicked, it fills the
+ * screen, you a little bigger; escape, or its ×, puts the panes back
+ */
+export function CallStage(props) {
+  let stage;
+  const id = () => call.stage();
+  const person = () => call.peers().find((peer) => peer.id === id());
+
+  // the whole screen, while it's wanted, and not once it's left (escape)
+  createEffect(() => {
+    // (read first: it's what this runs again for)
+    const full = call.full();
+    id();
+    if (!stage?.isConnected) return;
+    if (full && document.fullscreenElement !== stage) {
+      stage.requestFullscreen?.().catch(() => setFull(false));
+    } else if (!full && document.fullscreenElement === stage) {
+      document.exitFullscreen().catch(() => {});
+    }
+  });
+  const onFullscreen = () => {
+    if (call.full() && document.fullscreenElement !== stage) setFull(false);
+  };
+  const onKey = (event) => {
+    if (event.key === "Escape" && id() && !document.fullscreenElement) closeStage();
+  };
+  document.addEventListener("fullscreenchange", onFullscreen);
+  document.addEventListener("keydown", onKey);
+  onCleanup(() => {
+    document.removeEventListener("fullscreenchange", onFullscreen);
+    document.removeEventListener("keydown", onKey);
+    if (stage && document.fullscreenElement === stage) document.exitFullscreen().catch(() => {});
+  });
+
+  return html`<${Show} when=${id}>
+    <div
+      class="lattice-wm-call-stage"
+      ref=${(el) => (stage = el)}
+      style=${() => props.box ?? {}}
+      onDblClick=${() => setFull(!call.full())}
+      title="double click: the whole screen"
+    >
+      <${Show} when=${id} keyed>
+        ${(staged) => html`<${Face} id=${staged} shape="tile" muted=${false} title=${false} />`}
+      <//>
+      <span class="lattice-wm-call-stage-name">
+        ${() => person()?.name}
+        <${Show} when=${() => person() && !person().mic}>${icon("mic-off", 12)}<//>
+      </span>
+      <button
+        class="lattice-wm-call-stage-close"
+        aria-label="back to the panes"
+        title="back to the panes (escape)"
+        onClick=${closeStage}
+        onDblClick=${(event) => event.stopPropagation()}
+      >
+        ${icon("close", 14)}
+      </button>
+      <span class="lattice-wm-call-stage-me">
+        <${Face} id="me" shape="tile" title=${false} />
+      </span>
+    </div>
+  <//>`;
+}
+
+// where your own face goes in circles mode, to start with: the bottom right
+// of the panes (fractions of the window, as a floating face's are)
+const SELF_SIZE = 64;
+function selfStart(box) {
+  const right = box ? box.right : innerWidth;
+  const bottom = box ? box.bottom : innerHeight;
+  return { x: (right - SELF_SIZE - 16) / innerWidth, y: (bottom - SELF_SIZE - 16) / innerHeight };
+}
+
+/**
+ * your own face, while faces are on cursors (everyone else's are on theirs):
+ * a circle, at the bottom right of `props.panes` (an element) till you drag
+ * it somewhere else, which is remembered
+ */
+export function CallSelf(props) {
+  let self;
+  let dragging = null;
+  const at = () => call.settings.floating["me:cursors"] ?? selfStart(props.panes?.getBoundingClientRect());
+  const place = ({ x, y }) => ({
+    left: `${Math.max(0, Math.min(x * innerWidth, innerWidth - SELF_SIZE))}px`,
+    top: `${Math.max(0, Math.min(y * innerHeight, innerHeight - SELF_SIZE))}px`,
+  });
+  function onPointerDown(event) {
+    if (event.button !== 0) return;
+    const box = self.getBoundingClientRect();
+    dragging = { dx: event.clientX - box.left, dy: event.clientY - box.top, at: at() };
+    self.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+  function onPointerMove(event) {
+    if (!dragging) return;
+    dragging.at = {
+      x: Math.max(0, Math.min(1, (event.clientX - dragging.dx) / innerWidth)),
+      y: Math.max(0, Math.min(1, (event.clientY - dragging.dy) / innerHeight)),
+    };
+    Object.assign(self.style, place(dragging.at));
+  }
+  function onPointerUp() {
+    if (dragging) setFloating("me:cursors", dragging.at);
+    dragging = null;
+  }
+  return html`<${Show} when=${() => call.get() && call.settings.faces === "cursors" && !call.stage()}>
+    <div
+      class="lattice-wm-call-self"
+      ref=${(el) => (self = el)}
+      style=${() => place(at())}
+      title="you (drag to move)"
+      onPointerDown=${onPointerDown}
+      onPointerMove=${onPointerMove}
+      onPointerUp=${onPointerUp}
+      onPointerCancel=${onPointerUp}
+    >
+      <${Face} id="me" size=${SELF_SIZE} title=${false} />
+    </div>
+  <//>`;
 }

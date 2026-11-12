@@ -19,6 +19,8 @@ import { HELLO } from "../presence.js";
 import { faceFrom, watchFace } from "./face.js";
 import { lasting } from "../lasting.js";
 import { callToRejoin, forgetCall, keepCall, leavingCall } from "./rejoin.js";
+import { listen } from "./speaking.js";
+import { videoFor } from "./sizes.js";
 
 const KEY = "lattice-wm:call";
 const ICE_SERVERS = [
@@ -79,7 +81,7 @@ const { state, setState, settings, setSettings, heard, setHeard, version, bump, 
       peers: {},
     });
     const [settings, setSettings] = createStore({
-      faces: FACES.some(([id]) => id === saved.faces) ? saved.faces : "cursors",
+      faces: FACES.some(([id]) => id === saved.faces) ? saved.faces : "floating",
       camera: string(saved.camera),
       mic: string(saved.mic),
       floating: isObject(saved.floating) ? saved.floating : {},
@@ -115,6 +117,17 @@ function saveSettings() {
 // the session: what isn't for showing. {session} so every version of this
 // has the same one
 const live = lasting("lattice-wm:call:session", () => ({ session: null }));
+
+// whose face fills the panes (their id, or null), and whether it fills the
+// screen. a lasting of its own, not more of the state's above: a page that
+// swaps in a new version keeps the state it made, with nothing added since
+const view = lasting("lattice-wm:call:view", () =>
+  createRoot(() => {
+    const [stage, setStage] = createSignal(null);
+    const [full, setFull] = createSignal(false);
+    return { stage, setStage, full, setFull };
+  }),
+);
 
 // ── who you are ─────────────────────────────────────────────────────────
 
@@ -272,6 +285,7 @@ function useTrack(kind, track) {
   }
   if (track) live.session.local.addTrack(track);
   if (kind === "video") watchMine(track);
+  if (kind === "audio") listenMine(track);
   for (const peer of live.session.peers.values()) {
     for (const transceiver of peer.pc.getTransceivers()) {
       if (transceiver.receiver.track?.kind === kind && !transceiver.stopped) {
@@ -280,6 +294,18 @@ function useTrack(kind, track) {
     }
   }
   bump();
+}
+
+// whether you're speaking, from your mic (speaking.js)
+function listenMine(track) {
+  const now = live.session;
+  now.stopLevel?.();
+  now.stopLevel = null;
+  setState("call", "speaking", false);
+  if (!track) return;
+  now.stopLevel = listen(new MediaStream([track]), (speaking) => {
+    if (live.session === now) setState("call", "speaking", speaking);
+  });
 }
 
 // your face, in your camera's pictures (face.js), while it's on: said to
@@ -341,6 +367,7 @@ export async function join({ room, repo, name = "" }, { video = false } = {}) {
   if (audio) now.local.addTrack(audio);
   if (camera) now.local.addTrack(camera);
   if (camera) watchMine(camera);
+  if (audio) listenMine(audio);
   const problem = !audio ? (video && !camera ? "no mic or camera" : "no mic") : video && !camera ? "no camera" : null;
   setState("call", { joining: false, camera: !!camera, mic: !!audio, problem });
   bump();
@@ -379,7 +406,10 @@ export function hangUp({ rejoin = false } = {}) {
   } catch {}
   for (const id of [...now.peers.keys()]) drop(id, now);
   now.stopFace?.();
+  now.stopLevel?.();
   for (const track of now.local.getTracks()) track.stop();
+  view.setStage(null);
+  view.setFull(false);
   setState({ call: null, peers: {} });
   bump();
 }
@@ -489,6 +519,13 @@ export const call = {
   asking,
   current,
   stopAsking: () => setAsking(null),
+  /** whose face fills the panes (one still in the call), or null */
+  stage: () => {
+    const id = view.stage();
+    return id && state.peers[id] ? id : null;
+  },
+  /** whether it fills the screen */
+  full: () => view.full() && !!call.stage(),
   /**
    * the one in your call who's `person` from presence ({peer, contact}): by
    * the tab they're in, or else by who they are
@@ -502,6 +539,55 @@ export const call = {
     );
   },
 };
+
+// ── who's big ───────────────────────────────────────────────────────────
+
+/** fill the panes with `id`'s face, or, theirs already, put the panes back */
+export function toggleStage(id) {
+  const now = view.stage() === id ? null : id;
+  view.setStage(now);
+  if (!now) view.setFull(false);
+}
+
+/** `id`'s face filling the panes, and the screen too if `full` */
+export function showStage(id, { full = false } = {}) {
+  view.setStage(id);
+  view.setFull(!!full);
+}
+
+/** the face that's big, filling the screen or not */
+export function setFull(full) {
+  view.setFull(!!full && !!view.stage());
+}
+
+/** nobody big */
+export function closeStage() {
+  view.setStage(null);
+  view.setFull(false);
+}
+
+// how much of your camera's sent, for how many are in the call (sizes.js):
+// past a handful, smaller and slower, so it goes to all of them
+function tuneVideo() {
+  const now = live.session;
+  if (!now) return;
+  const wanted = videoFor(now.peers.size + 1);
+  for (const peer of now.peers.values()) {
+    for (const transceiver of peer.pc.getTransceivers()) {
+      if (transceiver.receiver.track?.kind !== "video" || transceiver.stopped) continue;
+      const sender = transceiver.sender;
+      const parameters = sender.getParameters();
+      // none till it's been negotiated: it's tuned when it's connected
+      const encoding = parameters.encodings?.[0];
+      if (!encoding) continue;
+      for (const key of ["maxBitrate", "scaleResolutionDownBy", "maxFramerate"]) {
+        if (wanted) encoding[key] = wanted[key];
+        else delete encoding[key];
+      }
+      sender.setParameters(parameters).catch((error) => console.warn("[wm] couldn't tune video", error));
+    }
+  }
+}
 
 // ── talking ─────────────────────────────────────────────────────────────
 
@@ -610,6 +696,12 @@ function connect(id, conn) {
 
   pc.ontrack = (event) => {
     if (!stream.getTrackById(event.track.id)) stream.addTrack(event.track);
+    // who's speaking: theirs, once there's sound to hear
+    if (event.track.kind === "audio" && !peer.stopLevel) {
+      peer.stopLevel = listen(stream, (speaking) =>
+        showPeer(id, speaking ? { speaking, spoke: Date.now() } : { speaking }),
+      );
+    }
     event.track.onunmute = bump;
     audio.play().catch(() => {});
     bump();
@@ -620,7 +712,10 @@ function connect(id, conn) {
   pc.onconnectionstatechange = () => {
     const now = pc.connectionState;
     clearTimeout(peer.interrupted);
-    if (now === "connected") showPeer(id, { connection: "connected" });
+    if (now === "connected") {
+      showPeer(id, { connection: "connected" });
+      tuneVideo();
+    }
     else if (now === "disconnected") {
       showPeer(id, { connection: "interrupted" });
       peer.interrupted = setTimeout(() => pc.connectionState === "disconnected" && lost(id), INTERRUPTED_FOR);
@@ -669,9 +764,15 @@ function drop(id, from = live.session) {
     peer.pc.close();
   } catch {}
   peer.audio.srcObject = null;
+  peer.stopLevel?.();
   if (from === live.session) {
     setState("peers", id, undefined);
+    if (view.stage() === id) {
+      view.setStage(null);
+      view.setFull(false);
+    }
     bump();
+    tuneVideo();
   }
 }
 
