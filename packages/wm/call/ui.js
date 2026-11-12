@@ -187,9 +187,10 @@ function nudge(key) {
 }
 
 // where a floating face starts (fractions of the window): you in the bottom
-// right, and everyone else (`index`: which of them) left of the middle, near
-// the call, two across and a few down, each nudged out of line a little
-function startAt(index, key) {
+// right, and everyone else (`index`: which of them) at the left of `panes`
+// (a box: where they are), near the call, a little way down, two across and
+// a few down, each nudged out of line a little
+function startAt(index, key, panes) {
   if (key === "me") {
     return {
       x: 1 - (MY_WIDTH + 24) / innerWidth,
@@ -199,8 +200,9 @@ function startAt(index, key) {
   }
   const column = index % 2;
   const row = Math.floor(index / 2);
-  const left = Math.max(220, innerWidth * 0.24) + column * (THEIR_WIDTH + 32) + (row % 2) * 48 + nudge(`${key}x`) * 20;
-  const top = innerHeight * 0.28 + row * (THEIR_WIDTH * 0.75 + 56) + nudge(`${key}y`) * 20;
+  const area = panes?.width ? panes : { left: innerWidth * 0.25, top: 0, height: innerHeight };
+  const left = area.left + 40 + column * (THEIR_WIDTH + 32) + (row % 2) * 48 + nudge(`${key}x`) * 20;
+  const top = area.top + area.height * 0.24 + row * (THEIR_WIDTH * 0.75 + 56) + nudge(`${key}y`) * 20;
   return { x: left / innerWidth, y: top / innerHeight, width: THEIR_WIDTH };
 }
 
@@ -288,11 +290,11 @@ function arrive(float, id, key, index) {
 
 /**
  * everyone's faces, floating over everything, each where you put it and the
- * size you made it: dragged to move, and by its corner to size. each is a
+ * size you made it (to start with, near `props.panes`, an element): dragged to move, and by its corner to size. each is a
  * circle centred on their face, or, double clicked, the picture's own shape
  * (4:3), none of it cut off (and double clicked again, a circle)
  */
-export function CallFloating() {
+export function CallFloating(props) {
   // you too, last: by id, so each keeps its place as people come and go.
   // not the ones put away (dragged out of the call bar, they're back)
   const ids = createMemo(() =>
@@ -307,7 +309,7 @@ export function CallFloating() {
           const key = () => call.floatKey(id);
           const name = () => (mine ? "you" : peer()?.name);
           const muted = () => (mine ? !call.get()?.mic : !peer()?.mic);
-          const at = () => ({ ...startAt(index(), key()), ...call.settings.floating[key()] });
+          const at = () => ({ ...startAt(index(), key(), props.panes?.getBoundingClientRect()), ...call.settings.floating[key()] });
           let float;
           // what's being done to it: {sizing, dx, dy (or the width it was), at}
           let dragging = null;

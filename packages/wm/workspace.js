@@ -2566,7 +2566,7 @@ export function mountWorkspace(
         <${Show} when=${following}><${InkSheet} /><//>
         <${Show} when=${() => callProject}>
           <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
-          <${CallFloating} />
+          <${CallFloating} panes=${() => root} />
         <//>
         <${Show} when=${() => callProject}>
           <${CallStage}

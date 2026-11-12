@@ -9,9 +9,10 @@
 // everyone in the room knows there's a call on, in it or not
 //
 // each pair connects once: the one whose id sorts later offers, with a
-// transceiver each for sound and for pictures, and the other answers. turning
-// a camera on or off, or changing mic, swaps the track in those, so nothing's
-// asked again. when a connection fails it's dropped, and made again
+// transceiver each for sound, for pictures and for a screen being shared
+// (SLOTS), and the other answers. turning a camera on or off, changing mic,
+// or sharing your screen swaps the track in those, so nothing's asked again.
+// when a connection fails it's dropped, and made again
 import { createRoot, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
@@ -36,6 +37,15 @@ const GONE_AFTER = 12000;
 const INTERRUPTED_FOR = 8000;
 // arriving: a call heard this soon after is one to ask about
 const ARRIVING = 10000;
+
+// what each of a connection's transceivers carries, in the order they're made
+const SLOTS = ["audio", "video", "screen"];
+const slotOf = (pc, transceiver) => SLOTS[pc.getTransceivers().indexOf(transceiver)];
+// a connection's screen's transceiver, or null (one made before there was one)
+const screenOf = (pc) => {
+  const transceiver = pc.getTransceivers()[SLOTS.indexOf("screen")];
+  return transceiver && !transceiver.stopped ? transceiver : null;
+};
 
 const string = (value) => (value == null ? "" : String(value));
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
@@ -297,7 +307,7 @@ function useTrack(kind, track) {
   if (kind === "audio") listenMine(track);
   for (const peer of live.session.peers.values()) {
     for (const transceiver of peer.pc.getTransceivers()) {
-      if (transceiver.receiver.track?.kind === kind && !transceiver.stopped) {
+      if (slotOf(peer.pc, transceiver) === kind && !transceiver.stopped) {
         transceiver.sender.replaceTrack(track).catch((error) => console.warn("[wm] couldn't swap a track", error));
       }
     }
@@ -417,6 +427,7 @@ export function hangUp({ rejoin = false } = {}) {
   now.stopFace?.();
   now.stopLevel?.();
   for (const track of now.local.getTracks()) track.stop();
+  now.screen?.stop();
   view.setStage(null);
   view.setFull(false);
   setState({ call: null, peers: {} });
@@ -531,6 +542,18 @@ export const call = {
     version();
     return live.session?.peers.get(id)?.stream ?? null;
   },
+  /** someone's screen, while they're sharing it (`id`, or "me"), or null */
+  screen(id) {
+    version();
+    const now = live.session;
+    if (!now) return null;
+    if (id === "me") {
+      if (!now.screen) return null;
+      if (now.screenView?.getTracks()[0] !== now.screen) now.screenView = new MediaStream([now.screen]);
+      return now.screenView;
+    }
+    return state.peers[id]?.screen ? (now.peers.get(id)?.screen ?? null) : null;
+  },
   /** yours */
   local() {
     version();
@@ -569,6 +592,53 @@ export const call = {
   },
 };
 
+// ── sharing your screen ─────────────────────────────────────────────────
+
+/** whether there's a screen to share, here */
+export const canShare = () => !!navigator.mediaDevices?.getDisplayMedia;
+
+/** share a screen (the browser asks which), to everyone in the call */
+export async function startScreen() {
+  const now = live.session;
+  if (!now || now.screen || state.call?.joining) return;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15 } }, audio: false });
+  } catch {
+    // not picked
+    return;
+  }
+  const track = stream.getVideoTracks()[0];
+  if (live.session !== now || !track) return stream.getTracks().forEach((track) => track.stop());
+  // it's to be read: kept sharp rather than smooth
+  track.contentHint = "detail";
+  // the browser's own "stop sharing"
+  track.addEventListener("ended", () => now.screen === track && stopScreen());
+  now.screen = track;
+  for (const [id, peer] of now.peers) {
+    const transceiver = screenOf(peer.pc);
+    if (transceiver) transceiver.sender.replaceTrack(track).catch((error) => console.warn("[wm] couldn't share", error));
+    // a connection from before there was room for a screen: made again
+    else lost(id);
+  }
+  setState("call", "screen", true);
+  bump();
+  sayHere();
+}
+
+/** stop sharing your screen */
+export function stopScreen() {
+  const now = live.session;
+  const track = now?.screen;
+  if (!track) return;
+  now.screen = null;
+  for (const peer of now.peers.values()) screenOf(peer.pc)?.sender.replaceTrack(null).catch(() => {});
+  track.stop();
+  setState("call", "screen", false);
+  bump();
+  sayHere();
+}
+
 // ── who's big ───────────────────────────────────────────────────────────
 
 /** fill the panes with `id`'s face, or, theirs already, put the panes back */
@@ -603,7 +673,8 @@ function tuneVideo() {
   const wanted = videoFor(now.peers.size + 1);
   for (const peer of now.peers.values()) {
     for (const transceiver of peer.pc.getTransceivers()) {
-      if (transceiver.receiver.track?.kind !== "video" || transceiver.stopped) continue;
+      // (a screen's sent as it is: it's to be read)
+      if (slotOf(peer.pc, transceiver) !== "video" || transceiver.stopped) continue;
       const sender = transceiver.sender;
       const parameters = sender.getParameters();
       // none till it's been negotiated: it's tuned when it's connected
@@ -634,6 +705,7 @@ const about = () => ({
   who: live.session.who,
   mic: !!state.call?.mic,
   camera: !!state.call?.camera,
+  screen: !!live.session?.screen,
   face: state.call?.camera ? (state.call.face ?? null) : null,
 });
 
@@ -699,14 +771,31 @@ function onHere(from, tab, message) {
   if (!who) return;
   let peer = live.session.peers.get(from);
   if (!peer && offers(from)) peer = connect(from, crypto.randomUUID());
+  const fields = { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face), screen: !!message.screen };
   if (peer) {
     peer.heard = Date.now();
-    showPeer(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
+    const was = !!state.peers[from]?.screen;
+    showPeer(from, fields);
+    if (fields.screen !== was) onSharing(from, fields.screen);
   } else {
     // they'll offer: until they do, they're on the call, connecting
     live.session.waiting ??= new Map();
-    live.session.waiting.set(from, { ...who, peer: tab, mic: !!message.mic, camera: !!message.camera, face: faceFrom(message.face) });
+    live.session.waiting.set(from, fields);
   }
+}
+
+// someone's started sharing their screen: it fills the panes, unless
+// someone's there already. stopped, it's put back, if that's what put it there
+function onSharing(id, sharing) {
+  const now = live.session;
+  if (sharing && !view.stage()) {
+    view.setStage(id);
+    now.shown = id;
+  } else if (!sharing && now.shown === id) {
+    now.shown = null;
+    if (view.stage() === id) closeStage();
+  }
+  bump();
 }
 
 // a connection to `id`, made fresh: `conn` is which one (the offerer's
@@ -724,6 +813,14 @@ function connect(id, conn) {
   live.session.waiting?.delete(id);
 
   pc.ontrack = (event) => {
+    // their screen's, when they share it: a stream of its own
+    if (slotOf(pc, event.transceiver) === "screen") {
+      peer.screen ??= new MediaStream();
+      if (!peer.screen.getTrackById(event.track.id)) peer.screen.addTrack(event.track);
+      event.track.onunmute = bump;
+      bump();
+      return;
+    }
     if (!stream.getTrackById(event.track.id)) stream.addTrack(event.track);
     // who's speaking: theirs, once there's sound to hear
     if (event.track.kind === "audio" && !peer.stopLevel) {
@@ -752,9 +849,9 @@ function connect(id, conn) {
   };
 
   if (offers(id)) {
-    for (const kind of ["audio", "video"]) {
-      const transceiver = pc.addTransceiver(kind, { direction: "sendrecv" });
-      const track = trackOf(kind);
+    for (const slot of SLOTS) {
+      const transceiver = pc.addTransceiver(slot === "audio" ? "audio" : "video", { direction: "sendrecv" });
+      const track = slot === "screen" ? live.session.screen : trackOf(slot);
       if (track) transceiver.sender.replaceTrack(track);
     }
     pc.onnegotiationneeded = async () => {
@@ -816,7 +913,8 @@ async function onOffer(from, { conn, sdp }) {
       const kind = transceiver.receiver.track?.kind;
       if (!kind) continue;
       transceiver.direction = "sendrecv";
-      await transceiver.sender.replaceTrack(trackOf(kind));
+      const slot = slotOf(pc, transceiver) ?? kind;
+      await transceiver.sender.replaceTrack(slot === "screen" ? (live.session.screen ?? null) : trackOf(kind));
     }
     await pc.setLocalDescription();
     send({ [KEY]: "answer", to: from, conn, sdp: pc.localDescription.toJSON() });
