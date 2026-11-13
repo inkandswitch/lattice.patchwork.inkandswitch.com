@@ -1,3 +1,4 @@
+import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
@@ -454,6 +455,9 @@ export default function Knit3dTool(handle, element, context = {}) {
 	const canvas = document.createElement("canvas")
 	canvas.tabIndex = 0
 	stage.appendChild(canvas)
+	// what it's shown on (the canvas is clear: the stage shows through)
+	const backdrop = backdropPicker({handle, stage, prefix: "knit3d"})
+	yarns.element.after(backdrop.element)
 
 	// will it knit: what the check found, each problem going to its op
 	const panel = checkPanel(stage, problem => {
@@ -1260,6 +1264,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 		cancelAnimationFrame(frame)
 		handle.off("change", scheduleReread)
 		scheme.removeEventListener("change", onColours)
+		backdrop.destroy()
 		removeEventListener(YARNS_CHANGED, onColours)
 		yarns.destroy()
 		resizeObserver.disconnect()

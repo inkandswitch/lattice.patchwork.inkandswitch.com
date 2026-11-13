@@ -1,3 +1,4 @@
+import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText, knitoutOf} from "./files.js"
 import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
@@ -235,6 +236,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	svg("path", {d: `M-16 ${CARRIAGE_Y + 16} L0 ${CARRIAGE_Y + 22} L16 ${CARRIAGE_Y + 16}`, class: "cam"}, carriageBody)
 	const carriageArrow = svg("path", {class: "arrow"}, carriageBody)
 
+	// what it's shown on (its ink, on the canvas, follows: see readYarns)
+	const backdrop = backdropPicker({handle, stage, prefix: "knitout-animation", onChange: () => onColours()})
+	yarns.element.after(backdrop.element)
+
 	const empty = document.createElement("div")
 	empty.className = "knitout-animation-empty"
 	empty.textContent = "no stitches yet"
@@ -272,7 +277,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		colours = {
 			yarns,
 			strands,
-			ink: style.color,
+			ink: getComputedStyle(stage).color,
 			danger: style.getPropertyValue("--knitout-animation-danger").trim() || "#d33a4c",
 		}
 	}
@@ -1318,6 +1323,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		removeEventListener(YARNS_CHANGED, onColours)
 		yarns.destroy()
 		scheme.removeEventListener("change", onColours)
+		backdrop.destroy()
 		resizeObserver.disconnect()
 		for (const [type, listener] of Object.entries(pictureListeners)) {
 			picture.removeEventListener(type, listener)

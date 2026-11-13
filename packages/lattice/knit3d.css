@@ -107,10 +107,71 @@
 		}
 	}
 
+	/* the background's swatch, and × back to the theme's */
+	& .knit3d-backdrop {
+		display: flex;
+		align-items: center;
+		gap: 2px;
+
+		& label {
+			display: flex;
+			cursor: pointer;
+		}
+
+		& input[type="color"] {
+			width: 20px;
+			height: 20px;
+			padding: 0;
+			border: 1px solid var(--knit3d-line);
+			border-radius: 2px;
+			background: none;
+			cursor: pointer;
+
+			&::-webkit-color-swatch-wrapper {
+				padding: 0;
+			}
+
+			/* (apart: one browser's pseudo-element is another's invalid
+			   selector, and spoils the whole rule) */
+			&::-webkit-color-swatch {
+				border: none;
+				border-radius: 1px;
+			}
+
+			&::-moz-color-swatch {
+				border: none;
+				border-radius: 1px;
+			}
+		}
+
+		& .knit3d-backdrop-reset {
+			padding: 0 3px;
+			border: none;
+			background: none;
+			color: var(--knit3d-muted);
+			font: inherit;
+			cursor: pointer;
+
+			&[hidden] {
+				display: none;
+			}
+		}
+	}
+
 	& .knit3d-stage {
 		position: relative;
 		flex: 1 1 auto;
 		min-height: 0;
+
+		/* shown on a colour someone's picked (see backdrop.js): its ink black
+		   or white, whichever reads on it, and what's muted, from that */
+		&[data-backdrop] {
+			--knit3d-sheet: var(--knit3d-backdrop);
+			--knit3d-ink: oklch(from var(--knit3d-backdrop) clamp(0, (0.65 - l) * 1000, 1) 0 0);
+			--knit3d-muted: oklch(from var(--knit3d-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+			background: var(--knit3d-sheet);
+			color: var(--knit3d-ink);
+		}
 
 		& canvas {
 			position: absolute;
