@@ -5,7 +5,7 @@ import { createStore, reconcile } from "solid-js/store";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { getHeads, inspectChange } from "@automerge/automerge";
+import { getHeads, getChangesMetaSince } from "@automerge/automerge";
 import {
   getFallbackTool,
   getRegistry,
@@ -46,10 +46,19 @@ function ago(time, now) {
 
 // when a doc was last changed, by anyone: the latest of its newest changes
 // (automerge stamps each one with the time, in seconds)
+// (just the changes' meta, not inspectChange: that decodes every op in the
+// change, and a file with its content in one change costs seconds). a change
+// is known by its hash, which is of its content, so its time is worked out
+// once, whichever doc or snapshot it's seen in
+const changeTimes = new Map();
 function editedAt(doc) {
   try {
-    const times = getHeads(doc).map((hash) => inspectChange(doc, hash)?.time ?? 0);
-    const latest = Math.max(0, ...times);
+    const heads = getHeads(doc);
+    if (heads.some((hash) => !changeTimes.has(hash))) {
+      const wanted = new Set(heads);
+      for (const meta of getChangesMetaSince(doc, [])) if (wanted.has(meta.hash)) changeTimes.set(meta.hash, meta.time);
+    }
+    const latest = Math.max(0, ...heads.map((hash) => changeTimes.get(hash) ?? 0));
     return latest ? latest * 1000 : null;
   } catch {
     return null;
