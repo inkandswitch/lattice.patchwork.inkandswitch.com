@@ -27,6 +27,7 @@ import { scrollsAlong } from "./ui/along.js";
 import { rowMenu, showMenuAt } from "./ui/context-menu.js";
 import { arrivals } from "./ui/arriving.js";
 import { createInk } from "./ink.js";
+import { anchorAt, inside, placeAnchor } from "./anchor.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
 import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
 import { CallPrompt, CallFloating, CallStage, Face } from "./call/ui.js";
@@ -581,24 +582,45 @@ export function mountWorkspace(
   const onInkMessage = (event) => ink.receive(event.message);
   roomHandle?.on("ephemeral-message", onInkMessage);
 
-  // your pointer, for everyone else: over which doc, in which tool, and
-  // where in its pane (fractions of it, since their panes aren't the size
-  // of yours). at most every POINTER_EVERY; null once it's off the panes
+  // your pointer, for everyone else: over which doc, in which tool, where
+  // in its pane (fractions of it), and over what there (anchor.js), since
+  // their panes aren't the size of yours, nor scrolled or zoomed as yours
+  // are. `at` is {group, x, y} (client px), or null once it's off the
+  // panes. it's worked out as it goes, at most every POINTER_EVERY, and
+  // again as what's under it moves (scrolling, zooming) while it doesn't
   let pointerTimer = null;
-  let pointerNext;
+  let pointerAtNow = null;
   let pointerSent = null;
-  function sharePointer(value) {
+  function sharePointer(at) {
     if (!room) return;
-    pointerNext = value;
+    pointerAtNow = at;
     pointerTimer ??= setTimeout(() => {
       pointerTimer = null;
-      const json = JSON.stringify(pointerNext);
+      const value = pointerAtNow && pointerFor(pointerAtNow);
+      const json = JSON.stringify(value);
       if (json === pointerSent) return;
       pointerSent = json;
-      room.share("pointer", pointerNext);
+      room.share("pointer", value);
     }, POINTER_EVERY);
   }
+  function pointerFor({ group, x, y }) {
+    const pane = inkPanes.get(group);
+    const panel = pane?.active();
+    const rect = pane?.body?.getBoundingClientRect();
+    if (!panel || !rect?.width || !rect.height) return null;
+    const fraction = (n) => Math.round(Math.min(2, Math.max(-1, n)) * 10000) / 10000;
+    const value = { url: panel.url, tool: panel.tool, x: fraction((x - rect.left) / rect.width), y: fraction((y - rect.top) / rect.height) };
+    // over its tabs, it's where it is by the pane
+    if (!inside(rect, x, y)) return value;
+    const { anchor, scale, origin } = anchorAt({ body: pane.body, el: hosts.get(panel.id)?.el ?? null }, x, y);
+    const px = (n) => Math.round(n * 10) / 10;
+    return { ...value, anchor, scale, dx: px(x - origin.x), dy: px(y - origin.y) };
+  }
+  const pointerAgain = () => pointerAtNow && sharePointer(pointerAtNow);
+  document.addEventListener("scroll", pointerAgain, { capture: true, passive: true });
+  document.addEventListener("wheel", pointerAgain, { capture: true, passive: true });
   const offPanes = () => sharePointer(null);
+  const [pointerFrame, setPointerFrame] = createSignal(0);
   const onHidden = () => document.visibilityState === "hidden" && offPanes();
   document.addEventListener("visibilitychange", onHidden);
 
@@ -1813,17 +1835,8 @@ export function mountWorkspace(
       onFocusIn=${() => setLastGroupId(group.id)}
       onPointerMove=${(event) => {
         // following and drawing, the ink sheet's over this and says where
-        const panel = active();
-        if (!panel || drawing()) return;
-        const rect = body.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        const fraction = (n) => Math.round(Math.min(2, Math.max(-1, n)) * 10000) / 10000;
-        sharePointer({
-          url: panel.url,
-          tool: panel.tool,
-          x: fraction((event.clientX - rect.left) / rect.width),
-          y: fraction((event.clientY - rect.top) / rect.height),
-        });
+        if (drawing()) return;
+        sharePointer({ group: group.id, x: event.clientX, y: event.clientY });
       }}
       onPointerLeave=${offPanes}
     >
@@ -1884,12 +1897,29 @@ export function mountWorkspace(
               const image = () => pointerImage(person.colour, person.look);
               // their face on it, while you're in a call with them
               const inCall = createMemo(() => (call.cursors() ? (call.find(person)?.id ?? null) : null));
+              // over what it's over for them, wherever that is in yours now
+              // (hidden while that's nowhere to be seen). from before
+              // pointers said, where it is in their pane
+              const place = createMemo(() => {
+                pointerFrame();
+                const pointer = person.pointer;
+                if (!pointer?.anchor || !body) {
+                  return { left: `${(pointer?.x ?? 0) * 100}%`, top: `${(pointer?.y ?? 0) * 100}%`, visibility: "visible" };
+                }
+                const at = placeAnchor(pointer.anchor, pointer.scale, { body, el: hosts.get(active()?.id)?.el ?? null });
+                if (!at) return { left: "0px", top: "0px", visibility: "hidden" };
+                const rect = body.getBoundingClientRect();
+                return {
+                  left: `${at.x + pointer.dx * at.k - rect.left}px`,
+                  top: `${at.y + pointer.dy * at.k - rect.top}px`,
+                  visibility: "visible",
+                };
+              });
               return html`<div
                 class="lattice-wm-pointer"
                 data-look=${() => person.look}
                 style=${() => ({
-                  left: `${(person.pointer?.x ?? 0) * 100}%`,
-                  top: `${(person.pointer?.y ?? 0) * 100}%`,
+                  ...place(),
                   "--lattice-wm-button-fill": person.colour,
                 })}
               >
@@ -2650,14 +2680,10 @@ export function mountWorkspace(
         : { display: "none" };
     };
     function pointAt(event) {
-      for (const { body, active } of inkPanes.values()) {
-        const panel = active();
+      const { clientX: x, clientY: y } = event;
+      for (const [group, { body, active }] of inkPanes) {
         const rect = body?.getBoundingClientRect();
-        if (!panel || !rect?.width || !rect.height) continue;
-        const { clientX: x, clientY: y } = event;
-        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) continue;
-        const fraction = (n) => Math.round(Math.min(2, Math.max(-1, n)) * 10000) / 10000;
-        return { url: panel.url, tool: panel.tool, x: fraction((x - rect.left) / rect.width), y: fraction((y - rect.top) / rect.height) };
+        if (active() && rect?.width && rect.height && inside(rect, x, y)) return { group, x, y };
       }
       return null;
     }
@@ -2742,6 +2768,17 @@ export function mountWorkspace(
   }
 
   const dispose = render(() => {
+    // while anyone's pointer is about, it's placed again every frame: what
+    // it's over moves under it as you scroll, zoom and type
+    const pointersAbout = createMemo(() => people.some((person) => person.pointer));
+    createEffect(() => {
+      if (!pointersAbout()) return;
+      let frame = requestAnimationFrame(function tick() {
+        setPointerFrame((n) => n + 1);
+        frame = requestAnimationFrame(tick);
+      });
+      onCleanup(() => cancelAnimationFrame(frame));
+    });
     createEffect(() => onShowing?.(showing()));
     createEffect(() => onFocused?.(focused()));
     createEffect(() => room?.share("look", look?.() === "mouse" ? "mouse" : "arrow"));
@@ -2815,6 +2852,8 @@ export function mountWorkspace(
     layoutHandle.off("ephemeral-message", onDragMessage);
     clearTimeout(pointerTimer);
     document.removeEventListener("visibilitychange", onHidden);
+    document.removeEventListener("scroll", pointerAgain, { capture: true });
+    document.removeEventListener("wheel", pointerAgain, { capture: true });
     views.stop();
     room?.stop();
     clearTimeout(shareTimer);

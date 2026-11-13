@@ -128,6 +128,15 @@ export function checkPanel(stage, onPick, {handle = null, context = {}, onProfil
 	button.addEventListener("click", () => {
 		panel.hidden = !panel.hidden
 	})
+	// the settings, and the sizes and yarn, only while alt is held: the
+	// verdict and what to check otherwise (checks.css)
+	const onAlt = event => {
+		if (event.key === "Alt") panel.toggleAttribute("data-alt", event.type === "keydown")
+	}
+	const offAlt = () => panel.removeAttribute("data-alt")
+	addEventListener("keydown", onAlt)
+	addEventListener("keyup", onAlt)
+	addEventListener("blur", offAlt)
 
 	// ── the settings: kept as they are while the rest of the panel's redone
 
@@ -539,6 +548,9 @@ export function checkPanel(stage, onPick, {handle = null, context = {}, onProfil
 		check,
 		remove() {
 			removeEventListener(SETTINGS_CHANGED, onSettings)
+			removeEventListener("keydown", onAlt)
+			removeEventListener("keyup", onAlt)
+			removeEventListener("blur", offAlt)
 			watcher?.stop()
 			handle?.off("change", onDocChange)
 			checks.close()

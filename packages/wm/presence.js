@@ -12,6 +12,7 @@
 // away, say, when all that's come is that they're still here)
 import { Presence, isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { colourFor } from "./pointer.js";
+import { anchorFrom } from "./anchor.js";
 
 const HEARTBEAT = 2000;
 const TTL = 10000;
@@ -53,12 +54,27 @@ function nodesFrom(value) {
   return Object.fromEntries(Object.entries(value).filter(([, node]) => isObject(node)));
 }
 // a pointer: over the doc at `url`, in `tool`, at x, y (fractions of the
-// pane it's in: a little past its edges, over its tabs, say)
+// pane it's in: a little past its edges, over its tabs, say). and over
+// what: `anchor` (anchor.js), made at `scale`, and dx, dy (px) from it, for
+// it to be over the same thing in a pane of another size, scrolled or
+// zoomed otherwise. no anchor (from before there were), it's where x, y say
 function pointerFrom(value) {
   if (!isObject(value) || !isValidAutomergeUrl(string(value.url))) return null;
   const { x, y } = value;
   if (![x, y].every((n) => typeof n === "number" && n >= -1 && n <= 2)) return null;
-  return { url: string(value.url), tool: string(value.tool), x, y };
+  const anchor = anchorFrom(value.anchor);
+  const pinned =
+    anchor && [value.scale, value.dx, value.dy].every(Number.isFinite) && value.scale > 0;
+  return {
+    url: string(value.url),
+    tool: string(value.tool),
+    x,
+    y,
+    anchor: pinned ? anchor : null,
+    scale: pinned ? value.scale : 1,
+    dx: pinned ? value.dx : 0,
+    dy: pinned ? value.dy : 0,
+  };
 }
 function activeFrom(value) {
   if (!isObject(value)) return {};
@@ -109,7 +125,7 @@ const VIEW = "view:";
  * there are, each with a way to check what's sent on it ({[channel]:
  * read(value)}): what they've sent is shared[channel], read. returns
  * {share(channel, value), view(id, value), me(), stop()}: share sends "nodes",
- * "active", "pointer" ({url, tool, x, y}, or null), "look" ("arrow" or
+ * "active", "pointer" ({url, tool, x, y, anchor, scale, dx, dy}, or null), "look" ("arrow" or
  * "mouse") or one of `reads`; view sends a pane's view ({url, tool, doc,
  * scroll}, or null once it's gone)
  */

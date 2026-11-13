@@ -66,6 +66,11 @@
 	&[hidden] {
 		display: none;
 	}
+
+	/* the settings, and the sizes and yarn, only while alt is held */
+	&:not([data-alt]) :is(.checks-settings, .checks-facts, .checks-size) {
+		display: none;
+	}
 }
 
 .checks-settings {

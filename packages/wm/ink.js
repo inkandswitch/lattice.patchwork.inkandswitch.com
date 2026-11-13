@@ -4,23 +4,14 @@
 // draws it, set as tldraw draws (a "m" stroke: tldraw's DrawShapeUtil and
 // draw/getPath.ts, 5.2.5)
 //
-// a stroke is pinned to what's under where it starts, so it stays on that as
-// each person's view moves, as aftersun's ink does:
-//   text     a character in a codemirror editor: the stroke goes where that
-//            character is, as it scrolls
-//   space    a point in a tool's own space, for a tool that says what's
-//            where (its element's inkSpace, below): it goes where that point
-//            is, and grows and shrinks as it's zoomed
-//   pane     else, a place in the pane, as a fraction of it
-// a stroke's points are pixels from where it started, as it was drawn; on
-// screen they're scaled by how much more (or less) zoomed in that place is now
-//
-// a tool's element can have `inkSpace`: {at(x, y), place(at)}. at takes a
-// point on the page (client px) and gives something plain (json) saying what's
-// there, or null for nothing; place takes that and gives {x, y, scale} (where
-// it is on the page now, and how many page px a unit of its space is), or null
-// if it isn't to be seen
+// a stroke is pinned to what's under where it starts (anchor.js: a point in
+// a tool's own space, a character in an editor, an element in the tool, or
+// else a place in the pane), so it stays on that as each person's view
+// moves, as aftersun's ink does. a stroke's points are pixels from where it
+// started, as it was drawn; on screen they're scaled by how much more (or
+// less) zoomed in that place is now
 import { getStroke } from "./vendor/perfect-freehand.js";
+import { anchorAt, anchorFrom, inside, placeAnchor } from "./anchor.js";
 
 const KIND = "ink";
 // tldraw's, for its default size: its theme's strokeWidth (2) times the "m"
@@ -61,88 +52,6 @@ const MAX_POINTS = 4000;
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
 const finite = (n) => typeof n === "number" && Number.isFinite(n);
 const round = (n) => Math.round(n * 10) / 10;
-
-// codemirror's view, which the editors in the panes share (patchwork's
-// importmap has it): for pinning to a character. without it, text's a pane
-let EditorView = null;
-import("@codemirror/view").then(
-  (view) => (EditorView = view.EditorView),
-  () => {},
-);
-
-function editorsIn(el) {
-  return el ? [...el.querySelectorAll(".cm-editor")] : [];
-}
-const inside = (rect, x, y) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
-
-// what's under (x, y) in `pane`, to pin a stroke to: {anchor, scale, origin}
-function anchorAt(pane, x, y) {
-  const space = pane.el?.inkSpace;
-  if (space) {
-    try {
-      const at = space.at(x, y);
-      const placed = at == null ? null : space.place(at);
-      if (placed && finite(placed.x) && finite(placed.y) && finite(placed.scale) && placed.scale > 0) {
-        return { anchor: { kind: "space", at }, scale: placed.scale, origin: { x: placed.x, y: placed.y } };
-      }
-    } catch (error) {
-      console.warn("[wm] ink: a tool's inkSpace failed", error);
-    }
-  }
-  if (EditorView) {
-    const editors = editorsIn(pane.el);
-    const index = editors.findIndex((editor) => inside(editor.getBoundingClientRect(), x, y));
-    const view = index >= 0 && EditorView.findFromDOM(editors[index]);
-    if (view) {
-      const pos = view.posAtCoords({ x, y }, false);
-      const at = pos == null ? null : view.coordsAtPos(pos);
-      if (at) return { anchor: { kind: "text", editor: index, pos }, scale: 1, origin: { x: at.left, y: at.top } };
-    }
-  }
-  const box = pane.body.getBoundingClientRect();
-  return {
-    anchor: { kind: "pane", x: (x - box.left) / box.width, y: (y - box.top) / box.height },
-    scale: 1,
-    origin: { x, y },
-  };
-}
-
-// where a stroke's start is in `pane` now, and how much it's scaled: {x, y,
-// k}, or null if it's not to be seen there
-function placeIn(stroke, pane) {
-  const { anchor } = stroke;
-  if (anchor.kind === "space") {
-    const space = pane.el?.inkSpace;
-    if (!space) return null;
-    try {
-      const placed = space.place(anchor.at);
-      if (!placed || !finite(placed.x) || !finite(placed.y) || !finite(placed.scale)) return null;
-      return { x: placed.x, y: placed.y, k: placed.scale / stroke.scale };
-    } catch {
-      return null;
-    }
-  }
-  if (anchor.kind === "text") {
-    const editors = editorsIn(pane.el);
-    const editor = editors[anchor.editor] ?? editors[0];
-    const view = editor && EditorView?.findFromDOM(editor);
-    if (!view) return null;
-    const at = view.coordsAtPos(Math.min(anchor.pos, view.state.doc.length));
-    return at ? { x: at.left, y: at.top, k: 1 } : null;
-  }
-  const box = pane.body.getBoundingClientRect();
-  return { x: box.left + anchor.x * box.width, y: box.top + anchor.y * box.height, k: 1 };
-}
-
-function anchorFrom(value) {
-  if (!isObject(value)) return null;
-  if (value.kind === "space" && "at" in value) return { kind: "space", at: value.at };
-  if (value.kind === "text" && Number.isInteger(value.editor) && Number.isInteger(value.pos) && value.pos >= 0) {
-    return { kind: "text", editor: value.editor, pos: value.pos };
-  }
-  if (value.kind === "pane" && finite(value.x) && finite(value.y)) return { kind: "pane", x: value.x, y: value.y };
-  return null;
-}
 
 // an outline (perfect-freehand's polygon) as a path, its corners smoothed
 function pathOf(outline) {
@@ -315,7 +224,7 @@ export function createInk({ panes, send, me }) {
       const seen = new Set();
       for (const stroke of strokes.values()) {
         if (!pane.panel || stroke.url !== pane.panel.url || stroke.tool !== pane.panel.tool) continue;
-        const at = placeIn(stroke, pane);
+        const at = placeAnchor(stroke.anchor, stroke.scale, pane);
         if (!at) continue;
         seen.add(stroke.id);
         let path = paths.get(stroke.id);
