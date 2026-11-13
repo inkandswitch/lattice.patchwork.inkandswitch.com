@@ -1247,12 +1247,22 @@
 		color: var(--lattice-shell-danger-text);
 	}
 
+	/* it gives a little when pressed, as lattice's other buttons do (less
+	   than the round ones: it's wider, so the same scale moves more) */
 	& .lattice-button {
 		padding: calc(4 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px));
 		border: 1px solid var(--lattice-rule);
 		border-radius: var(--lattice-shell-radius);
 		background: var(--lattice-shell-fill);
 		cursor: pointer;
+		transition: scale 120ms ease-out;
+
+		&:active:not(:disabled) {
+			scale: 0.97;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+		}
 	}
 
 	/* the versions panel's "+ more" avatar is filled with a gentle ink, which
