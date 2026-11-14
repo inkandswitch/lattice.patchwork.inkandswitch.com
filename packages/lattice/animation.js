@@ -31,6 +31,10 @@ const DEPTH = 0.4
 // (where the fabric bulges out, on the whole, more than BULGING, its layers
 // go from its face to twice its usual depth)
 const BULGING = 0.2
+// the far bed's stitches, on the canvas: faded towards what's behind them, a
+// little, so they read as further away (the svg's loops on the far bed's
+// needles are faded as much: see animation.css)
+const FAR = 0.7
 const BACK_HOOK = -5
 const FRONT_HOOK = 5
 const NEEDLE = 20
@@ -539,7 +543,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		for (let at = 0; at < paths.length; at++) {
 			const strand = at >= YARNS && at < marks ? Math.floor((at - YARNS) / YARNS) % STRANDS : 0
 			c.lineWidth = strand ? 2 * STRAND : 2.1
-			c.globalAlpha = at < YARNS ? 0.4 : at > marks ? (at - marks) / 3 : 1
+			c.globalAlpha = at < YARNS ? FAR : at > marks ? (at - marks) / 3 : 1
 			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % YARNS]
 			c.stroke(paths[at])
 		}
