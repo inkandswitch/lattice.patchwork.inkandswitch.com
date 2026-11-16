@@ -155,4 +155,26 @@ export const plugins = [
       return LatticexTerminalTool;
     },
   },
+  // patternwitch, a pixel painter: our copy of pkg-base's (packages/
+  // patternwitch), under the same ids, so it stands in for that one. a
+  // project's + menu makes one (project.js)
+  {
+    type: "patchwork:datatype",
+    id: "patternwitch",
+    name: "PatternWitch",
+    icon: "Grid3x3",
+    async load() {
+      return (await import("../patternwitch/datatype.js")).PatternWitchDatatype;
+    },
+  },
+  {
+    type: "patchwork:tool",
+    id: "patternwitch",
+    name: "PatternWitch",
+    icon: "Grid3x3",
+    supportedDatatypes: ["patternwitch"],
+    async load() {
+      return (await import("../patternwitch/tool.js")).default;
+    },
+  },
 ];

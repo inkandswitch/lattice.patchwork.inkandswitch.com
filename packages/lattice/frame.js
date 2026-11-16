@@ -34,6 +34,7 @@ import { CallBar } from "./call-bar.js";
 import { call } from "../wm/call/call.js";
 import { CallTiles } from "../wm/call/ui.js";
 import { swapOnChange } from "./dev-swap.js";
+import { pageBridge, providePage } from "./page.js";
 
 // wm's, too, for its menus, before any project has brought it; knitout.js's
 // look, which lattice wears; and the fonts lattice brings
@@ -63,6 +64,9 @@ const DEV_SERVER =
   DEV_FRAME ??
   (FRAME_ORIGIN === location.origin && document.querySelector('meta[name="lattice-dev-server"]') ? FRAME_ORIGIN : null);
 if (DEV_SERVER) swapOnChange(DEV_SERVER);
+// and `pnpm page`, from the computer it's on, can look in and do things,
+// once this tab's been given its token (page.js)
+if (DEV_SERVER) pageBridge(DEV_SERVER);
 
 // a sidebar toggle's icon: a window with a column filled, `at` from its left
 function sidebarIcon(at) {
@@ -371,6 +375,9 @@ function Frame(props) {
     remember(projectKey, url);
     setPage(null);
   }
+
+  // what `pnpm page`'s helpers need (page.js)
+  if (DEV_SERVER) onCleanup(providePage({ repo, baseRepo, hive, home: homeHandle, projects, choose }));
 
   // what's in the middle instead of the project, when it isn't: "settings"
   const [page, setPage] = createSignal(parsePath(location.pathname)?.page ?? null);

@@ -550,7 +550,7 @@ export default function LatticexTerminalTool(handle, element) {
 
 	// ── the mouse ────────────────────────────────────────────────────────
 
-	// a program that's asked for the mouse (tmux, claude, vim's mouse=a) gets
+	// a program that's asked for the mouse (tmux, vim's mouse=a) gets
 	// it, but with alt held: then it's this terminal's, to select and scroll
 	const reporting = () =>
 		status === "live" && !screen?.readonly && (screen?.modes?.mouseTrackingMode ?? "none") !== "none"
