@@ -3,6 +3,7 @@ import {fileURLToPath} from "node:url"
 import {defineConfig} from "vite"
 import {base, core, environment, patchwork} from "./vite/environment.ts"
 import {frame} from "./vite/frame.ts"
+import {page} from "./vite/page.ts"
 import {pages} from "./vite/pages.ts"
 
 const root = dirname(fileURLToPath(import.meta.url))
@@ -27,6 +28,7 @@ export default defineConfig({
 	plugins: [
 		environment(),
 		frame(),
+		page(),
 		pages(),
 		patchwork({
 			title: "Patchwork",

@@ -3,8 +3,9 @@
 // imports knitoutjs's tools and wm, and lattice's frame (packages/lattice)
 // imports both, from beside it in packages/; a relative import can't leave
 // the folder that's pushed, so the folder has them all at the paths they have
-// on the site: packages/knitoutjs, packages/wm (and packages/lattice, for
-// lattice's frame), under a modules.json that points at the package.
+// on the site: packages/knitoutjs, packages/wm (and packages/lattice and
+// packages/patternwitch, for lattice's frame), under a modules.json that
+// points at the package.
 //
 // what's in `dir` (stage/<package>, if not given) is replaced, all but its
 // .pushwork: the state that says which patchwork folder it is, and so which
@@ -24,7 +25,7 @@ const args = process.argv.slice(2)
 const PACKAGES = {
 	// the app, what it's called, and what it brings with it
 	knitoutjs: {entry: "./packages/knitoutjs/app/index.js", name: "Knitout JS", with: ["knitoutjs", "wm"], meta: "packages/knitoutjs"},
-	lattice: {entry: "./packages/lattice/index.js", name: "Lattice", with: ["knitoutjs", "wm", "lattice"], meta: "packages/lattice"},
+	lattice: {entry: "./packages/lattice/index.js", name: "Lattice", with: ["knitoutjs", "wm", "lattice", "patternwitch"], meta: "packages/lattice"},
 }
 const which = PACKAGES[args[0]]
 if (!which) throw new Error(`stage what? ${Object.keys(PACKAGES).join(" or ")}`)

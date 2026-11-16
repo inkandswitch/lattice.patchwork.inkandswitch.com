@@ -1,5 +1,5 @@
 import {spawn, spawnSync} from "node:child_process"
-import {existsSync, readFileSync, watch} from "node:fs"
+import {existsSync, readFileSync, rmSync, watch, writeFileSync} from "node:fs"
 import {createServer} from "node:net"
 import {dirname, join, relative, resolve, sep} from "node:path"
 import {fileURLToPath} from "node:url"
@@ -19,6 +19,9 @@ const tunnel =
 const tunnelHost = process.env.LATTICE_TUNNEL_HOST
 const tunnelName = process.env.LATTICE_TUNNEL_NAME ?? "lattice-dev"
 const SITE = "https://lattice.patchwork.inkandswitch.com"
+// where the tunnel is, for `pnpm page link` (scripts/page.mjs): gone with it
+const TUNNEL_FILE = join(root, "node_modules", ".lattice-tunnel")
+const forgetTunnel = () => rmSync(TUNNEL_FILE, {force: true})
 const footerLines = tunnel ? 10 : 7
 const footer = process.stdout.isTTY && process.stdout.rows > footerLines
 let stopping = false
@@ -245,6 +248,9 @@ function startTunnel(url) {
 		stopSpinner()
 		tunnelURL = found
 		devLink = `${SITE}/?dev=${tunnelURL}`
+		try {
+			writeFileSync(TUNNEL_FILE, `${tunnelURL}\n`)
+		} catch {}
 		console.log(
 			`\n  tunnel: ${tunnelURL}\n\n  ${bold("send her this link:")}\n  ${link(devLink)}\n\n  \x1b[2m(anyone with it can use this dev server)\x1b[0m\n`
 		)
@@ -265,6 +271,7 @@ function startTunnel(url) {
 	child.on("exit", code => {
 		stopSpinner()
 		if (stopping || tunnelURL.startsWith("needs")) return
+		forgetTunnel()
 		tunnelURL = `closed (cloudflared exited ${code})`
 		devLink = ""
 		// what it said last, which for a named tunnel not set up says why
@@ -318,6 +325,7 @@ for (const event of ["uncaughtException", "unhandledRejection"]) {
 	})
 }
 process.on("exit", () => {
+	forgetTunnel()
 	hideFooter()
 	signalAll("SIGTERM")
 })
