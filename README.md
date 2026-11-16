@@ -16,6 +16,8 @@ in the project there too. it's at
 - [`packages/wm`](packages/wm): the panes, the files, who else is here, and
   calls.
 - [`packages/versions`](packages/versions): the history down the right.
+- [`packages/patternwitch`](packages/patternwitch): a pixel painter, our
+  copy of pkg-base's patternwitch. a project's + menu makes one.
 - [`latticex`](latticex): a terminal on your computer, shared into a project.
 - `src/main.ts`, `vite/`, `scripts/`: the site, and running it.
 
@@ -43,6 +45,21 @@ then `LATTICE_TUNNEL_HOST=lattice-dev.example.com pnpm dev` (export it from
 your shell's profile to have it always), and the link to send is the same
 every time. `LATTICE_TUNNEL_NAME` is the tunnel's name, if it isn't
 `lattice-dev`.
+
+## claude, in your tab
+
+while `pnpm dev`'s running, `pnpm page` runs code in the lattice tab you have
+open, here or on the site with `?dev=`, and prints what came of it: so a
+claude in this repo can look at the page (`pnpm page dom`, `inspect`, `logs`)
+and make projects and files in it (`new-project`, `add-file`, `write`).
+`pnpm page` on its own says all it does; `CLAUDE.md` says it for claude.
+
+only a tab that's been given the token can be reached: `pnpm page link`
+prints yours (with `?dev=` and the tunnel, and the localhost one). open one
+once, or put its `#page=…` on the address of a tab that's open already, and
+that browser stays in. it's yours, not for sending: anyone with the token and
+the tunnel's address could run code in your tab, and see what comes back. the token's
+in `node_modules/.lattice-page.json`; deleting it makes a new one.
 
 ## who made it
 
