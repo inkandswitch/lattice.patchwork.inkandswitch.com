@@ -1,5 +1,5 @@
 // a viewer's mouse, as the bytes the program asked for. a program turns on
-// mouse reporting (tmux, claude, vim's mouse=a) with an escape the
+// mouse reporting (tmux, vim's mouse=a) with an escape the
 // terminal's own xterm reads, and xterm's mouse code knows what each kind
 // reports (x10 presses, vt200 releases too, drag and any movement as well)
 // and how each encoding says it. it says it as data, as if to send it:

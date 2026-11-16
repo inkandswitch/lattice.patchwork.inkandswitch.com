@@ -105,5 +105,5 @@ down arrows instead.
 ## the mouse, and selecting
 
 Dragging selects text, and ⌘C copies it. A program that asks for the mouse
-(tmux, claude, vim with `mouse=a`) gets clicks, drags and the wheel instead;
+(tmux, vim with `mouse=a`) gets clicks, drags and the wheel instead;
 hold alt to select or scroll here anyway.
