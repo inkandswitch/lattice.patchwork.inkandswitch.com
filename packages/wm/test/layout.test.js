@@ -194,6 +194,40 @@ test("moving a tab touches only the tab", () => {
   assert.deepEqual(touched(before, nodes), [b]);
 });
 
+test("a tab goes in before the one it's dropped before", () => {
+  const nodes = {};
+  openPanels(nodes, null, "center", ["a", "b", "c"].map((url) => ({ url, tool: "editor" })));
+  const [a, b, c] = ["a", "b", "c"].map((url) => findPanelShowing(nodes, url));
+  // in its own pane: earlier, later, and to the end
+  movePanel(nodes, c, groupWith(nodes, "a"), "center", a);
+  assert.equal(shapeOf(nodes), "c a b");
+  movePanel(nodes, c, groupWith(nodes, "a"), "center", b);
+  assert.equal(shapeOf(nodes), "a c b");
+  movePanel(nodes, a, groupWith(nodes, "a"), "center", null);
+  assert.equal(shapeOf(nodes), "c b a");
+  // just before the one after it: it's there already, so nothing changes
+  const before = clone(nodes);
+  movePanel(nodes, c, groupWith(nodes, "a"), "center", b);
+  assert.deepEqual(touched(before, nodes), []);
+  // from another pane, in among these
+  openPanels(nodes, groupWith(nodes, "a"), "right", [{ url: "d", tool: "editor" }]);
+  movePanel(nodes, findPanelShowing(nodes, "d"), groupWith(nodes, "a"), "center", b);
+  assert.equal(shapeOf(nodes), "c d b a");
+  assertTree(nodes);
+});
+
+test("opening before a tab puts them there, in order", () => {
+  const nodes = {};
+  openPanels(nodes, null, "center", ["a", "b"].map((url) => ({ url, tool: "editor" })));
+  const b = findPanelShowing(nodes, "b");
+  openPanels(nodes, groupWith(nodes, "a"), "center", ["x", "y"].map((url) => ({ url, tool: "editor" })), b);
+  assert.equal(shapeOf(nodes), "a x y b");
+  // one that isn't there: at the end
+  openPanels(nodes, groupWith(nodes, "a"), "center", [{ url: "z", tool: "editor" }], "gone");
+  assert.equal(shapeOf(nodes), "a x y b z");
+  assertTree(nodes);
+});
+
 test("moving a group's only tab moves the group, and what's left closes up", () => {
   const nodes = {};
   openPanels(nodes, null, "center", [{ url: "a", tool: "editor" }]);

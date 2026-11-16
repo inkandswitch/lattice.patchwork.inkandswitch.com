@@ -1,9 +1,9 @@
 import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
-import { Prec, Transaction } from "@codemirror/state";
+import { EditorState, Prec, Transaction } from "@codemirror/state";
 import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
-import { goToLine as goToLineIn, knitoutEditorIntegration, showError } from "./cm-knitout.js";
+import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { runInto } from "./run.js";
 import { builderOf, setBuild } from "./builds.js";
@@ -82,6 +82,15 @@ export default function KnitoutEditorTool(handle, element, context) {
         "aria-label": named ? `${named}, code` : "code",
         "aria-description": "escape, then tab, to leave the editor",
       }),
+      // a paste or a drop can move the caret a long way: put it in the
+      // middle, not just inside the edge, so you can see where you are.
+      // (an import dropped in leaves the caret be: that's keepCaretInPlace's)
+      EditorState.transactionExtender.of((tr) =>
+        tr.docChanged && tr.selection && (tr.isUserEvent("input.paste") || tr.isUserEvent("input.drop"))
+          ? { effects: EditorView.scrollIntoView(tr.newSelection.main.head, { y: "center" }) }
+          : null
+      ),
+      keepCaretInPlace,
       knitoutEditorIntegration({
         events,
         url: handle.url,

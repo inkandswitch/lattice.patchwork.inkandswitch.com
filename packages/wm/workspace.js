@@ -1063,7 +1063,7 @@ export function mountWorkspace(
     noticeTimer = setTimeout(() => setNotice(null), 3500);
   }
 
-  async function openDocs(urls, groupId, zone = "center", toolId) {
+  async function openDocs(urls, groupId, zone = "center", toolId, before = null) {
     groupId ??= findGroup(lastGroupId()) ? lastGroupId() : null;
     const panels = [];
     const refused = [];
@@ -1078,7 +1078,7 @@ export function mountWorkspace(
     }
     if (panels.length) {
       addFiles(panels.map((panel) => panel.url));
-      const [first] = updateLayout((nodes) => Layout.openPanels(nodes, groupId, zone, panels));
+      const [first] = updateLayout((nodes) => Layout.openPanels(nodes, groupId, zone, panels, before));
       activate(first);
     }
     if (refused.length) {
@@ -1296,6 +1296,9 @@ export function mountWorkspace(
   // ── dragging tabs and docs ─────────────────────────────────────────────
 
   const [dragging, setDragging] = createSignal(false);
+  // the tab being dragged from here, if one is: over its own bar, the place
+  // either side of it is where it already is
+  let draggedPanel = null;
   // dropping along the frame's own edge splits the whole layout, so a row
   // can run all the way across (a .k and its visualizer above everything)
   const [outerZone, setOuterZone] = createSignal(null);
@@ -1351,6 +1354,7 @@ export function mountWorkspace(
     if (entered === 0) stopDragging();
   }
   function stopDragging() {
+    draggedPanel = null;
     entered = 0;
     setDragging(false);
     setOuterZone(null);
@@ -1404,7 +1408,7 @@ export function mountWorkspace(
     stopDragging();
     if (!target) return;
     const group = target.groupId && findGroup(target.groupId);
-    drop(event, target.groupId, target.zone, group ? activeIn(group) : null);
+    drop(event, target.groupId, target.zone, group ? activeIn(group) : null, target.before ?? null);
   }
 
   function listenForDrops(el) {
@@ -1414,11 +1418,12 @@ export function mountWorkspace(
     el.addEventListener("drop", onRootDrop, true);
   }
 
-  function drop(event, groupId, zone, activePanel) {
+  // (`before`: the tab it goes in before, dropped among a pane's tabs)
+  function drop(event, groupId, zone, activePanel, before = null) {
     const dataTransfer = event.dataTransfer;
     const panelId = dataTransfer.getData(PANEL_TYPE);
     if (panelId) {
-      updateLayout((nodes) => Layout.movePanel(nodes, panelId, groupId, zone));
+      updateLayout((nodes) => Layout.movePanel(nodes, panelId, groupId, zone, before));
       activate(panelId);
       return;
     }
@@ -1427,7 +1432,7 @@ export function mountWorkspace(
       const { url, id, patchworkTool } = JSON.parse(tool);
       const at = zone === "code" ? "center" : zone;
       const [made] = updateLayout((nodes) =>
-        Layout.openPanels(nodes, groupId, at, [Layout.newPanel(url, id, patchworkTool)]),
+        Layout.openPanels(nodes, groupId, at, [Layout.newPanel(url, id, patchworkTool)], before),
       );
       activate(made);
       return;
@@ -1438,7 +1443,7 @@ export function mountWorkspace(
     const files = !docs.length && dataTransfer.types.includes(FILES_TYPE) ? [...dataTransfer.files] : [];
     if (files.length) {
       const at = zone === "code" ? "center" : zone;
-      importFiles(files, groupId).then((urls) => urls.length && openDocs(urls, groupId, at));
+      importFiles(files, groupId).then((urls) => urls.length && openDocs(urls, groupId, at, undefined, before));
       return;
     }
     if (zone === "code") {
@@ -1449,6 +1454,8 @@ export function mountWorkspace(
       docs.map((doc) => doc.url),
       groupId,
       zone,
+      undefined,
+      before,
     );
   }
 
@@ -1797,8 +1804,9 @@ export function mountWorkspace(
       // over code that docs can be imported into, most of it is for that
       // (not files from the computer: they're no docs yet)
       const into = placing || onlyFiles(event.dataTransfer) ? null : hosts.get(active()?.id)?.el.dropInto;
-      // over the tabs, it joins them (at the end), which the tab bar shows
-      if (onTabs) return { zone: "center", lineTop: null, onTabs: true };
+      // over the tabs, it joins them, before the first whose middle is past
+      // the pointer (or after them all), which the tab bar shows
+      if (onTabs) return { zone: "center", lineTop: null, onTabs: true, before: tabBefore(event.clientX) };
       // files over an editor's text are mostly its (intoEditor), as code is
       // an importer's: just a thin band along each edge splits
       const overText =
@@ -1811,6 +1819,14 @@ export function mountWorkspace(
       }
       return { zone, lineTop: null };
     }
+    function tabBefore(x) {
+      for (const tab of tabs.querySelectorAll(".lattice-wm-tab")) {
+        if (tab.dataset.panel === draggedPanel) continue;
+        const rect = tab.getBoundingClientRect();
+        if (x < rect.left + rect.width / 2) return tab.dataset.panel;
+      }
+      return null;
+    }
     dropTargets.set(group.id, zoneFor);
     onCleanup(() => {
       if (dropTargets.get(group.id) === zoneFor) dropTargets.delete(group.id);
@@ -1820,6 +1836,8 @@ export function mountWorkspace(
     // what dropping onto the tool says it does ("import here")
     const dropLabel = () => hosts.get(active()?.id)?.el.dropInto?.label;
     const onTabs = () => !!target()?.onTabs;
+    // the tab a drop goes in before: null for the end, undefined off the tabs
+    const slotBefore = () => (onTabs() ? (target().before ?? null) : undefined);
     // the pane's own hint, unless it's going in among the tabs
     const zone = () => (onTabs() ? null : (target()?.zone ?? null));
     const codeLine = () => target()?.lineTop ?? null;
@@ -1852,12 +1870,17 @@ export function mountWorkspace(
       >
         <div class="lattice-wm-tablist" role="tablist" aria-label="tabs" ref=${(el) => ringResized.observe(el)}>
           <${For} each=${() => group.panels}>
-            ${(panel) => html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`}
+            ${(panel) => [
+              html`<${Show} when=${() => slotBefore() === panel.id}>
+                <div class="lattice-wm-tab-slot" aria-hidden="true"></div>
+              <//>`,
+              html`<${Tab} panel=${panel} group=${group} active=${() => active() === panel} />`,
+            ]}
+          <//>
+          <${Show} when=${() => slotBefore() === null}>
+            <div class="lattice-wm-tab-slot" aria-hidden="true"></div>
           <//>
         </div>
-        <${Show} when=${onTabs}>
-          <div class="lattice-wm-tab-slot" aria-hidden="true"></div>
-        <//>
         <button
           class="lattice-wm-add"
           title="open a file here, or start a new one"
@@ -2057,6 +2080,7 @@ export function mountWorkspace(
       onDragStart=${(event) => {
         event.dataTransfer.setData(PANEL_TYPE, panel.id);
         event.dataTransfer.effectAllowed = "move";
+        draggedPanel = panel.id;
       }}
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}

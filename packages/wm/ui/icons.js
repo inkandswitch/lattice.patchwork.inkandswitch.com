@@ -39,6 +39,8 @@ const PATHS = {
   fit: "M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10",
   flip: "M2.5 5.5h10L10 3M13.5 10.5h-10L6 13",
   comment: "M3 3.5h10v7H7.5l-3 2.5v-2.5H3Z",
+  // a pixel grid (patternwitch)
+  grid: "M2.5 2.5h11v11h-11ZM6.17 2.5v11M9.83 2.5v11M2.5 6.17h11M2.5 9.83h11",
   // a telephone's handset, and put down
   phone: "M3.5 2.5H6l1 3-1.5 1a7 7 0 0 0 4 4l1-1.5 3 1V12.5a1 1 0 0 1-1 1A10.5 10.5 0 0 1 2.5 3.5a1 1 0 0 1 1-1Z",
   "hang-up": "M1.8 9.6c3.5-3.3 8.9-3.3 12.4 0l-.9 2-2.6-.5-.4-1.9a6.5 6.5 0 0 0-4.6 0l-.4 1.9-2.6.5Z",

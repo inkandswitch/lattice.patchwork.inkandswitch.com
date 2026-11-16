@@ -140,18 +140,18 @@ export const knitout = {
   },
 
   // a generated .k's line: built just now, out of date, or its .js failed,
-  // only while its .js still writes into it. a .js's says when it failed
+  // only while its .js still writes into it. a .js has none: its editor
+  // says when it failed, and a bar that comes and goes with it jumps
   status(url, api) {
     const doc = linksOf(url, api);
-    const jsUrl = doc.source ?? url;
+    if (!doc.source) return null;
+    const jsUrl = doc.source;
     const build = buildOf(jsUrl, api);
-    const state = doc.source ? buildState(url, api) : build.state === "error" ? "error" : null;
+    const state = buildState(url, api);
     if (!state) return null;
     // a .k that isn't keeping up with its .js: it failed, or it's out of
     // date, or it's building again after failing
-    const stuck =
-      !!doc.source &&
-      (state === "error" || state === "stale" || (state === "running" && !!builds[doc.source]?.failed));
+    const stuck = state === "error" || state === "stale" || (state === "running" && !!builds[jsUrl]?.failed);
     switch (state) {
       case "running":
         return { state, stuck, text: "building…" };
@@ -162,7 +162,7 @@ export const knitout = {
           action: {
             icon: "warning",
             label: build.line != null ? `error on line ${build.line}` : "error",
-            title: `${build.message ?? ""}\n${doc.source ? "show the .js, at that line" : "go to that line"}`,
+            title: `${build.message ?? ""}\nshow the .js, at that line`,
             run: (from) => showError(jsUrl, from, api),
           },
         };
@@ -175,7 +175,7 @@ export const knitout = {
             icon: "rebuild",
             label: "rebuild",
             title: "build it again from its .js",
-            run: () => rebuild(doc.source, url, api),
+            run: () => rebuild(jsUrl, url, api),
           },
         };
       default:

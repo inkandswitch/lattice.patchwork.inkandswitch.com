@@ -371,6 +371,16 @@ function lastKey(nodes, parent) {
   return list.length ? nodes[list.at(-1)].order : null;
 }
 
+// the keys either side of the place just before `beforeId` among `parent`'s
+// children (at the end, with none or one that isn't there), leaving `moving`
+// out of it: anything between them goes there
+function boundsBefore(nodes, parent, beforeId, moving) {
+  const list = (childrenOf(nodes).get(parent) ?? []).filter((id) => id !== moving);
+  const found = beforeId == null ? -1 : list.indexOf(beforeId);
+  const at = found < 0 ? list.length : found;
+  return [at > 0 ? nodes[list[at - 1]].order : null, at < list.length ? nodes[list[at]].order : null];
+}
+
 // put a node last in `parent`
 function append(nodes, id, parent) {
   if (nodes[id].parent === parent) return false;
@@ -525,7 +535,7 @@ const edgeOf = (zone) => (zone === "center" ? "right" : zone);
 // open panels ([{url, tool, patchworkTool?}]) in the group `targetId`: as
 // tabs, or in a new group on one of its edges. with nothing open, they're
 // the whole layout. returns the new panels' ids
-export function openPanels(nodes, targetId, zone, panels) {
+export function openPanels(nodes, targetId, zone, panels, before = null) {
   if (!panels.length) return [];
   panels = panels.map((panel) => ({ ...panel, type: "panel" }));
   return edit(nodes, () => {
@@ -537,7 +547,12 @@ export function openPanels(nodes, targetId, zone, panels) {
       zone = edgeOf(zone);
     }
     if (zone === "center" && nodes[target].type === "group") {
-      return panels.flatMap((panel) => add(nodes, panel, target, between(lastKey(nodes, target), null)).panels);
+      // in among its tabs, before `before` (or after them all), in order
+      let [after, next] = boundsBefore(nodes, target, before, null);
+      return panels.flatMap((panel) => {
+        after = between(after, next);
+        return add(nodes, panel, target, after).panels;
+      });
     }
     const made = addAtTop(nodes, newGroup(panels));
     placeBeside(nodes, made.root, target, edgeOf(zone));
@@ -547,14 +562,21 @@ export function openPanels(nodes, targetId, zone, panels) {
 
 // move a panel into the group `targetId` (zone "center"), or into a new group
 // on one of its edges. a group's only panel moves with its group
-export function movePanel(nodes, panelId, targetId, zone) {
+export function movePanel(nodes, panelId, targetId, zone, before = null) {
   edit(nodes, () => {
     const panel = nodes[panelId];
     const target = groupOrNode(nodes, targetId);
     if (panel?.type !== "panel" || !nodes[target]) return;
     const from = panel.parent;
     if (zone === "center" && nodes[target].type === "group") {
-      if (from !== target) append(nodes, panelId, target);
+      // in among its tabs, before `before` (or after them all). where it
+      // already is, nothing changes
+      const [after, next] = boundsBefore(nodes, target, before, panelId);
+      const there = from === target && (after === null || panel.order > after) && (next === null || panel.order < next);
+      if (!there) {
+        put(panel, "parent", target);
+        put(panel, "order", between(after, next));
+      }
       return;
     }
     if ((childrenOf(nodes).get(from) ?? []).length === 1) {

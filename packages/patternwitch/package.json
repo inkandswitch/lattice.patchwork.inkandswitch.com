@@ -1,0 +1,13 @@
+{
+	"name": "@lattice/patternwitch",
+	"version": "0.0.1",
+	"description": "PatternWitch — a pixel painter for Patchwork (a copy of patchwork-pkg-base's)",
+	"private": true,
+	"type": "module",
+	"main": "patternwitch.js",
+	"exports": "./patternwitch.js",
+	"scripts": {
+		"push": "pushwork sync",
+		"register": "pw-modules add \"$MODULE_SETTINGS_DOC_URL\" \"$(pushwork url)\""
+	}
+}

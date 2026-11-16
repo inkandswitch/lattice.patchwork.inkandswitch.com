@@ -33,6 +33,8 @@ importers:
 
   packages/lattice: {}
 
+  packages/patternwitch: {}
+
   packages/versions:
     dependencies:
       '@automerge/automerge':

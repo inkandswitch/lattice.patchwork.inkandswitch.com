@@ -1,4 +1,4 @@
-import {StateEffect, StateField} from "@codemirror/state"
+import {StateEffect, StateField, Transaction} from "@codemirror/state"
 import {EditorView, Decoration, ViewPlugin, WidgetType} from "@codemirror/view"
 import {icon} from "./icons.js"
 
@@ -139,17 +139,90 @@ const errorLineField = StateField.define({
 
 /**
  * mark the line a run failed on ({line, message}), or clear it (null). it
- * clears itself when the code changes
+ * clears itself when the code changes. it never scrolls: a run follows
+ * typing and pasting, and the editor stays where you are. the status's
+ * line button goes there
  */
 export function showError(view, error) {
-	const effects = [setErrorLine.of(error)]
-	if (error) {
-		const lineNumber = Math.max(1, Math.min(error.line, view.state.doc.lines))
-		effects.push(
-			EditorView.scrollIntoView(view.state.doc.line(lineNumber).from, {y: "nearest"}),
-		)
+	view.dispatch({effects: setErrorLine.of(error)})
+}
+
+/**
+ * text that appears above your caret, and you didn't put there (someone
+ * else's edit, an import dropped in), leaves your caret where it was on the
+ * screen. codemirror on its own keeps the top line still, so text arriving
+ * between the top and the caret pushes the caret down. a caret that's off
+ * the screen is left to codemirror
+ */
+export const keepCaretInPlace = ViewPlugin.fromClass(
+	class {
+		constructor(view) {
+			this.view = view
+			// the caret's top, from the top of the scroller, or null when it's
+			// out of sight
+			this.offset = null
+			this.onScroll = () => this.record()
+			view.scrollDOM.addEventListener("scroll", this.onScroll, {passive: true})
+			view.requestMeasure({key: this, read: () => this.record()})
+		}
+
+		record() {
+			const view = this.view
+			const coords = view.coordsAtPos(view.state.selection.main.head, 1)
+			const top = coords && coords.top - view.scrollDOM.getBoundingClientRect().top
+			this.offset = top != null && top >= 0 && top <= view.scrollDOM.clientHeight ? top : null
+		}
+
+		update(update) {
+			// the doc changed, and nothing moved the caret: it was carried along
+			const carried =
+				update.docChanged && update.transactions.every(tr => !tr.docChanged || !tr.selection)
+			if (carried) {
+				const head = update.startState.selection.main.head
+				let above = false
+				update.changes.iterChangedRanges(fromA => {
+					if (fromA < head) above = true
+				})
+				const offset = this.offset
+				if (above && offset != null) {
+					// (a view can't dispatch while it's updating)
+					queueMicrotask(() => {
+						const view = this.view
+						if (!view.dom.isConnected) return
+						view.dispatch({
+							effects: EditorView.scrollIntoView(view.state.selection.main.head, {
+								y: "start",
+								// codemirror adds its scroll margins on top of this
+								yMargin: Math.max(0, offset - scrollMarginTop(view)),
+							}),
+						})
+					})
+				}
+				return
+			}
+			// your own doing, or the editor resized: where the caret is now.
+			// (the scroll that follows, if any, records it again)
+			if (
+				update.geometryChanged ||
+				update.transactions.some(tr => tr.annotation(Transaction.userEvent) != null)
+			) {
+				update.view.requestMeasure({key: this, read: () => this.record()})
+			}
+		}
+
+		destroy() {
+			this.view.scrollDOM.removeEventListener("scroll", this.onScroll)
+		}
+	},
+)
+
+function scrollMarginTop(view) {
+	let top = 0
+	for (const source of view.state.facet(EditorView.scrollMargins)) {
+		const margins = source(view)
+		if (margins?.top != null) top = Math.max(top, margins.top)
 	}
-	view.dispatch({effects})
+	return top
 }
 
 const knitoutTheme = EditorView.baseTheme({
