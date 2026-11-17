@@ -26,3 +26,10 @@ test("each kind opens in its own editor", () => {
 	assert.equal(toolsFor("yarn")[0].id, "yarn")
 	assert.equal(toolsFor("swatch")[0].id, "swatch")
 })
+
+test("the kniterate editor is offered for a .k only while alt is held", async () => {
+	const {altToolsFor} = await import("../files.js")
+	assert.ok(!toolsFor("k").some(tool => tool.id === "kniterate"))
+	assert.deepEqual(altToolsFor("k").map(tool => tool.id), ["kniterate"])
+	assert.deepEqual(altToolsFor("js"), [])
+})

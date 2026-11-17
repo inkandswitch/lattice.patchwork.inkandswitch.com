@@ -42,11 +42,11 @@ export const TOOLS = {
   kniterate: {
     id: "kniterate",
     name: "kniterate",
-    title: "the passes this .k makes on a Kniterate, drawn the way its editor draws them",
+    title: "the .k as a Kniterate editor draws it, a row a pass: and, if it isn't generated, edit it there",
     position: 3,
     extensions: ["k"],
-    // not offered for now: a pane that already shows it still does
-    offered: false,
+    // only offered while alt is held (and to a pane that shows it already)
+    offered: "alt",
     load: () => import("./kniterate.js"),
   },
   animation: {
@@ -114,9 +114,15 @@ export const TOOLS = {
 };
 
 // (those offered: a tool with offered false is only there for the panes
-// that show it already)
+// that show it already, and one with offered "alt" is offered while alt is
+// held, in altToolsFor)
 export function toolsFor(extension) {
-  return Object.values(TOOLS).filter((tool) => tool.offered !== false && tool.extensions.includes(extension));
+  return Object.values(TOOLS).filter(
+    (tool) => tool.offered !== false && tool.offered !== "alt" && tool.extensions.includes(extension),
+  );
+}
+export function altToolsFor(extension) {
+  return Object.values(TOOLS).filter((tool) => tool.offered === "alt" && tool.extensions.includes(extension));
 }
 
 // for wm: a doc's tools are its kind's. one none of them fits shows with
@@ -124,5 +130,6 @@ export function toolsFor(extension) {
 export const tools = {
   list: Object.values(TOOLS),
   for: (doc) => toolsFor(fileExtension(doc)),
+  alt: (doc) => altToolsFor(fileExtension(doc)),
   extension: fileExtension,
 };

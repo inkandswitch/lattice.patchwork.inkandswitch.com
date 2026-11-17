@@ -33,8 +33,14 @@ export function machineLimits(profiles) {
 }
 // loops on one needle it mightn't clear, knitting them together
 const STACK = 3
-// how long (mm) a float gets before it snags
+// how long (mm) a float gets before it's worth a note
 const FLOAT = 25
+// the kniterate's own limits (support.kniterate.com, "Machine limitations"):
+// floats of at most 6–7 stitches, and at most 2–3 short rows in the middle of
+// a piece (the roller pulls the whole width down together: rows knitted while
+// needles on both sides hold still aren't pulled down, and ride up)
+const FLOAT_STITCHES = 7
+const MIDDLE_ROWS = 3
 // rows the needles beside a held loop can knit before there's no room for
 // them: the held loop's yarn reaches REACH down, and the rows beside it,
 // bunched up as tight as they go, are `squash` of a wale apart. any more and
@@ -109,6 +115,9 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	const gone = new Set() // loops dropped, or unravelled
 	const knitsOn = new Map() // needle key → knits it's done
 	const besideAt = new Map() // loop id → [knits on the needles beside it, when it was made]
+	const knitTimes = new Map() // needle key → the ops that knitted on it, in order
+	const stillSince = new Map() // needle key → the op its loops last came off or onto it
+	const middles = new Map() // "op|op" (when each side was last worked) → its problem
 	const active = new Set()
 	const yarn = new Map() // carrier → {loops (mm of yarn), floats (needles)}
 	// how long each loop's wale is, from the bottom edge up to it (mm, in each
@@ -192,9 +201,70 @@ export function checkKnitout(text, converted = null, settings = {}) {
 		return Math.max((knitsOn.get(bed + (loop.n - 1)) ?? 0) - at[0], (knitsOn.get(bed + (loop.n + 1)) ?? 0) - at[1])
 	}
 
+	// knits on needle `key` after op `since`
+	function knitsSince(key, since) {
+		const times = knitTimes.get(key)
+		if (!times) return 0
+		let lo = 0
+		let hi = times.length
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1
+			if (times[mid] <= since) lo = mid + 1
+			else hi = mid
+		}
+		return times.length - lo
+	}
+
+	// short rows in the middle of a piece: a pass knitting between needles on
+	// its bed, either side, that have loops held still. counted from the later
+	// of the two sides' longest held, so a heel stepping in a needle a row is
+	// caught as surely as one turning at the same two. `knitted`: each bed's
+	// knitting in the pass, {needle (its first), lo, hi, last (op)}
+	let knitted = new Map()
+	function shortInMiddle() {
+		for (const {needle, lo, hi, last} of knitted.values()) {
+			let left = null
+			let right = null
+			for (const [key, held] of machine.held) {
+				if (!held.loops.length || held.needle.back !== needle.back) continue
+				const since = stillSince.get(key)
+				if (since == null) continue
+				if (held.needle.n < lo) {
+					if (!left || since < left.since) left = {key, since}
+				} else if (held.needle.n > hi) {
+					if (!right || since < right.since) right = {key, since}
+				}
+			}
+			if (!left || !right) continue
+			const rows = knitsSince(needle.key, Math.max(left.since, right.since))
+			if (rows <= MIDDLE_ROWS) continue
+			const episode = `${left.since}|${right.since}`
+			const text =
+				`${rows} rows knitted in the middle of the piece while ${left.key} and ${right.key}, either side, were held ` +
+				`(from lines ${ops[left.since].kLine} and ${ops[right.since].kLine}): the kniterate can short row about ${MIDDLE_ROWS} rows in the middle of a piece. ` +
+				`the roller can't pull more down, and they ride up the needles: knit fewer, or knit the held needles in between`
+			const found = middles.get(episode)
+			if (found) {
+				if (rows > found.rows) {
+					found.rows = rows
+					found.problem.text = text
+					found.problem.lastLine = ops[last].kLine
+				}
+				continue
+			}
+			const before = problems.length
+			report("risk", last, text, "middle")
+			if (problems.length > before) middles.set(episode, {rows, problem: problems[problems.length - 1]})
+		}
+		knitted = new Map()
+	}
+
 	ops.forEach((op, i) => {
 		const at = track[i]
-		if (at?.turn != null) pass++
+		if (at?.turn != null) {
+			shortInMiddle()
+			pass++
+		}
 
 		// carriers
 		const name = op.text.split(/\s+/)[0]
@@ -263,13 +333,19 @@ export function checkKnitout(text, converted = null, settings = {}) {
 				if (last) {
 					const gap = Math.abs(across(machine, op.needle) - last.x)
 					usage.floats += Math.max(0, gap - 1)
-					if (gap * pitch > FLOAT && last.dir === (op.dir === "-" ? -1 : 1)) {
-						report(
-							"note",
-							i,
-							`carrier ${c} floats ${gap} needles (${Math.round(gap * pitch)} mm): long floats snag`,
-							"float",
-						)
+					const stitches = gap - 1
+					const mm = Math.round(gap * pitch)
+					if (last.dir === (op.dir === "-" ? -1 : 1)) {
+						if (stitches > FLOAT_STITCHES) {
+							report(
+								"risk",
+								i,
+								`carrier ${c} floats past ${stitches} stitches (${mm} mm): the kniterate manages floats of about ${FLOAT_STITCHES - 1}–${FLOAT_STITCHES}, longer ones catch and snag`,
+								"float",
+							)
+						} else if (gap * pitch > FLOAT) {
+							report("note", i, `carrier ${c} floats past ${stitches} stitches (${mm} mm): long floats snag`, "float")
+						}
 					}
 				}
 				yarn.set(c, usage)
@@ -311,7 +387,25 @@ export function checkKnitout(text, converted = null, settings = {}) {
 			arrive(loop)
 		}
 		if (op.kind === "split") for (const loop of held) arrive(loop)
-		if (op.kind === "knit") knitsOn.set(op.needle.key, (knitsOn.get(op.needle.key) ?? 0) + 1)
+		if (op.kind === "knit") {
+			knitsOn.set(op.needle.key, (knitsOn.get(op.needle.key) ?? 0) + 1)
+			if (!knitTimes.has(op.needle.key)) knitTimes.set(op.needle.key, [])
+			knitTimes.get(op.needle.key).push(i)
+			const bed = op.needle.back ? "b" : "f"
+			const here = knitted.get(bed)
+			if (!here) knitted.set(bed, {needle: op.needle, lo: op.needle.n, hi: op.needle.n, last: i})
+			else {
+				here.lo = Math.min(here.lo, op.needle.n)
+				here.hi = Math.max(here.hi, op.needle.n)
+				here.last = i
+			}
+		}
+		// (a tuck onto loops already there doesn't let them go: a tucked cast-on
+		// starts a hold, a wrap at a short row's turn doesn't end one)
+		if (op.kind === "knit" || op.kind === "drop" || op.kind === "split" || (op.kind === "tuck" && !held.length)) {
+			stillSince.set(op.needle.key, i)
+		}
+		if (op.kind === "split") stillSince.set(op.to.key, i)
 		if (op.kind === "split") {
 			const stacked = machine.held.get(op.to.key)?.loops.length ?? 0
 			if (stacked >= STACK) report("risk", i, `the transfer leaves ${stacked} loops on ${op.to.key}`, "stack")
@@ -340,6 +434,7 @@ export function checkKnitout(text, converted = null, settings = {}) {
 	})
 
 	// at the end
+	shortInMiddle()
 	const ending = ops.length - 1
 	for (const c of active) report("note", ending, `carrier ${c} is still in at the end: take it out`, `still-${c}`)
 	let live = 0

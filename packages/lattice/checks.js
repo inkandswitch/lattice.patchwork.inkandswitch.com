@@ -106,8 +106,9 @@ export function located(handle, op) {
 // same text, when the settings change). given the .k's `handle` (and the
 // tool's `context`), it reads the machine and yarns the .k's knitted with
 // (profiles.js), says which they are, lets them be chosen, and tells
-// `onProfiles(resolved)` whenever they change
-export function checkPanel(stage, onPick, {handle = null, context = {}, onProfiles = null} = {}) {
+// `onProfiles(resolved)` whenever they change. `onResult(result)` hears each
+// check's result, as it's shown (its problems, to draw where they are)
+export function checkPanel(stage, onPick, {handle = null, context = {}, onProfiles = null, onResult = null} = {}) {
 	const checks = checker()
 	let text = null
 	let resolved = null
@@ -443,6 +444,7 @@ export function checkPanel(stage, onPick, {handle = null, context = {}, onProfil
 
 	function show(result) {
 		if (!result) return
+		onResult?.(result)
 		const {problems, width, yarn} = result
 		const count = level => problems.filter(problem => problem.level === level).reduce((sum, p) => sum + p.count, 0)
 		const errors = count("error")

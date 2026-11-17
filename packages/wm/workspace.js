@@ -215,11 +215,12 @@ function cellStyle(node, direction) {
  *   baseRepo   for tools that mustn't be forked into a draft (a terminal:
  *              a terminal shares on the original). repo, if not given
  *   hive       the site's keyhive, if it has one, for new docs
- *   tools      the app's tools: {list, for(doc), extension(doc)?}. `list`
+ *   tools      the app's tools: {list, for(doc), alt(doc)?, extension(doc)?}. `list`
  *              is all of them ({id, name, title, position, load, drafts?,
  *              patchworkId?, was?}: `was` is any ids it had before, which
  *              panes saved then still say); `for` is the ones that show a
- *              doc, the first first; `extension` is what a doc's called as a
+ *              doc, the first first; `alt` the ones a tab's tool menu offers
+ *              too while alt is held; `extension` is what a doc's called as a
  *              file, if not what its name says. a doc none of them shows
  *              shows with patchwork's own tool for it
  *   extensions what the app adds to the panes: [{name, watch, links,
@@ -748,6 +749,7 @@ export function mountWorkspace(
         extension: "",
         type: null,
         tools: [],
+        altTools: [],
         ext: {},
         changes: 0,
       });
@@ -772,6 +774,8 @@ export function mountWorkspace(
               extension,
               type: doc?.["@patchwork"]?.type ?? null,
               tools: toolsOf(doc).map((tool) => tool.id),
+              // (offered only while alt is held)
+              altTools: (tools.alt?.(doc) ?? []).map((tool) => tool.id),
               changes: info.changes + 1,
             });
             for (const extension of extensions) {
@@ -1201,16 +1205,18 @@ export function mountWorkspace(
       .sort((a, b) => (b.id === first) - (a.id === first) || a.name.localeCompare(b.name));
   }
 
-  // [{tool, patchworkTool?, name, title}]
+  // [{tool, patchworkTool?, name, title, alt (offered only while alt is
+  // held)}]
   function toolChoices(url) {
     const info = docInfo(url);
-    return info.tools
+    const alt = new Set(info.altTools ?? []);
+    return [...info.tools, ...alt]
       .map(toolById)
       .filter(Boolean)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .flatMap((tool) => {
         const theirs = tool.id === "patchwork" ? patchworkToolsFor(info.type) : [];
-        if (!theirs.length) return [{ tool: tool.id, name: tool.name, title: tool.title }];
+        if (!theirs.length) return [{ tool: tool.id, name: tool.name, title: tool.title, alt: alt.has(tool.id) }];
         return theirs.map((theirTool) => ({
           tool: tool.id,
           patchworkTool: theirTool.id,
@@ -1260,6 +1266,7 @@ export function mountWorkspace(
 
   function openToolMenu(event, panel, groupId) {
     if (pressedToClose(toolMenu, event.currentTarget)) return;
+    setAltHeld(event.altKey);
     openToolMenuAt(event.currentTarget, panel, groupId);
   }
 
@@ -2280,14 +2287,16 @@ export function mountWorkspace(
   }
 
   function ToolMenu() {
-    const tools = () => {
-      const panel = toolMenuFor()?.panel;
-      return panel ? toolChoices(panel.url) : [];
-    };
     const isChosen = (tool) => {
       const panel = toolMenuFor()?.panel;
       const chosen = panel && shownWith(panel);
       return !!chosen && chosen.tool === tool.tool && chosen.patchworkTool === tool.patchworkTool;
+    };
+    // (one offered only while alt is held, then, or while it's what the
+    // pane shows)
+    const tools = () => {
+      const panel = toolMenuFor()?.panel;
+      return panel ? toolChoices(panel.url).filter((tool) => !tool.alt || altHeld() || isChosen(tool)) : [];
     };
 
     function choose(tool) {

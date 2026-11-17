@@ -13,6 +13,14 @@
 		--kniterate-line: var(--editor-line);
 		--kniterate-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
 		--kniterate-danger: var(--editor-danger-text);
+		--kniterate-risk: var(--studio-warning, #c98a00);
+		/* what each bed does at a needle, as the canvas colours it */
+		--kniterate-knit: oklch(0.66 0.13 150);
+		--kniterate-tuck: oklch(0.76 0.14 85);
+		--kniterate-miss: oklch(0.65 0.01 250);
+		--kniterate-split: oklch(0.6 0.15 310);
+		--kniterate-xfer: oklch(0.6 0.15 250);
+		--kniterate-drop: oklch(0.6 0.19 25);
 		--kniterate-mono: var(--studio-family-code);
 		/* for its canvas (kniterate.js reads them) */
 		--kniterate-highlighter: var(--editor-selection-fill);
@@ -51,6 +59,149 @@
 
 	& .kniterate-spacer {
 		flex: 1;
+	}
+
+	& .kniterate-view {
+		padding: 1px 4px;
+		border: 1px solid var(--kniterate-line);
+		border-radius: 2px;
+		background: var(--kniterate-sheet);
+		color: inherit;
+		font: inherit;
+	}
+
+	/* the editing bar: tools, the stitches to paint, what to do with what's
+	   selected */
+	& .kniterate-edit {
+		display: flex;
+		flex: none;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 12px;
+		padding: 4px 6px;
+		border-bottom: 1px solid var(--kniterate-line-soft);
+		background: var(--kniterate-chrome);
+		color: var(--kniterate-chrome-ink);
+	}
+
+	& .kniterate-tools,
+	& .kniterate-actions {
+		display: flex;
+
+		& .knitout-button + .knitout-button {
+			margin-left: -1px;
+		}
+	}
+
+	& .kniterate-tools .knitout-button[data-on] {
+		background: var(--kniterate-ink);
+		color: var(--kniterate-sheet);
+	}
+
+	& .knitout-button:disabled {
+		opacity: 0.45;
+		cursor: default;
+		translate: none;
+	}
+
+	& .kniterate-palette {
+		display: flex;
+		gap: 2px;
+	}
+
+	& .kniterate-swatch {
+		display: grid;
+		place-items: center;
+		width: 24px;
+		height: 24px;
+		padding: 0;
+		border: 1px solid var(--kniterate-line-soft);
+		border-radius: 2px;
+		background: var(--kniterate-sheet);
+		cursor: pointer;
+
+		& canvas {
+			width: 20px;
+			height: 20px;
+		}
+
+		&[data-on] {
+			border-color: var(--kniterate-ink);
+			box-shadow: 0 0 0 1px var(--kniterate-ink);
+		}
+	}
+
+	/* a .k a pattern writes: read only, with a way to a copy */
+	& .kniterate-readonly {
+		display: flex;
+		flex: none;
+		align-items: center;
+		gap: 10px;
+		padding: 4px 8px;
+		border-bottom: 1px solid var(--kniterate-line-soft);
+		background: var(--kniterate-chrome);
+		color: var(--kniterate-muted);
+		font-size: 11px;
+	}
+
+	/* what the needle under the pointer does, by the pointer */
+	& .kniterate-tooltip {
+		position: absolute;
+		z-index: 2;
+		max-width: 320px;
+		padding: 4px 7px;
+		border: 1px solid var(--kniterate-line);
+		border-radius: 2px;
+		background: var(--kniterate-sheet);
+		box-shadow: 1px 1px 0 var(--kniterate-line);
+		color: var(--kniterate-ink);
+		font: 11px/1.4 var(--kniterate-mono);
+		white-space: pre-wrap;
+		pointer-events: none;
+	}
+
+	/* what the colours mean */
+	& .kniterate-legend {
+		position: absolute;
+		right: 8px;
+		bottom: 26px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+		max-width: 60%;
+		padding: 3px 7px;
+		border: 1px solid var(--kniterate-line-soft);
+		border-radius: 2px;
+		background: color-mix(in oklab, var(--kniterate-sheet) 88%, transparent);
+		color: var(--kniterate-muted);
+		font-size: 10px;
+		pointer-events: none;
+
+		& span {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+
+		& i {
+			width: 9px;
+			height: 9px;
+			border-radius: 1px;
+		}
+	}
+
+	/* a row's option, being typed in over its cell */
+	& .kniterate-option-input {
+		position: absolute;
+		z-index: 3;
+		box-sizing: border-box;
+		padding: 0 3px;
+		border: 1px solid var(--kniterate-accent);
+		border-radius: 0;
+		background: var(--kniterate-sheet);
+		color: var(--kniterate-ink);
+		font: 11px var(--kniterate-mono);
+		outline: none;
 	}
 
 	& .kniterate-sides {
@@ -99,13 +250,22 @@
 		flex: 1 1 auto;
 		min-height: 0;
 
-		& canvas {
+		& > canvas {
 			position: absolute;
 			inset: 0;
 			width: 100%;
 			height: 100%;
 			outline: none;
 			touch-action: none;
+			cursor: default;
+
+			&:is([data-tool="brush"], [data-tool="line"], [data-tool="rect"], [data-tool="eraser"], [data-tool="picker"]) {
+				cursor: crosshair;
+			}
+
+			&:is([data-tool="hand"], [data-panning]) {
+				cursor: grab;
+			}
 		}
 	}
 
@@ -153,9 +313,7 @@
 		overflow: hidden;
 	}
 
-	& [hidden].kniterate-empty,
-	& [hidden].kniterate-error,
-	& [hidden].kniterate-warnings {
+	& [hidden]:is(.kniterate-empty, .kniterate-error, .kniterate-warnings, .kniterate-edit, .kniterate-readonly, .kniterate-tooltip, .kniterate-option-input) {
 		display: none;
 	}
 }
