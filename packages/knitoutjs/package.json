@@ -11,6 +11,6 @@
 		"test": "node --test test/*.test.js"
 	},
 	"devDependencies": {
-		"@automerge/automerge": "3.4.1"
+		"@automerge/automerge": "3.5.0"
 	}
 }

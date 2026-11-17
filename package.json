@@ -3,12 +3,12 @@
 	"type": "module",
 	"private": true,
 	"dependencies": {
-		"@inkandswitch/patchwork": "^0.10.0",
-		"@inkandswitch/patchwork-pkg-base": "^0.0.147"
+		"@inkandswitch/patchwork": "^0.10.1",
+		"@inkandswitch/patchwork-pkg-base": "^0.0.157"
 	},
 	"devDependencies": {
 		"@inkandswitch/patchwork-e2e": "^0.2.4",
-		"vite": "^8.1.5"
+		"vite": "^8.3.8"
 	},
 	"scripts": {
 		"dev": "node scripts/dev.mjs",
