@@ -70,13 +70,21 @@ export function newSettling() {
 		}
 	}
 
-	return {
+	const settling = {
 		// a new .k: what's settled is forgotten
 		load(newOps, newCarriers) {
 			ops = newOps ?? []
 			carriers = newCarriers ?? []
 			restart()
 			rewound = undefined
+		},
+		// a message, as the settler sends them: {type: "load", gen, ops,
+		// carriers} (no answer), or {type: "step", gen, request}, answered
+		// {gen, answer}
+		handle(message) {
+			if (message.type === "load") settling.load(message.ops, message.carriers)
+			else if (message.type === "step") return {gen: message.gen, answer: settling.step(message.request)}
+			return null
 		},
 		step({upTo, rewind = 0, budget = Infinity, gap = 0, inflate = 0, squash, grab = null, size: args = null}) {
 			const to = Math.max(0, Math.min(ops.length, Math.floor(upTo)))
@@ -94,4 +102,5 @@ export function newSettling() {
 			return answer(moved)
 		},
 	}
+	return settling
 }

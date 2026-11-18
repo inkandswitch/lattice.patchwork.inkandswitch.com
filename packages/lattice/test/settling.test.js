@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {apply, newMachine, readKnitout} from "../knitting.js"
 import {newFabric, relax, sizer, strain} from "../loopsim.js"
 import {newSettling, sizeArgs} from "../settling.js"
+import {settler} from "../settler.js"
 
 // a little jersey: cast on with tucks, then rows of knit, both ways
 function jersey(needles = 8, rows = 6) {
@@ -104,4 +105,103 @@ test("sizes go over as json, and come back to the same sizer", () => {
 	const args = sizeArgs(settings, null)
 	assert.equal(typeof args, "string")
 	assert.equal(sizer(JSON.parse(args)).key, sizer(settings).key)
+})
+
+// ── the settler: no Worker in node, so it settles on the page, through the
+// same messages the worker has
+
+const tick = () => new Promise(resolve => setTimeout(resolve, 5))
+function watched(options) {
+	let resolve = () => {}
+	const s = settler({...options, onUpdate: () => resolve()})
+	s.next = () => new Promise(r => (resolve = r))
+	return s
+}
+
+test("the settler answers, and says so", async () => {
+	const knitout = jersey()
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	assert.equal(s.fabric.count, 0)
+	const coming = s.next()
+	assert.equal(s.settle(request(knitout.ops.length)), true)
+	await coming
+	assert.equal(s.fabric.count, direct(knitout, knitout.ops.length).machine.loops.length)
+	s.destroy()
+})
+
+test("settled, and asked the same, the settler stops asking", async () => {
+	const knitout = jersey()
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	let asked = 0
+	while (s.settle(request(knitout.ops.length))) {
+		assert.ok(++asked < 50, "still asking") // (z eases a step an answer: a few)
+		await s.next()
+	}
+	let updates = 0
+	s.onUpdate = () => updates++
+	await tick()
+	assert.equal(updates, 0)
+	assert.equal(s.settle(request(knitout.ops.length)), false)
+	s.destroy()
+})
+
+test("an answer from before a new .k is dropped", async () => {
+	const big = jersey(8, 6)
+	const small = jersey(4, 2)
+	const s = watched()
+	s.load(big.ops, big.carriers)
+	s.settle(request(big.ops.length))
+	s.load(small.ops, small.carriers)
+	await tick()
+	assert.equal(s.fabric.count, 0)
+	const coming = s.next()
+	assert.equal(s.settle(request(small.ops.length)), true)
+	await coming
+	assert.equal(s.fabric.count, direct(small, small.ops.length).machine.loops.length)
+	s.destroy()
+})
+
+test("asked again while it's settling, it asks once the answer's in", async () => {
+	const knitout = jersey()
+	const half = Math.floor(knitout.ops.length / 2)
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	const first = s.next()
+	s.settle(request(half))
+	assert.equal(s.settle(request(knitout.ops.length)), true)
+	await first
+	assert.equal(s.fabric.upTo, half)
+	const second = s.next()
+	assert.equal(s.settle(request(knitout.ops.length)), true)
+	await second
+	assert.equal(s.fabric.upTo, knitout.ops.length)
+	s.destroy()
+})
+
+test("a rewind goes over with the next request", async () => {
+	const knitout = jersey()
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	let coming = s.next()
+	s.settle(request(knitout.ops.length))
+	await coming
+	s.rewind()
+	coming = s.next()
+	assert.equal(s.settle(request(knitout.ops.length)), true)
+	await coming
+	s.destroy()
+})
+
+test("with a limit, it stops asking after so many", async () => {
+	const knitout = jersey()
+	const s = watched({limit: 0})
+	s.load(knitout.ops, knitout.carriers)
+	const coming = s.next()
+	s.settle(request(knitout.ops.length, {budget: 0}))
+	await coming
+	assert.ok(s.fabric.moved > 0.01, "it settled at once: the limit's not tried")
+	assert.equal(s.settle(request(knitout.ops.length, {budget: 0})), false)
+	s.destroy()
 })
