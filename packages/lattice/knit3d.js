@@ -641,6 +641,9 @@ export default function Knit3dTool(handle, element, context = {}) {
 	const mesh = new Mesh()
 	function build(budget) {
 		settler.settle({upTo: done, budget: budget * settings.speed, gap: GAP, inflate: round, squash: settings.squash, size: loopSize})
+		// (nothing for this .k yet, or from further on than it's got to: what
+		// was drawn stays, till there is)
+		if (!settler.ready) return
 		fabric = settler.fabric
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
@@ -868,6 +871,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 		cameraFrame = 0
 	}
 	function moveCamera(goal, duration = CAMERA_MOVE) {
+		fitting = false
 		stopCamera()
 		if (duration <= 0 || lessMotion()) {
 			Object.assign(camera, goal, {target: [...goal.target]})
@@ -990,6 +994,10 @@ export default function Knit3dTool(handle, element, context = {}) {
 	function show() {
 		runTo(upTo)
 		build(playing ? PLAYING_BUDGET : STILL_BUDGET)
+		if (fitting && settler.ready && fabric.count) {
+			fitting = false
+			resetCamera()
+		}
 		draw()
 		scrubber.max = String(knitout.ops.length)
 		scrubber.value = String(upTo)
@@ -1046,6 +1054,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 
 	let drag = null
 	function onPointerDown(event) {
+		fitting = false
 		stopCamera()
 		canvas.setPointerCapture(event.pointerId)
 		drag = {x: event.clientX, y: event.clientY, pan: event.shiftKey || event.button !== 0}
@@ -1072,6 +1081,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 	}
 	function onWheel(event) {
 		event.preventDefault()
+		fitting = false
 		stopCamera()
 		camera.distance = Math.max(2, Math.min(800, camera.distance * Math.exp(event.deltaY * 0.0015)))
 		draw()
@@ -1142,6 +1152,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 
 	let timer = null
 	let fitted = false
+	let fitting = false // (the first fit's waiting for the fabric, unless the camera's moved first)
 	// (the knitout as last read: a change to the .k that isn't to its text,
 	// its yarns, say, leaves the fabric as it is)
 	let readText = null
@@ -1163,10 +1174,10 @@ export default function Knit3dTool(handle, element, context = {}) {
 		}
 		show()
 		panel.check(readText)
+		// (framed on the fabric once there's some to frame: see show)
 		if (!fitted && knitout.ops.length) {
 			fitted = true
-			resetCamera()
-			draw()
+			fitting = true
 		}
 		// someone's, from before it had anything to show it on
 		applyTheirs()

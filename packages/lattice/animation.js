@@ -313,6 +313,9 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// latest answer, which may be a loop or two behind the machine)
 	const settler = newSettler({onUpdate: () => requestFrame()})
 	let fabric = NO_FABRIC
+	// (a new .k's loops aren't the last one's: till it's settled, the canvas
+	// stays as it was, and then it's all where it's settled at once)
+	let snap = false
 	let index = 0 // the next op to do
 	let progress = 0 // how far through it, 0–1
 	let playing = false
@@ -448,6 +451,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// was pulled through (or, on the far bed, the arc of its loop's head),
 	// batched into one path for each yarn at each depth
 	function drawFabric() {
+		// (a new .k, not settled yet: what was drawn stays, till it is)
+		if (snap) return
 		const ratio = devicePixelRatio || 1
 		const width = Math.round(size.width * ratio)
 		const height = Math.round(size.height * ratio)
@@ -492,10 +497,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		}
 		const usual = near ? sum / near : 0
 		const layer = usual > BULGING ? (2 * usual) / DEPTHS : DEPTH
+		// (a loop on a needle is drawn there, not here: the fabric may be from
+		// before it was, after a seek back)
+		const onNeedles = new Set()
+		for (const held of machine.held.values()) for (const loop of held.loops) onNeedles.add(loop.id)
 		for (let id = first; id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
-			if (!(x > left && x < right && y > top && y < bottom)) continue
+			if (!(x > left && x < right && y > top && y < bottom) || onNeedles.has(id)) continue
 			const loop = loops[id]
 			const far = loop.back !== back
 			const pulled = showStrain ? Math.round((fabric.strain[id] ?? 0) * 3) : 0
@@ -561,8 +570,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// for a frame for each)
 	function settle(budget) {
 		settler.settle({upTo: index, budget: budget * settings.speed, squash: settings.squash, grab: pulledTo(), size: loopSize})
+		// (nothing for this .k yet, or from further on than it's got to: what
+		// was drawn stays, till there is)
+		if (!settler.ready) return false
 		fabric = settler.fabric
-		return syncFabric(false)
+		const instant = snap
+		snap = false
+		return syncFabric(instant)
 	}
 
 	// where the loop being pulled on is held: under the pointer (wherever the
@@ -605,9 +619,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function drawAll() {
 		layers.backLoops.replaceChildren()
 		layers.frontLoops.replaceChildren()
-		shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
 		loopElements.clear()
-		syncFabric(true)
+		// (what's shown stays where it was, and goes to where it's settled)
+		if (settler.ready && !snap) syncFabric(false)
+		else for (const key of machine.held.keys()) drawHeld(key)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
 	}
 
@@ -961,7 +976,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function seek(to) {
 		const target = Math.max(0, Math.min(knitout.ops.length, to))
 		machine = newMachine()
-		settler.rewind()
 		for (let i = 0; i < target; i++) apply(machine, knitout.ops[i], i, yarnOf)
 		index = target
 		progress = 0
@@ -1248,7 +1262,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		readText = text
 		knitout = readKnitout(text)
 		settler.load(knitout.ops, knitout.carriers)
-		fabric = NO_FABRIC
+		snap = true
 		track = carriageTrack(knitout.ops)
 		empty.hidden = knitout.ops.length > 0
 		const [problem] = knitout.problems

@@ -6,7 +6,9 @@ import {newSettling} from "./settling.js"
 // either way). the view says where it's got to and how it wants it settled
 // each frame (`settle`), and draws `fabric`, the latest answer: a frame or
 // so behind, and so only ever as many loops as it has (`count`), which may be
-// fewer than the view's machine has made
+// fewer than the view's machine has made. while it isn't `ready` (nothing's
+// answered for this .k yet, or the answer's from further on than the view
+// has got to: it's gone back) the view keeps what it last drew
 //
 // it asks one thing at a time: when the request's changed since it last
 // asked, or the last answer still moved (more than MOVED; at most `limit`
@@ -30,7 +32,7 @@ export const NO_FABRIC = Object.freeze({
 
 export function settler({onUpdate = () => {}, limit = Infinity} = {}) {
 	let gen = 0 // which .k: a later load's answers are the only ones taken
-	let rewinds = 0
+	let upTo = 0 // where the view last said it was
 	let loaded = {type: "load", gen, ops: [], carriers: []}
 	let fabric = NO_FABRIC
 	let waiting = false
@@ -82,6 +84,9 @@ export function settler({onUpdate = () => {}, limit = Infinity} = {}) {
 		get fabric() {
 			return fabric
 		},
+		get ready() {
+			return fabric !== NO_FABRIC && fabric.upTo <= upTo
+		},
 		// a new .k: nothing's settled on it yet
 		load(ops, carriers) {
 			gen++
@@ -89,14 +94,11 @@ export function settler({onUpdate = () => {}, limit = Infinity} = {}) {
 			loaded = {type: "load", gen, ops, carriers}
 			send(loaded)
 		},
-		// start the machine again at the next request, as a seek does
-		rewind() {
-			rewinds++
-		},
-		// be at `request.upTo`, settled as it says (see settling.js, but for
-		// `rewind`, which is rewind()'s): whether an answer's on its way
+		// be at `request.upTo`, settled as it says (see settling.js): whether
+		// an answer's on its way
 		settle(request) {
-			const json = JSON.stringify([gen, rewinds, request])
+			upTo = request.upTo
+			const json = JSON.stringify([gen, request])
 			const changed = json !== asked
 			if (changed) follows = 0
 			const more = changed || (fabric.moved > MOVED && follows < limit)
@@ -104,7 +106,7 @@ export function settler({onUpdate = () => {}, limit = Infinity} = {}) {
 				if (!changed) follows++
 				asked = json
 				waiting = true
-				send({type: "step", gen, request: {...request, rewind: rewinds}})
+				send({type: "step", gen, request})
 			}
 			return waiting
 		},

@@ -9,10 +9,9 @@ import {firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
 // joins which: a loop's the same loop on both, its number the order it was
 // made in
 //
-// a request: {upTo (the ops done), rewind (a count: when it changes, the
-// machine starts again, as a seek does), budget (ms to settle for; Infinity,
-// till it's settled), gap, inflate, squash, grab (as relax has them), size
-// (sizeArgs's json)}
+// a request: {upTo (the ops done: fewer than last time, and the machine
+// starts again), budget (ms to settle for; Infinity, till it's settled), gap,
+// inflate, squash, grab (as relax has them), size (sizeArgs's json)}
 //
 // an answer: {upTo, count, xs, ys, zs, slack, pinned, strain (each loop's,
 // as loopsim's strain has it), moved (as relax returns it)}, each array
@@ -34,7 +33,7 @@ export function newSettling() {
 	let machine = newMachine()
 	let fabric = newFabric()
 	let done = 0
-	let rewound
+	let fresh = true // (nothing's laid out yet: the next step's a jump)
 	let sized = null
 	let size = sizer()
 	const yarnOf = name => Math.max(0, carriers.indexOf(name)) % 6
@@ -43,6 +42,7 @@ export function newSettling() {
 		machine = newMachine()
 		fabric = newFabric()
 		done = 0
+		fresh = true
 	}
 
 	function sizeOf(args) {
@@ -76,7 +76,6 @@ export function newSettling() {
 			ops = newOps ?? []
 			carriers = newCarriers ?? []
 			restart()
-			rewound = undefined
 		},
 		// a message, as the settler sends them: {type: "load", gen, ops,
 		// carriers} (no answer), or {type: "step", gen, request}, answered
@@ -86,14 +85,12 @@ export function newSettling() {
 			else if (message.type === "step") return {gen: message.gen, answer: settling.step(message.request)}
 			return null
 		},
-		step({upTo, rewind = 0, budget = Infinity, gap = 0, inflate = 0, squash, grab = null, size: args = null}) {
+		step({upTo, budget = Infinity, gap = 0, inflate = 0, squash, grab = null, size: args = null}) {
 			const to = Math.max(0, Math.min(ops.length, Math.floor(upTo)))
-			// (a seek, or back: from nothing, and laid out at once)
-			const jump = rewind !== rewound || to < done
-			if (jump) {
-				restart()
-				rewound = rewind
-			}
+			// (back: from nothing; and from nothing, laid out at once)
+			if (to < done) restart()
+			const jump = fresh
+			fresh = false
 			for (; done < to; done++) apply(machine, ops[done], done, yarnOf)
 			const options = {gap, inflate, squash, grab, size: sizeOf(args)}
 			let moved = jump ? relax(fabric, machine, 0, options) : 0

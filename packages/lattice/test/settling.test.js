@@ -19,7 +19,7 @@ function jersey(needles = 8, rows = 6) {
 	return readKnitout(lines.join("\n"))
 }
 
-const request = (upTo, more = {}) => ({upTo, rewind: 0, budget: Infinity, gap: 0, inflate: 0, squash: 0.3, size: sizeArgs({}, null), grab: null, ...more})
+const request = (upTo, more = {}) => ({upTo, budget: Infinity, gap: 0, inflate: 0, squash: 0.3, size: sizeArgs({}, null), grab: null, ...more})
 
 // what the views did themselves: the ops on a machine, then a jump's
 // relax, then relaxed till it's settled
@@ -67,16 +67,6 @@ test("going back to an earlier op is the same as going there fresh", () => {
 	assert.deepEqual([...back.ys], [...there.ys])
 })
 
-test("a rewind starts the machine again, even at the same op", () => {
-	const knitout = jersey()
-	const settling = newSettling()
-	settling.load(knitout.ops, knitout.carriers)
-	const first = settling.step(request(knitout.ops.length))
-	const again = settling.step(request(knitout.ops.length, {rewind: 1}))
-	assert.equal(again.count, first.count)
-	assert.deepEqual([...again.xs], [...first.xs])
-})
-
 test("a new .k starts from nothing", () => {
 	const big = jersey(8, 6)
 	const small = jersey(4, 2)
@@ -96,7 +86,7 @@ test("the answer's arrays are its own, not the fabric's", () => {
 	settling.load(knitout.ops, knitout.carriers)
 	const answer = settling.step(request(knitout.ops.length))
 	const xs = [...answer.xs]
-	settling.step(request(knitout.ops.length, {rewind: 1, squash: 0.1}))
+	settling.step(request(knitout.ops.length, {squash: 0.1}))
 	assert.deepEqual([...answer.xs], xs)
 })
 
@@ -180,20 +170,6 @@ test("asked again while it's settling, it asks once the answer's in", async () =
 	s.destroy()
 })
 
-test("a rewind goes over with the next request", async () => {
-	const knitout = jersey()
-	const s = watched()
-	s.load(knitout.ops, knitout.carriers)
-	let coming = s.next()
-	s.settle(request(knitout.ops.length))
-	await coming
-	s.rewind()
-	coming = s.next()
-	assert.equal(s.settle(request(knitout.ops.length)), true)
-	await coming
-	s.destroy()
-})
-
 test("with a limit, it stops asking after so many", async () => {
 	const knitout = jersey()
 	const s = watched({limit: 0})
@@ -203,5 +179,51 @@ test("with a limit, it stops asking after so many", async () => {
 	await coming
 	assert.ok(s.fabric.moved > 0.01, "it settled at once: the limit's not tried")
 	assert.equal(s.settle(request(knitout.ops.length, {budget: 0})), false)
+	s.destroy()
+})
+
+test("a new .k's settler isn't ready till it's answered", async () => {
+	const knitout = jersey()
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	assert.equal(s.ready, false)
+	const coming = s.next()
+	s.settle(request(knitout.ops.length))
+	assert.equal(s.ready, false)
+	await coming
+	assert.equal(s.ready, true)
+	s.load(knitout.ops, knitout.carriers)
+	assert.equal(s.ready, false)
+	s.destroy()
+})
+
+test("an answer for an op later than the one asked for isn't ready", async () => {
+	const knitout = jersey()
+	const half = Math.floor(knitout.ops.length / 2)
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	let coming = s.next()
+	s.settle(request(knitout.ops.length))
+	await coming
+	assert.equal(s.ready, true)
+	coming = s.next()
+	s.settle(request(half))
+	assert.equal(s.ready, false, "the fabric's from further on than the view's machine")
+	await coming
+	assert.equal(s.ready, true)
+	assert.equal(s.fabric.upTo, half)
+	s.destroy()
+})
+
+test("an answer for an earlier op than asked is ready: it's behind, not wrong", async () => {
+	const knitout = jersey()
+	const half = Math.floor(knitout.ops.length / 2)
+	const s = watched()
+	s.load(knitout.ops, knitout.carriers)
+	const coming = s.next()
+	s.settle(request(half))
+	await coming
+	s.settle(request(knitout.ops.length))
+	assert.equal(s.ready, true)
 	s.destroy()
 })
