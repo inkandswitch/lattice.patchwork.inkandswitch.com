@@ -79,8 +79,12 @@ export function generateTopology(
   let nextLoopId = 0;
 
   // ── Initialise: pre-populate the front bed with one loop per needle ──────
-  for (let n = 0; n < width; n++) {
-    frontBed[n] = [{ id: nextLoopId++ }];
+  // (lattice: unless the program starts from empty needles, castOn: false, as
+  // a .k does)
+  if (program.castOn !== false) {
+    for (let n = 0; n < width; n++) {
+      frontBed[n] = [{ id: nextLoopId++ }];
+    }
   }
 
   // ── Process each program row ─────────────────────────────────────────────

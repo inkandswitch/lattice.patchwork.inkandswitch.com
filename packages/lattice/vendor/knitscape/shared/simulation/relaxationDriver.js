@@ -1,7 +1,5 @@
-import { noodleRenderer } from "./renderer.js";
+import { createNoodleRenderer } from "./renderer.js";
 import { DEFAULT_RELAX_SETTINGS } from "./types.js";
-
-const renderer = noodleRenderer;
 
 /**
  * Owns the relaxation worker and the render loop for one piece of geometry.
@@ -30,14 +28,15 @@ export function createRelaxationDriver(initialGeometry, options) {
   let pendingStart = false;
   let geometryDirty = false;
 
+  // (lattice: its own renderer, and its worker made as the page wants:
+  // `createWorker(url)`, a module worker by default)
+  const renderer = createNoodleRenderer();
   renderer.init(geometry.yarnData, canvas, options.resetCamera ?? true);
 
-  const worker = new Worker(
-    new URL("./relaxation.worker.ts", import.meta.url),
-    {
-      type: "module",
-    },
-  );
+  const workerUrl = new URL("./relaxation.worker.js", import.meta.url);
+  const worker = options.createWorker
+    ? options.createWorker(workerUrl)
+    : new Worker(workerUrl, { type: "module" });
 
   const send = (msg, transfer) => {
     worker.postMessage(msg, transfer ?? []);
@@ -128,6 +127,7 @@ export function createRelaxationDriver(initialGeometry, options) {
 
   function terminate() {
     worker.terminate();
+    renderer.destroy();
   }
 
   return {

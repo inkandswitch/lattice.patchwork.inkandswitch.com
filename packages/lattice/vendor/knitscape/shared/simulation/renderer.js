@@ -1,5 +1,9 @@
 import { buildYarnCurveInto } from "./spline.js";
-import { bbox3d, initShaderProgram, resizeCanvasToDisplaySize } from "./webgl.js";
+import {
+  bbox3d,
+  initShaderProgram,
+  resizeCanvasToDisplaySize,
+} from "./webgl.js";
 import { createCamera3D } from "./camera.js";
 import { Mat4 } from "../mat4.js";
 import { createFiberRenderer, fiberStyle } from "./fiber.js";
@@ -282,553 +286,583 @@ const JOIN_INSTANCE_GEO = new Float32Array([0, 0, 1, 0, 0, 1]);
 const SHADOW_SIZE = 2048;
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
-let gl;
-let camera;
-let lastBbox;
-let segmentProgram, joinProgram, segmentDepthProgram, joinDepthProgram;
-let shadowFB, shadowTexture;
-let shadowViewMatrix, shadowProjectionMatrix;
-// Direction toward the light (world space). A directional light shades the
-// whole fabric evenly regardless of its size; a nearby point light would
-// graze across large pieces and shade one side differently from the other.
-const LIGHT_DIR = normalize3([-1, 1, 4]);
+// (lattice: a renderer for each canvas, where knitscape has one, as the
+// module; its state is the closure's)
+export function createNoodleRenderer() {
+  let gl;
+  let camera;
+  let lastBbox;
+  let segmentProgram, joinProgram, segmentDepthProgram, joinDepthProgram;
+  let shadowFB, shadowTexture;
+  let shadowViewMatrix, shadowProjectionMatrix;
+  // Direction toward the light (world space). A directional light shades the
+  // whole fabric evenly regardless of its size; a nearby point light would
+  // graze across large pieces and shade one side differently from the other.
+  const LIGHT_DIR = normalize3([-1, 1, 4]);
 
-// Segment instance geometry VAO (shared, non-instanced part)
-let segmentGeoBuffer, joinGeoBuffer;
+  // Segment instance geometry VAO (shared, non-instanced part)
+  let segmentGeoBuffer, joinGeoBuffer;
 
-// Per-yarn data
-let yarns = [];
+  // Per-yarn data
+  let yarns = [];
 
-// Fibre-level drawing (fiber.ts), in place of the toon strips when on. Its
-// yarns are rebuilt from the toon centerlines whenever those were replaced or
-// moved while it was off.
-// Frames are only drawn when something in them changed: the camera, the canvas,
-// the yarn or a setting. Otherwise the canvas keeps showing the last one. The
-// shadow map depends only on the yarn and the light, so moving the camera
-// doesn't redraw it either.
-let sceneChanged = true;
-let shadowStale = true;
-let lastView = null;
-let lastAspect = 0;
+  // Fibre-level drawing (fiber.ts), in place of the toon strips when on. Its
+  // yarns are rebuilt from the toon centerlines whenever those were replaced or
+  // moved while it was off.
+  // Frames are only drawn when something in them changed: the camera, the canvas,
+  // the yarn or a setting. Otherwise the canvas keeps showing the last one. The
+  // shadow map depends only on the yarn and the light, so moving the camera
+  // doesn't redraw it either.
+  let sceneChanged = true;
+  let shadowStale = true;
+  let lastView = null;
+  let lastAspect = 0;
 
-let fiberMode = false;
-let fiber = null;
-let fiberStale = true;
-// Rebuilding the fibre frames of a whole garment takes a while, so while the
-// yarn is moving they catch up at most a third of the time; the latest
-// position is always drawn once it stops.
-let fiberMoved = false;
-let fiberUpdateMs = 0;
-let fiberUpdatedAt = 0;
+  let fiberMode = false;
+  let fiber = null;
+  let fiberStale = true;
+  // Rebuilding the fibre frames of a whole garment takes a while, so while the
+  // yarn is moving they catch up at most a third of the time; the latest
+  // position is always drawn once it stops.
+  let fiberMoved = false;
+  let fiberUpdateMs = 0;
+  let fiberUpdatedAt = 0;
 
-// Screen-space ambient occlusion over either renderer (ambientOcclusion.ts).
-let ao = null;
-const aoSettings = { ...DEFAULT_AO };
+  // Screen-space ambient occlusion over either renderer (ambientOcclusion.ts).
+  let ao = null;
+  const aoSettings = { ...DEFAULT_AO };
 
-function setAmbientOcclusion(settings) {
-  Object.assign(aoSettings, settings);
-  sceneChanged = true;
-}
-
-function setFiberMode(on) {
-  if (on !== fiberMode) sceneChanged = shadowStale = true;
-  fiberMode = on;
-}
-
-/** Change fibre settings; they show on the next frame. */
-function setFiberStyle(style) {
-  // The sample spacing is baked into each yarn's frames when it is built.
-  if (style.spacing !== undefined && style.spacing !== fiberStyle.spacing)
-    fiberStale = true;
-  Object.assign(fiberStyle, style);
-  // Plies, twist and spacing change what casts shadows.
-  sceneChanged = shadowStale = true;
-}
-
-function fiberFrame(viewMatrix, projMatrix) {
-  if (!fiber) fiber = createFiberRenderer(gl);
-  if (fiberStale) {
-    fiber.setYarns(
-      yarns.map((yarn) => ({
-        dense: yarn.splinePts,
-        radius: yarn.diameter / 2,
-        color: yarn.color,
-      })),
-    );
-    fiberStale = false;
-    fiberMoved = false;
-    shadowStale = true;
-  } else if (
-    fiberMoved &&
-    performance.now() - fiberUpdatedAt >= 2 * fiberUpdateMs
-  ) {
-    const start = performance.now();
-    fiber.update(yarns.map((yarn) => yarn.splinePts));
-    fiberUpdatedAt = performance.now();
-    fiberUpdateMs = fiberUpdatedAt - start;
-    fiberMoved = false;
-    shadowStale = true;
-  }
-  return {
-    viewMatrix,
-    projMatrix,
-    shadowViewMatrix,
-    shadowProjectionMatrix,
-    shadowSize: SHADOW_SIZE,
-    lightDir: LIGHT_DIR,
-  };
-}
-
-function setupShadowFramebuffer() {
-  shadowTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    SHADOW_SIZE,
-    SHADOW_SIZE,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    null,
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-  const depthRB = gl.createRenderbuffer();
-  gl.bindRenderbuffer(gl.RENDERBUFFER, depthRB);
-  gl.renderbufferStorage(
-    gl.RENDERBUFFER,
-    gl.DEPTH_COMPONENT16,
-    SHADOW_SIZE,
-    SHADOW_SIZE,
-  );
-
-  shadowFB = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFB);
-  gl.framebufferTexture2D(
-    gl.FRAMEBUFFER,
-    gl.COLOR_ATTACHMENT0,
-    gl.TEXTURE_2D,
-    shadowTexture,
-    0,
-  );
-  gl.framebufferRenderbuffer(
-    gl.FRAMEBUFFER,
-    gl.DEPTH_ATTACHMENT,
-    gl.RENDERBUFFER,
-    depthRB,
-  );
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-}
-
-function buildSegmentVAO(splinePts, yarnBuffer) {
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-
-  // Non-instanced: quad geometry (position, vec2)
-  gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
-  const posLoc = gl.getAttribLocation(segmentProgram.program, "position");
-  gl.enableVertexAttribArray(posLoc);
-  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-  // Instanced: pointA and pointB from yarn buffer
-  gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
-  const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
-
-  const pointALoc = gl.getAttribLocation(segmentProgram.program, "pointA");
-  gl.enableVertexAttribArray(pointALoc);
-  gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
-  gl.vertexAttribDivisor(pointALoc, 1);
-
-  const pointBLoc = gl.getAttribLocation(segmentProgram.program, "pointB");
-  gl.enableVertexAttribArray(pointBLoc);
-  gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
-  gl.vertexAttribDivisor(pointBLoc, 1);
-
-  gl.bindVertexArray(null);
-  return vao;
-}
-
-function buildSegmentDepthVAO(yarnBuffer) {
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
-  const posLoc = gl.getAttribLocation(segmentDepthProgram.program, "position");
-  gl.enableVertexAttribArray(posLoc);
-  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
-  const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
-
-  const pointALoc = gl.getAttribLocation(segmentDepthProgram.program, "pointA");
-  gl.enableVertexAttribArray(pointALoc);
-  gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
-  gl.vertexAttribDivisor(pointALoc, 1);
-
-  const pointBLoc = gl.getAttribLocation(segmentDepthProgram.program, "pointB");
-  gl.enableVertexAttribArray(pointBLoc);
-  gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
-  gl.vertexAttribDivisor(pointBLoc, 1);
-
-  gl.bindVertexArray(null);
-  return vao;
-}
-
-function buildJoinVAO(yarnBuffer) {
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
-  const posLoc = gl.getAttribLocation(joinProgram.program, "position");
-  gl.enableVertexAttribArray(posLoc);
-  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
-  const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
-
-  const pointALoc = gl.getAttribLocation(joinProgram.program, "pointA");
-  gl.enableVertexAttribArray(pointALoc);
-  gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
-  gl.vertexAttribDivisor(pointALoc, 1);
-
-  const pointBLoc = gl.getAttribLocation(joinProgram.program, "pointB");
-  gl.enableVertexAttribArray(pointBLoc);
-  gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
-  gl.vertexAttribDivisor(pointBLoc, 1);
-
-  const pointCLoc = gl.getAttribLocation(joinProgram.program, "pointC");
-  gl.enableVertexAttribArray(pointCLoc);
-  gl.vertexAttribPointer(pointCLoc, 3, gl.FLOAT, false, stride, 2 * stride);
-  gl.vertexAttribDivisor(pointCLoc, 1);
-
-  gl.bindVertexArray(null);
-  return vao;
-}
-
-function buildJoinDepthVAO(yarnBuffer) {
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
-  const posLoc = gl.getAttribLocation(joinDepthProgram.program, "position");
-  gl.enableVertexAttribArray(posLoc);
-  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
-  const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
-
-  const pointALoc = gl.getAttribLocation(joinDepthProgram.program, "pointA");
-  gl.enableVertexAttribArray(pointALoc);
-  gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
-  gl.vertexAttribDivisor(pointALoc, 1);
-
-  const pointBLoc = gl.getAttribLocation(joinDepthProgram.program, "pointB");
-  gl.enableVertexAttribArray(pointBLoc);
-  gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
-  gl.vertexAttribDivisor(pointBLoc, 1);
-
-  const pointCLoc = gl.getAttribLocation(joinDepthProgram.program, "pointC");
-  gl.enableVertexAttribArray(pointCLoc);
-  gl.vertexAttribPointer(pointCLoc, 3, gl.FLOAT, false, stride, 2 * stride);
-  gl.vertexAttribDivisor(pointCLoc, 1);
-
-  gl.bindVertexArray(null);
-  return vao;
-}
-
-function normalize3(v) {
-  const len = Math.hypot(v[0], v[1], v[2]);
-  return [v[0] / len, v[1] / len, v[2] / len];
-}
-
-function computeLightMatrices(bbox) {
-  // Shadow camera sits back along LIGHT_DIR, far enough to clear the scene.
-  const lightTarget = bbox.center;
-  const reach = Math.hypot(
-    bbox.xMax - bbox.xMin,
-    bbox.yMax - bbox.yMin,
-    bbox.zMax - bbox.zMin,
-  );
-  const lightPos = lightTarget.map((c, i) => c + LIGHT_DIR[i] * reach);
-  const lightCameraMatrix = Mat4.lookAt(lightPos, lightTarget, [0, 1, 0]);
-  shadowViewMatrix = Mat4.inverse(lightCameraMatrix);
-
-  // Fit the ortho frustum tightly around the scene bbox in light space, so
-  // the shadow map's 2048² texels are spent entirely on visible geometry.
-  const corners = [
-    [bbox.xMin, bbox.yMin, bbox.zMin, 1],
-    [bbox.xMax, bbox.yMin, bbox.zMin, 1],
-    [bbox.xMin, bbox.yMax, bbox.zMin, 1],
-    [bbox.xMax, bbox.yMax, bbox.zMin, 1],
-    [bbox.xMin, bbox.yMin, bbox.zMax, 1],
-    [bbox.xMax, bbox.yMin, bbox.zMax, 1],
-    [bbox.xMin, bbox.yMax, bbox.zMax, 1],
-    [bbox.xMax, bbox.yMax, bbox.zMax, 1],
-  ];
-
-  let minX = Infinity,
-    maxX = -Infinity;
-  let minY = Infinity,
-    maxY = -Infinity;
-  let minZ = Infinity,
-    maxZ = -Infinity;
-  for (const c of corners) {
-    const v = Mat4.transformVector(shadowViewMatrix, c);
-    if (v[0] < minX) minX = v[0];
-    if (v[0] > maxX) maxX = v[0];
-    if (v[1] < minY) minY = v[1];
-    if (v[1] > maxY) maxY = v[1];
-    if (v[2] < minZ) minZ = v[2];
-    if (v[2] > maxZ) maxZ = v[2];
+  function setAmbientOcclusion(settings) {
+    Object.assign(aoSettings, settings);
+    sceneChanged = true;
   }
 
-  const padX = (maxX - minX) * 0.05;
-  const padY = (maxY - minY) * 0.05;
-  const padZ = (maxZ - minZ) * 0.05;
+  function setFiberMode(on) {
+    if (on !== fiberMode) sceneChanged = shadowStale = true;
+    fiberMode = on;
+  }
 
-  shadowProjectionMatrix = Mat4.orthographic(
-    minX - padX,
-    maxX + padX,
-    minY - padY,
-    maxY + padY,
-    -maxZ - padZ,
-    -minZ + padZ,
-  );
-}
+  /** Change fibre settings; they show on the next frame. */
+  function setFiberStyle(style) {
+    // The sample spacing is baked into each yarn's frames when it is built.
+    if (style.spacing !== undefined && style.spacing !== fiberStyle.spacing)
+      fiberStale = true;
+    Object.assign(fiberStyle, style);
+    // Plies, twist and spacing change what casts shadows.
+    sceneChanged = shadowStale = true;
+  }
 
-function init(yarnData, canvas, resetCamera = true) {
-  if (!gl || gl.canvas !== canvas) {
-    gl = canvas.getContext("webgl2");
-    fiber = null;
-    ao = null;
-    if (!gl) {
-      console.error("Unable to create WebGL2 context");
-      return;
+  function fiberFrame(viewMatrix, projMatrix) {
+    if (!fiber) fiber = createFiberRenderer(gl);
+    if (fiberStale) {
+      fiber.setYarns(
+        yarns.map((yarn) => ({
+          dense: yarn.splinePts,
+          radius: yarn.diameter / 2,
+          color: yarn.color,
+        })),
+      );
+      fiberStale = false;
+      fiberMoved = false;
+      shadowStale = true;
+    } else if (
+      fiberMoved &&
+      performance.now() - fiberUpdatedAt >= 2 * fiberUpdateMs
+    ) {
+      const start = performance.now();
+      fiber.update(yarns.map((yarn) => yarn.splinePts));
+      fiberUpdatedAt = performance.now();
+      fiberUpdateMs = fiberUpdatedAt - start;
+      fiberMoved = false;
+      shadowStale = true;
     }
-    gl.clearColor(0.1, 0.1, 0.1, 1);
-
-    segmentProgram = initShaderProgram(gl, segmentVertexShader, fragmentShader);
-    joinProgram = initShaderProgram(gl, joinVertexShader, fragmentShader);
-    segmentDepthProgram = initShaderProgram(
-      gl,
-      segmentDepthVertex,
-      depthFragment,
-    );
-    joinDepthProgram = initShaderProgram(gl, joinDepthVertex, depthFragment);
-
-    // Shared instance geometry buffers
-    segmentGeoBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, SEGMENT_INSTANCE_GEO, gl.STATIC_DRAW);
-
-    joinGeoBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, JOIN_INSTANCE_GEO, gl.STATIC_DRAW);
-
-    setupShadowFramebuffer();
-
-    camera = createCamera3D();
-    camera.attach(canvas);
+    return {
+      viewMatrix,
+      projMatrix,
+      shadowViewMatrix,
+      shadowProjectionMatrix,
+      shadowSize: SHADOW_SIZE,
+      lightDir: LIGHT_DIR,
+    };
   }
 
-  lastBbox = bbox3d(yarnData[0].pts);
-  if (resetCamera)
-    camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
-  computeLightMatrices(lastBbox);
+  function setupShadowFramebuffer() {
+    shadowTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGBA,
+      SHADOW_SIZE,
+      SHADOW_SIZE,
+      0,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      null,
+    );
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-  yarns = [];
-  fiberStale = true;
-  sceneChanged = shadowStale = true;
+    const depthRB = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, depthRB);
+    gl.renderbufferStorage(
+      gl.RENDERBUFFER,
+      gl.DEPTH_COMPONENT16,
+      SHADOW_SIZE,
+      SHADOW_SIZE,
+    );
 
-  yarnData.forEach((yarn) => {
-    if (yarn.pts.length < 6) return;
-
-    const splinePts = buildYarnCurveInto(yarn.pts, 12, 0);
-    const segmentCount = splinePts.length / 3 - 1;
-    const joinCount = splinePts.length / 3 - 2;
-
-    const yarnBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, splinePts, gl.DYNAMIC_DRAW);
-
-    yarns.push({
-      segmentVAO: buildSegmentVAO(splinePts, yarnBuffer),
-      joinVAO: buildJoinVAO(yarnBuffer),
-      segmentDepthVAO: buildSegmentDepthVAO(yarnBuffer),
-      joinDepthVAO: buildJoinDepthVAO(yarnBuffer),
-      segmentCount,
-      joinCount,
-      yarnBuffer,
-      splinePts,
-      color: yarn.color,
-      diameter: yarn.diameter,
-    });
-  });
-}
-
-function setMainUniforms(program, viewMatrix, projMatrix, color, diameter) {
-  const u = program.uniformLocations;
-  gl.useProgram(program.program);
-  gl.uniformMatrix4fv(u.modelMatrix, false, IDENTITY);
-  gl.uniformMatrix4fv(u.modelViewMatrix, false, viewMatrix);
-  gl.uniformMatrix4fv(u.projectionMatrix, false, projMatrix);
-  gl.uniformMatrix4fv(u.shadowViewMatrix, false, shadowViewMatrix);
-  gl.uniformMatrix4fv(u.shadowProjectionMatrix, false, shadowProjectionMatrix);
-  gl.uniform1f(u.uWidth, diameter);
-  gl.uniform3fv(u.uColor, color);
-  gl.uniform3fv(u.uLightDir, LIGHT_DIR);
-  gl.uniform1f(u.uViewportHeight, gl.canvas.height);
-}
-
-function setDepthUniforms(program, viewMatrix, projMatrix, diameter) {
-  const u = program.uniformLocations;
-  gl.useProgram(program.program);
-  gl.uniformMatrix4fv(u.modelViewMatrix, false, viewMatrix);
-  gl.uniformMatrix4fv(u.projectionMatrix, false, projMatrix);
-  gl.uniform1f(u.uWidth, diameter);
-}
-
-function draw() {
-  if (!gl) return;
-  const resized = resizeCanvasToDisplaySize(gl.canvas);
-
-  const canvas = gl.canvas;
-  const aspect = canvas.clientWidth / canvas.clientHeight;
-  const viewMatrix = camera.viewMatrix;
-  if (
-    !sceneChanged &&
-    !resized &&
-    viewMatrix === lastView &&
-    aspect === lastAspect
-  )
-    return;
-  sceneChanged = false;
-  lastView = viewMatrix;
-  lastAspect = aspect;
-  const projMatrix = camera.projection(aspect);
-
-  const frame = fiberMode ? fiberFrame(viewMatrix, projMatrix) : null;
-  // Fibre frames still catching up with the yarn: come back next frame.
-  if (fiberMoved) sceneChanged = true;
-
-  if (shadowStale) {
-    shadowStale = false;
-    // Shadow pass — render depth into shadowFB
+    shadowFB = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFB);
-    gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      shadowTexture,
+      0,
+    );
+    gl.framebufferRenderbuffer(
+      gl.FRAMEBUFFER,
+      gl.DEPTH_ATTACHMENT,
+      gl.RENDERBUFFER,
+      depthRB,
+    );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  function buildSegmentVAO(splinePts, yarnBuffer) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    // Non-instanced: quad geometry (position, vec2)
+    gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
+    const posLoc = gl.getAttribLocation(segmentProgram.program, "position");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    // Instanced: pointA and pointB from yarn buffer
+    gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
+    const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
+
+    const pointALoc = gl.getAttribLocation(segmentProgram.program, "pointA");
+    gl.enableVertexAttribArray(pointALoc);
+    gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribDivisor(pointALoc, 1);
+
+    const pointBLoc = gl.getAttribLocation(segmentProgram.program, "pointB");
+    gl.enableVertexAttribArray(pointBLoc);
+    gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
+    gl.vertexAttribDivisor(pointBLoc, 1);
+
+    gl.bindVertexArray(null);
+    return vao;
+  }
+
+  function buildSegmentDepthVAO(yarnBuffer) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
+    const posLoc = gl.getAttribLocation(
+      segmentDepthProgram.program,
+      "position",
+    );
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
+    const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
+
+    const pointALoc = gl.getAttribLocation(
+      segmentDepthProgram.program,
+      "pointA",
+    );
+    gl.enableVertexAttribArray(pointALoc);
+    gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribDivisor(pointALoc, 1);
+
+    const pointBLoc = gl.getAttribLocation(
+      segmentDepthProgram.program,
+      "pointB",
+    );
+    gl.enableVertexAttribArray(pointBLoc);
+    gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
+    gl.vertexAttribDivisor(pointBLoc, 1);
+
+    gl.bindVertexArray(null);
+    return vao;
+  }
+
+  function buildJoinVAO(yarnBuffer) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
+    const posLoc = gl.getAttribLocation(joinProgram.program, "position");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
+    const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
+
+    const pointALoc = gl.getAttribLocation(joinProgram.program, "pointA");
+    gl.enableVertexAttribArray(pointALoc);
+    gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribDivisor(pointALoc, 1);
+
+    const pointBLoc = gl.getAttribLocation(joinProgram.program, "pointB");
+    gl.enableVertexAttribArray(pointBLoc);
+    gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
+    gl.vertexAttribDivisor(pointBLoc, 1);
+
+    const pointCLoc = gl.getAttribLocation(joinProgram.program, "pointC");
+    gl.enableVertexAttribArray(pointCLoc);
+    gl.vertexAttribPointer(pointCLoc, 3, gl.FLOAT, false, stride, 2 * stride);
+    gl.vertexAttribDivisor(pointCLoc, 1);
+
+    gl.bindVertexArray(null);
+    return vao;
+  }
+
+  function buildJoinDepthVAO(yarnBuffer) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
+    const posLoc = gl.getAttribLocation(joinDepthProgram.program, "position");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
+    const stride = 3 * Float32Array.BYTES_PER_ELEMENT;
+
+    const pointALoc = gl.getAttribLocation(joinDepthProgram.program, "pointA");
+    gl.enableVertexAttribArray(pointALoc);
+    gl.vertexAttribPointer(pointALoc, 3, gl.FLOAT, false, stride, 0);
+    gl.vertexAttribDivisor(pointALoc, 1);
+
+    const pointBLoc = gl.getAttribLocation(joinDepthProgram.program, "pointB");
+    gl.enableVertexAttribArray(pointBLoc);
+    gl.vertexAttribPointer(pointBLoc, 3, gl.FLOAT, false, stride, stride);
+    gl.vertexAttribDivisor(pointBLoc, 1);
+
+    const pointCLoc = gl.getAttribLocation(joinDepthProgram.program, "pointC");
+    gl.enableVertexAttribArray(pointCLoc);
+    gl.vertexAttribPointer(pointCLoc, 3, gl.FLOAT, false, stride, 2 * stride);
+    gl.vertexAttribDivisor(pointCLoc, 1);
+
+    gl.bindVertexArray(null);
+    return vao;
+  }
+
+  function normalize3(v) {
+    const len = Math.hypot(v[0], v[1], v[2]);
+    return [v[0] / len, v[1] / len, v[2] / len];
+  }
+
+  function computeLightMatrices(bbox) {
+    // Shadow camera sits back along LIGHT_DIR, far enough to clear the scene.
+    const lightTarget = bbox.center;
+    const reach = Math.hypot(
+      bbox.xMax - bbox.xMin,
+      bbox.yMax - bbox.yMin,
+      bbox.zMax - bbox.zMin,
+    );
+    const lightPos = lightTarget.map((c, i) => c + LIGHT_DIR[i] * reach);
+    const lightCameraMatrix = Mat4.lookAt(lightPos, lightTarget, [0, 1, 0]);
+    shadowViewMatrix = Mat4.inverse(lightCameraMatrix);
+
+    // Fit the ortho frustum tightly around the scene bbox in light space, so
+    // the shadow map's 2048² texels are spent entirely on visible geometry.
+    const corners = [
+      [bbox.xMin, bbox.yMin, bbox.zMin, 1],
+      [bbox.xMax, bbox.yMin, bbox.zMin, 1],
+      [bbox.xMin, bbox.yMax, bbox.zMin, 1],
+      [bbox.xMax, bbox.yMax, bbox.zMin, 1],
+      [bbox.xMin, bbox.yMin, bbox.zMax, 1],
+      [bbox.xMax, bbox.yMin, bbox.zMax, 1],
+      [bbox.xMin, bbox.yMax, bbox.zMax, 1],
+      [bbox.xMax, bbox.yMax, bbox.zMax, 1],
+    ];
+
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minY = Infinity,
+      maxY = -Infinity;
+    let minZ = Infinity,
+      maxZ = -Infinity;
+    for (const c of corners) {
+      const v = Mat4.transformVector(shadowViewMatrix, c);
+      if (v[0] < minX) minX = v[0];
+      if (v[0] > maxX) maxX = v[0];
+      if (v[1] < minY) minY = v[1];
+      if (v[1] > maxY) maxY = v[1];
+      if (v[2] < minZ) minZ = v[2];
+      if (v[2] > maxZ) maxZ = v[2];
+    }
+
+    const padX = (maxX - minX) * 0.05;
+    const padY = (maxY - minY) * 0.05;
+    const padZ = (maxZ - minZ) * 0.05;
+
+    shadowProjectionMatrix = Mat4.orthographic(
+      minX - padX,
+      maxX + padX,
+      minY - padY,
+      maxY + padY,
+      -maxZ - padZ,
+      -minZ + padZ,
+    );
+  }
+
+  function init(yarnData, canvas, resetCamera = true) {
+    if (!gl || gl.canvas !== canvas) {
+      gl = canvas.getContext("webgl2");
+      fiber = null;
+      ao = null;
+      if (!gl) {
+        console.error("Unable to create WebGL2 context");
+        return;
+      }
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+
+      segmentProgram = initShaderProgram(
+        gl,
+        segmentVertexShader,
+        fragmentShader,
+      );
+      joinProgram = initShaderProgram(gl, joinVertexShader, fragmentShader);
+      segmentDepthProgram = initShaderProgram(
+        gl,
+        segmentDepthVertex,
+        depthFragment,
+      );
+      joinDepthProgram = initShaderProgram(gl, joinDepthVertex, depthFragment);
+
+      // Shared instance geometry buffers
+      segmentGeoBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, segmentGeoBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, SEGMENT_INSTANCE_GEO, gl.STATIC_DRAW);
+
+      joinGeoBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, joinGeoBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, JOIN_INSTANCE_GEO, gl.STATIC_DRAW);
+
+      setupShadowFramebuffer();
+
+      camera = createCamera3D();
+      camera.attach(canvas);
+    }
+
+    lastBbox = bbox3d(yarnData[0].pts);
+    if (resetCamera)
+      camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
+    computeLightMatrices(lastBbox);
+
+    yarns = [];
+    fiberStale = true;
+    sceneChanged = shadowStale = true;
+
+    yarnData.forEach((yarn) => {
+      if (yarn.pts.length < 6) return;
+
+      const splinePts = buildYarnCurveInto(yarn.pts, 12, 0);
+      const segmentCount = splinePts.length / 3 - 1;
+      const joinCount = splinePts.length / 3 - 2;
+
+      const yarnBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, yarnBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, splinePts, gl.DYNAMIC_DRAW);
+
+      yarns.push({
+        segmentVAO: buildSegmentVAO(splinePts, yarnBuffer),
+        joinVAO: buildJoinVAO(yarnBuffer),
+        segmentDepthVAO: buildSegmentDepthVAO(yarnBuffer),
+        joinDepthVAO: buildJoinDepthVAO(yarnBuffer),
+        segmentCount,
+        joinCount,
+        yarnBuffer,
+        splinePts,
+        color: yarn.color,
+        diameter: yarn.diameter,
+      });
+    });
+  }
+
+  function setMainUniforms(program, viewMatrix, projMatrix, color, diameter) {
+    const u = program.uniformLocations;
+    gl.useProgram(program.program);
+    gl.uniformMatrix4fv(u.modelMatrix, false, IDENTITY);
+    gl.uniformMatrix4fv(u.modelViewMatrix, false, viewMatrix);
+    gl.uniformMatrix4fv(u.projectionMatrix, false, projMatrix);
+    gl.uniformMatrix4fv(u.shadowViewMatrix, false, shadowViewMatrix);
+    gl.uniformMatrix4fv(
+      u.shadowProjectionMatrix,
+      false,
+      shadowProjectionMatrix,
+    );
+    gl.uniform1f(u.uWidth, diameter);
+    gl.uniform3fv(u.uColor, color);
+    gl.uniform3fv(u.uLightDir, LIGHT_DIR);
+    gl.uniform1f(u.uViewportHeight, gl.canvas.height);
+  }
+
+  function setDepthUniforms(program, viewMatrix, projMatrix, diameter) {
+    const u = program.uniformLocations;
+    gl.useProgram(program.program);
+    gl.uniformMatrix4fv(u.modelViewMatrix, false, viewMatrix);
+    gl.uniformMatrix4fv(u.projectionMatrix, false, projMatrix);
+    gl.uniform1f(u.uWidth, diameter);
+  }
+
+  function draw() {
+    if (!gl) return;
+    const resized = resizeCanvasToDisplaySize(gl.canvas);
+
+    const canvas = gl.canvas;
+    const aspect = canvas.clientWidth / canvas.clientHeight;
+    const viewMatrix = camera.viewMatrix;
+    if (
+      !sceneChanged &&
+      !resized &&
+      viewMatrix === lastView &&
+      aspect === lastAspect
+    )
+      return;
+    sceneChanged = false;
+    lastView = viewMatrix;
+    lastAspect = aspect;
+    const projMatrix = camera.projection(aspect);
+
+    const frame = fiberMode ? fiberFrame(viewMatrix, projMatrix) : null;
+    // Fibre frames still catching up with the yarn: come back next frame.
+    if (fiberMoved) sceneChanged = true;
+
+    if (shadowStale) {
+      shadowStale = false;
+      // Shadow pass — render depth into shadowFB
+      gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFB);
+      gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.POLYGON_OFFSET_FILL);
+      gl.polygonOffset(4.0, 8.0);
+
+      if (frame) {
+        fiber.drawDepth(frame);
+      } else {
+        for (const yarn of yarns) {
+          setDepthUniforms(
+            segmentDepthProgram,
+            shadowViewMatrix,
+            shadowProjectionMatrix,
+            yarn.diameter,
+          );
+          gl.bindVertexArray(yarn.segmentDepthVAO);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, yarn.segmentCount);
+
+          setDepthUniforms(
+            joinDepthProgram,
+            shadowViewMatrix,
+            shadowProjectionMatrix,
+            yarn.diameter,
+          );
+          gl.bindVertexArray(yarn.joinDepthVAO);
+          gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
+        }
+      }
+
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+    }
+
+    // Main pass, into the occlusion's target when it is on.
+    if (!ao) ao = createAmbientOcclusion(gl);
+    Object.assign(ao.settings, aoSettings);
+    const occluded = ao.begin(window.devicePixelRatio || 1);
+    if (!occluded) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.enable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
-    gl.enable(gl.POLYGON_OFFSET_FILL);
-    gl.polygonOffset(4.0, 8.0);
 
-    if (frame) {
-      fiber.drawDepth(frame);
-    } else {
-      for (const yarn of yarns) {
-        setDepthUniforms(
-          segmentDepthProgram,
-          shadowViewMatrix,
-          shadowProjectionMatrix,
-          yarn.diameter,
-        );
-        gl.bindVertexArray(yarn.segmentDepthVAO);
-        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, yarn.segmentCount);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
 
-        setDepthUniforms(
-          joinDepthProgram,
-          shadowViewMatrix,
-          shadowProjectionMatrix,
-          yarn.diameter,
-        );
-        gl.bindVertexArray(yarn.joinDepthVAO);
-        gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
-      }
+    if (frame) fiber.draw(frame);
+    else drawToon(viewMatrix, projMatrix);
+
+    if (occluded) ao.finish(projMatrix);
+  }
+
+  function drawToon(viewMatrix, projMatrix) {
+    for (const yarn of yarns) {
+      setMainUniforms(
+        segmentProgram,
+        viewMatrix,
+        projMatrix,
+        yarn.color,
+        yarn.diameter,
+      );
+      gl.uniform1i(segmentProgram.uniformLocations.tShadow, 0);
+      gl.bindVertexArray(yarn.segmentVAO);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, yarn.segmentCount);
+
+      setMainUniforms(
+        joinProgram,
+        viewMatrix,
+        projMatrix,
+        yarn.color,
+        yarn.diameter,
+      );
+      gl.uniform1i(joinProgram.uniformLocations.tShadow, 0);
+      gl.bindVertexArray(yarn.joinVAO);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
     }
 
-    gl.disable(gl.POLYGON_OFFSET_FILL);
+    gl.bindVertexArray(null);
   }
 
-  // Main pass, into the occlusion's target when it is on.
-  if (!ao) ao = createAmbientOcclusion(gl);
-  Object.assign(ao.settings, aoSettings);
-  const occluded = ao.begin(window.devicePixelRatio || 1);
-  if (!occluded) gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
-  gl.disable(gl.CULL_FACE);
-
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, shadowTexture);
-
-  if (frame) fiber.draw(frame);
-  else drawToon(viewMatrix, projMatrix);
-
-  if (occluded) ao.finish(projMatrix);
-}
-
-function drawToon(viewMatrix, projMatrix) {
-  for (const yarn of yarns) {
-    setMainUniforms(
-      segmentProgram,
-      viewMatrix,
-      projMatrix,
-      yarn.color,
-      yarn.diameter,
-    );
-    gl.uniform1i(segmentProgram.uniformLocations.tShadow, 0);
-    gl.bindVertexArray(yarn.segmentVAO);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, yarn.segmentCount);
-
-    setMainUniforms(
-      joinProgram,
-      viewMatrix,
-      projMatrix,
-      yarn.color,
-      yarn.diameter,
-    );
-    gl.uniform1i(joinProgram.uniformLocations.tShadow, 0);
-    gl.bindVertexArray(yarn.joinVAO);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 3, yarn.joinCount);
+  function updateYarnGeometry(yarnData) {
+    yarnData.forEach((yarn, i) => {
+      if (!yarns[i]) return;
+      buildYarnCurveInto(yarn.pts, 12, 0.5, yarns[i].splinePts);
+      gl.bindBuffer(gl.ARRAY_BUFFER, yarns[i].yarnBuffer);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, yarns[i].splinePts);
+    });
+    sceneChanged = true;
+    if (fiberMode && fiber && !fiberStale) fiberMoved = true;
+    else {
+      fiberStale = true;
+      shadowStale = true;
+    }
   }
 
-  gl.bindVertexArray(null);
-}
-
-function updateYarnGeometry(yarnData) {
-  yarnData.forEach((yarn, i) => {
-    if (!yarns[i]) return;
-    buildYarnCurveInto(yarn.pts, 12, 0.5, yarns[i].splinePts);
-    gl.bindBuffer(gl.ARRAY_BUFFER, yarns[i].yarnBuffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, yarns[i].splinePts);
-  });
-  sceneChanged = true;
-  if (fiberMode && fiber && !fiberStale) fiberMoved = true;
-  else {
-    fiberStale = true;
-    shadowStale = true;
+  function fitCamera() {
+    if (camera && lastBbox) {
+      const canvas = gl.canvas;
+      camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
+    }
   }
-}
 
-function fitCamera() {
-  if (camera && lastBbox) {
-    const canvas = gl.canvas;
-    camera.fit(lastBbox, canvas.clientWidth / canvas.clientHeight);
+  // (lattice: the camera's listeners off, and the context let go)
+  function destroy() {
+    if (!gl) return;
+    camera?.detach(gl.canvas);
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    gl = null;
   }
-}
 
-export const noodleRenderer = {
-  draw,
-  init,
-  updateYarnGeometry,
-  fitCamera,
-  setFiberMode,
-  setFiberStyle,
-  setAmbientOcclusion,
-};
+  return {
+    draw,
+    init,
+    updateYarnGeometry,
+    fitCamera,
+    setFiberMode,
+    setFiberStyle,
+    setAmbientOcclusion,
+    destroy,
+  };
+}

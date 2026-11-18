@@ -51,6 +51,7 @@ export function simulate(program, options) {
     canvas: options.canvas,
     resetCamera: options.resetCamera,
     relaxSettings: options.relaxSettings,
+    createWorker: options.createWorker,
   });
 
   function setMaxStitch(n) {

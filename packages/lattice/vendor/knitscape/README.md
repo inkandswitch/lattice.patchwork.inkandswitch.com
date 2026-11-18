@@ -19,3 +19,10 @@ what lattice changed, besides imports (`@shared/…` to relative paths, with
   it loads, `Path2D`s, which a worker hasn't got)
 - `shared/simulation/fiber.js`: `FiberYarn`'s constructor assigns `gl` and
   `radius` itself (typescript's parameter properties don't strip)
+- `knitbit/simulation/topology.js`: a program with `castOn: false` starts
+  from empty needles (hers always has a loop on every front needle to start)
+- `shared/simulation/renderer.js`: `createNoodleRenderer()`, a renderer for
+  each canvas (hers is the module's, one a page), with a `destroy()`
+- `shared/simulation/relaxationDriver.js`: a renderer of its own, and the
+  worker made by `options.createWorker(url)` if it's given (lattice's
+  `moduleWorker`, for when the package is from another origin)
