@@ -1,7 +1,9 @@
 import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
+import {WALE, firstLoop} from "./loopsim.js"
+import {NO_FABRIC, settler as newSettler} from "./settler.js"
+import {sizeArgs} from "./settling.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
@@ -24,8 +26,8 @@ const GAP = 0.32 // each bed's fabric, either side of the middle
 const NEEDLE = 6 // a needle's length, down its bed
 const SLOPE = Math.SQRT1_2 // the beds lean 45° away from the gap
 const BED_MARGIN = Math.ceil(OVERRUN + 6)
-// frames the fabric gets to settle in, after a jump; and how long it gets to
-// settle each frame (ms), playing or not
+// answers the fabric gets to settle in, after a jump; and how long it gets to
+// settle for each (ms), playing or not
 const SETTLE = 150
 const PLAYING_BUDGET = 6
 const STILL_BUDGET = 14
@@ -610,7 +612,10 @@ export default function Knit3dTool(handle, element, context = {}) {
 	let knitout = {ops: [], carriers: [], problems: [], range: [0, 20]}
 	let track = []
 	let machine = newMachine()
-	let fabric = newFabric()
+	// (settled off the page's thread: see settler.js. what's drawn is its
+	// latest answer, which may be a loop or two behind the machine)
+	const settler = newSettler({onUpdate: () => refresh(), limit: SETTLE})
+	let fabric = NO_FABRIC
 	let done = 0 // ops done to the machine
 	let upTo = 0 // ops the picture shows
 	let playing = false
@@ -622,7 +627,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 		const to = Math.max(0, Math.min(knitout.ops.length, Math.floor(target)))
 		if (to < done) {
 			machine = newMachine()
-			fabric = newFabric()
 			done = 0
 		}
 		for (; done < to; done++) apply(machine, knitout.ops[done], done, yarnOf)
@@ -636,11 +640,11 @@ export default function Knit3dTool(handle, element, context = {}) {
 	// however far they've gone
 	const mesh = new Mesh()
 	function build(budget) {
-		const until = performance.now() + budget * settings.speed
-		const moved = relax(fabric, machine, Infinity, {gap: GAP, inflate: round, until, squash: settings.squash, size: loopSize})
+		settler.settle({upTo: done, budget: budget * settings.speed, gap: GAP, inflate: round, squash: settings.squash, size: loopSize})
+		fabric = settler.fabric
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
-		const count = loops.length
+		const count = Math.min(loops.length, fabric.count)
 		// (only the loops relax lays out: the newest rows, when there are more)
 		const start = firstLoop(machine)
 		const next = new Int32Array(count).fill(-1)
@@ -737,7 +741,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			const yarn = palette.yarns[loop.yarn] ?? palette.yarns[0]
 			let [colour, colour2 = colour] = yarn.colours
 			if (strainBox.checked) {
-				const pulled = strain(fabric, i)
+				const pulled = fabric.strain[i]
 				colour = colour.map((value, k) => value + (palette.danger[k] - value) * pulled)
 				colour2 = colour2.map((value, k) => value + (palette.danger[k] - value) * pulled)
 			}
@@ -795,7 +799,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 		gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
 		gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices.subarray(0, mesh.indexCount), gl.DYNAMIC_DRAW)
 		indexCount = mesh.indexCount
-		return moved
 	}
 
 	// the two beds, leaning away from the gap, their needles' hooks at the
@@ -982,13 +985,11 @@ export default function Knit3dTool(handle, element, context = {}) {
 	let dirty = false
 	let playhead = 0 // where playing's got to, between ops
 
-	// the fabric settles over a few frames after a jump (at most SETTLE)
-	let settling = 0
+	// (the fabric settles over a few answers after a jump, at most SETTLE: each
+	// answer that comes is drawn, see the settler's onUpdate)
 	function show() {
 		runTo(upTo)
-		const moved = build(playing ? PLAYING_BUDGET : STILL_BUDGET)
-		settling = moved > 0.01 && settling < SETTLE ? settling + 1 : 0
-		if (settling) refresh()
+		build(playing ? PLAYING_BUDGET : STILL_BUDGET)
 		draw()
 		scrubber.max = String(knitout.ops.length)
 		scrubber.value = String(upTo)
@@ -1114,11 +1115,10 @@ export default function Knit3dTool(handle, element, context = {}) {
 	// (and the machine and yarns the .k's knitted with, as the check finds them)
 	let settings = readSettings()
 	let profiles = null
-	let loopSize = sizer(settings)
+	let loopSize = sizeArgs(settings, null)
 	function onSettings() {
 		settings = readSettings()
-		loopSize = sizer({...settings, profiles})
-		settling = 0
+		loopSize = sizeArgs(settings, profiles)
 		refresh()
 	}
 	function onProfiles(resolved) {
@@ -1151,7 +1151,8 @@ export default function Knit3dTool(handle, element, context = {}) {
 		knitout = readKnitout(readText)
 		track = carriageTrack(knitout.ops)
 		machine = newMachine()
-		fabric = newFabric()
+		settler.load(knitout.ops, knitout.carriers)
+		fabric = NO_FABRIC
 		done = 0
 		upTo = wasEnd ? knitout.ops.length : Math.min(upTo, knitout.ops.length)
 		empty.hidden = knitout.ops.length > 0
@@ -1255,6 +1256,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 	reread()
 
 	return () => {
+		settler.destroy()
 		view?.stop()
 		stopCamera()
 		clearTimeout(soon)

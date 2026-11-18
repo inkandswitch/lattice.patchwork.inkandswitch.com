@@ -1,7 +1,9 @@
 import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText, knitoutOf} from "./files.js"
-import {WALE, firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
+import {WALE, firstLoop} from "./loopsim.js"
+import {NO_FABRIC, settler as newSettler} from "./settler.js"
+import {sizeArgs} from "./settling.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
@@ -307,7 +309,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	let knitout = {ops: [], carriers: [], problems: [], range: [0, 20]}
 	let track = [] // the carriage's run, op by op
 	let machine = newMachine()
-	let fabric = newFabric()
+	// (settled off the page's thread: see settler.js. what's drawn is its
+	// latest answer, which may be a loop or two behind the machine)
+	const settler = newSettler({onUpdate: () => requestFrame()})
+	let fabric = NO_FABRIC
 	let index = 0 // the next op to do
 	let progress = 0 // how far through it, 0–1
 	let playing = false
@@ -385,7 +390,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		held.loops.forEach((loop, at) => {
 			const path = group.children[at]
 			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
-			const pulled = strainBox.checked ? Math.round(strain(fabric, loop.id) * 3) : 0
+			const pulled = strainBox.checked ? Math.round((fabric.strain[loop.id] ?? 0) * 3) : 0
 			const className = `loop y${shownYarn(loop)}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
 			if (pathData.get(path) === d + className) return
 			pathData.set(path, d + className)
@@ -401,7 +406,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function syncFabric(instant) {
 		const count = machine.loops.length
 		if (shown.xs.length < count) {
-			const length = Math.max(1024, fabric.xs.length)
+			const length = Math.max(1024, count, fabric.xs.length)
 			const grown = {xs: new Float32Array(length).fill(NaN), ys: new Float32Array(length).fill(NaN)}
 			grown.xs.set(shown.xs)
 			grown.ys.set(shown.ys)
@@ -410,7 +415,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const {xs, ys} = shown
 		let unsettled = false
 		for (let id = firstLoop(machine); id < count; id++) {
-			if (fabric.pinned[id]) {
+			// (on a needle, or not settled yet)
+			if (id >= fabric.count || fabric.pinned[id]) {
 				xs[id] = NaN
 				continue
 			}
@@ -492,7 +498,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (!(x > left && x < right && y > top && y < bottom)) continue
 			const loop = loops[id]
 			const far = loop.back !== back
-			const pulled = showStrain ? Math.round(strain(fabric, id) * 3) : 0
+			const pulled = showStrain ? Math.round((fabric.strain[id] ?? 0) * 3) : 0
 			const depth = Math.max(0, Math.min(DEPTHS - 1, Math.floor(nearness(id) / layer)))
 			const marked = loop.op === pointing ? marks : pulled ? marks + pulled : null
 			const path = paths[marked ?? (far ? shownYarn(loop, true) : depth * STRANDS * YARNS + YARNS + loop.yarn)]
@@ -551,10 +557,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	}
 
 	// settle the fabric a little more, and show it: whether there's more to do
+	// (the settling's answers come as they come: the settler's onUpdate asks
+	// for a frame for each)
 	function settle(budget) {
-		const until = performance.now() + budget * settings.speed
-		const moved = relax(fabric, machine, Infinity, {until, squash: settings.squash, grab: pulledTo(), size: loopSize})
-		return syncFabric(false) || moved > 0.01
+		settler.settle({upTo: index, budget: budget * settings.speed, squash: settings.squash, grab: pulledTo(), size: loopSize})
+		fabric = settler.fabric
+		return syncFabric(false)
 	}
 
 	// where the loop being pulled on is held: under the pointer (wherever the
@@ -599,7 +607,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		layers.frontLoops.replaceChildren()
 		shown = {xs: new Float32Array(0), ys: new Float32Array(0)}
 		loopElements.clear()
-		relax(fabric, machine, 0, {squash: settings.squash, size: loopSize})
 		syncFabric(true)
 		layers.backBed.style.transform = `translate(${machine.rack * COL}px, 0px)`
 	}
@@ -954,7 +961,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function seek(to) {
 		const target = Math.max(0, Math.min(knitout.ops.length, to))
 		machine = newMachine()
-		fabric = newFabric()
+		settler.rewind()
 		for (let i = 0; i < target; i++) apply(machine, knitout.ops[i], i, yarnOf)
 		index = target
 		progress = 0
@@ -1199,10 +1206,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	// (and the machine and yarns the .k's knitted with, as the check finds them)
 	let settings = readSettings()
 	let profiles = null
-	let loopSize = sizer(settings)
+	let loopSize = sizeArgs(settings, null)
 	function onSettings() {
 		settings = readSettings()
-		loopSize = sizer({...settings, profiles})
+		loopSize = sizeArgs(settings, profiles)
 		requestFrame()
 	}
 	function onProfiles(resolved) {
@@ -1240,6 +1247,8 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const text = docText(handle.doc())
 		readText = text
 		knitout = readKnitout(text)
+		settler.load(knitout.ops, knitout.carriers)
+		fabric = NO_FABRIC
 		track = carriageTrack(knitout.ops)
 		empty.hidden = knitout.ops.length > 0
 		const [problem] = knitout.problems
@@ -1317,6 +1326,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	reread()
 
 	return () => {
+		settler.destroy()
 		view?.stop()
 		delete element.inkSpace
 		playing = false
