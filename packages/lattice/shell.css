@@ -1312,12 +1312,3 @@
 	padding: calc(12 * var(--lattice-px, 1px)) calc(16 * var(--lattice-px, 1px)) calc(48 * var(--lattice-px, 1px));
 	padding-left: 2rem;
 }
-
-/* and its type at the editor's size. patchwork's codemirror theme sizes an
-   editor by --text-editor-font-size, which no theme sets (they set
-   --editor-font-size), so the body took the pane's 12px while its headings
-   and leading, in rem, stayed at the page's 16. on the editor, not the
-   content, so its own zoom (an inline font-size on the editor) still wins */
-.lattice-shell .lattice-wm-tool .cm-editor:has(> .cm-scroller > .cm-content[data-language="markdown"]) {
-	font-size: var(--text-editor-font-size, var(--editor-font-size, 1rem));
-}
