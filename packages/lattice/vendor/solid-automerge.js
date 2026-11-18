@@ -1,4 +1,4 @@
-// solid-automerge 2.0.2 (chee's, ~/soft/chee/solid-automerge at v2.0.2), with
+// solid-automerge 2.1.1 (chee's, ~/soft/chee/solid-automerge at v2.1.1), with
 // cabbages and @solid-primitives/utils bundled in: neither's in patchwork's
 // import map. solid-js stays a bare import, so it's patchwork's one solid.
 //   esbuild src/index.ts --bundle --format=esm --external:solid-js
@@ -497,11 +497,22 @@ var require_browser = __commonJS({
   }
 });
 
-// node_modules/.pnpm/cabbages@0.2.10/node_modules/cabbages/output/cabbages.js
+// node_modules/.pnpm/cabbages@0.2.11/node_modules/cabbages/output/cabbages.js
 var import_debug = __toESM(require_browser(), 1);
 var log = (0, import_debug.default)("cabbages");
 function pojo(target) {
-  return typeof target == "object" && typeof target != null && Object.getPrototypeOf(target) == Object.prototype;
+  return typeof target == "object" && target != null && Object.getPrototypeOf(target) == Object.prototype;
+}
+function copy(value) {
+  if (Array.isArray(value)) return value.map(copy);
+  if (pojo(value)) {
+    let result = {};
+    for (let key of Object.keys(value)) result[key] = copy(value[key]);
+    return result;
+  }
+  if (value instanceof Date) return new Date(value);
+  if (ArrayBuffer.isView(value)) return value.slice();
+  return value;
 }
 var BLOCK_MARKER = "\uFFFC";
 function apply(target, ...rest) {
@@ -630,6 +641,15 @@ function apply(target, ...rest) {
       }
     }
     target = target[key];
+    if (typeof target == "string") {
+      log("ignoring patch to a block marker in a string", path, range);
+      return;
+    }
+    if (target == null || typeof target != "object" && typeof target != "function") {
+      throw new TypeError(
+        `invalid path ${JSON.stringify(path)}: ${String(key)} is ${target}`
+      );
+    }
   }
 }
 function get(obj, key) {
@@ -671,14 +691,14 @@ function fromAutomerge(autopatch, payload) {
       return [
         path,
         [key, key],
-        structuredClone(autopatch.values)
+        copy(autopatch.values)
       ];
     }
     case "splice": {
       return [path, [key, key], [autopatch.value]];
     }
     case "put": {
-      return [path, key, structuredClone(autopatch.value)];
+      return [path, key, copy(autopatch.value)];
     }
   }
 }
@@ -734,9 +754,6 @@ function makeDocumentProjection(handle) {
   }
   handle.on("change", patch);
   handle.on("delete", ondelete);
-  handle.whenReady().then(() => {
-    set(structuredClone(handle.doc()));
-  });
   return doc;
 }
 
@@ -773,12 +790,11 @@ function useDocHandle(url, options) {
     if (options?.["~skipInitialValue"]) return void 0;
     const unwrappedURL = access(url);
     if (!unwrappedURL) return void 0;
-    const state = repo.findWithProgress(unwrappedURL).peek();
-    return state.state === "ready" ? state.handle : void 0;
+    return peekReadyHandle(repo, unwrappedURL);
   }
   const [handle, { mutate }] = createResource(
     url,
-    (url2) => repo.findWithProgress(url2).whenReady(),
+    (url2) => repo.find(url2),
     {
       initialValue: getExistingHandle()
     }
@@ -789,6 +805,17 @@ function useDocHandle(url, options) {
     }
   });
   return handle;
+}
+function isQueryable(repo) {
+  return typeof repo.query == "function";
+}
+function peekReadyHandle(repo, url) {
+  if (isQueryable(repo)) {
+    const state2 = repo.query(url).state();
+    return state2.status == "ready" ? state2.handle : void 0;
+  }
+  const state = repo.findWithProgress(url).peek();
+  return state.state == "ready" ? state.handle : void 0;
 }
 
 // src/useDocument.ts

@@ -14,7 +14,7 @@
 		"node": ">=22.13"
 	},
 	"dependencies": {
-		"@automerge/automerge-repo": "2.6.0-subduction.48",
+		"@automerge/automerge-repo": "2.6.0-subduction.49",
 		"@xterm/headless": "6.0.0",
 		"node-pty": "1.1.0"
 	}
