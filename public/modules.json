@@ -16,6 +16,7 @@
 		"./packages/codemirror-markdown/",
 		"./packages/embed/",
 		"./packages/comments-view/",
+		"./packages/call/",
 		"./packages/theming/",
 		"./packages/lattice-themes/",
 		"./packages/tldraw5/"

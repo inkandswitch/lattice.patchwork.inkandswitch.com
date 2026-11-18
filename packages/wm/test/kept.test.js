@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { FOLLOW_GRACE, keep, kept, keptFollow } from "../kept.js";
-import { REJOIN_WITHIN, callToRejoin, forgetCall, keepCall, leavingCall } from "../call/rejoin.js";
 
 function memory() {
   const items = new Map();
@@ -69,30 +68,4 @@ test("following: nothing kept is nobody, never waited for", () => {
   const follow = keptFollow("f", { storage: memory() });
   assert.equal(follow.initial, null);
   assert.equal(follow.waiting(null), false);
-});
-
-test("rejoin: a call left by a reload is rejoined, as it was", () => {
-  const storage = memory();
-  keepCall({ room: "automerge:room", camera: true, mic: false }, { storage });
-  // still in it: not one to rejoin
-  assert.equal(callToRejoin("automerge:room", { now: 5000, storage }), null);
-  leavingCall({ at: 5000, storage });
-  assert.deepEqual(callToRejoin("automerge:room", { now: 6000, storage }), { camera: true, mic: false });
-  assert.equal(callToRejoin("automerge:other", { now: 6000, storage }), null);
-});
-
-test("rejoin: not once it's too long ago, nor after hanging up", () => {
-  const storage = memory();
-  keepCall({ room: "automerge:room", camera: false, mic: true }, { storage });
-  leavingCall({ at: 0, storage });
-  assert.equal(callToRejoin("automerge:room", { now: REJOIN_WITHIN + 1, storage }), null);
-  assert.ok(callToRejoin("automerge:room", { now: REJOIN_WITHIN, storage }));
-  forgetCall({ storage });
-  assert.equal(callToRejoin("automerge:room", { now: 1, storage }), null);
-});
-
-test("rejoin: leaving with no call kept keeps nothing", () => {
-  const storage = memory();
-  leavingCall({ at: 1, storage });
-  assert.equal(storage.items.size, 0);
 });

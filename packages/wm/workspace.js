@@ -29,12 +29,24 @@ import { arrivals } from "./ui/arriving.js";
 import { createInk } from "./ink.js";
 import { anchorAt, inside, placeAnchor } from "./anchor.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
-import { call, hearCalls, inProject, ask, hangUp, onCallIn } from "./call/call.js";
-import { CallPrompt, CallFloating, CallStage, Face } from "./call/ui.js";
+import { cursors, hearCall, sendCall } from "./call.js";
 
 const STYLESHEET = new URL("./wm.css", import.meta.url).href;
 
 // "just now", "4 min ago": how long since something was done
+// their face on their pointer: the call's call-face (call.js), which is
+// nothing for anyone who isn't in your call. by their tab, else by who they
+// are. sized by wm.css, as the rest of wm is
+function PointerFace(props) {
+  const face = document.createElement("patchwork-view");
+  face.className = "lattice-wm-pointer-face";
+  face.setAttribute("component", "call-face");
+  face.setAttribute("no-title", "");
+  createEffect(() => face.setAttribute("peer", props.person.peer ?? ""));
+  createEffect(() => face.setAttribute("contact", props.person.contact ?? ""));
+  return face;
+}
+
 function ago(time, now) {
   const seconds = (now - time) / 1000;
   if (seconds < 45) return "just now";
@@ -444,30 +456,19 @@ export function mountWorkspace(
     });
   }
 
-  // ── a call, in the project (call/call.js): hearing whether there's one
-  //    on, and asking, as you arrive, whether you'll join it. the phone,
+  // ── a call, in the project (call.js: the call package's, through its
+  //    provider). the project's files are the room, called what the
+  //    project is, for as long as you're here (patchwork:call-room), so a
+  //    call on it is offered in the call's control panel. the phone,
   //    beside the +, is there while one's on, or while it's not a secret
   //    (ui/secret.js: ctrl, alt and command, tapped together twice)
-  const callProject = roomHandle && {
-    room: roomHandle,
-    repo: baseRepo,
-    get name() {
-      return projectName();
-    },
-  };
-  const offCallProject = callProject ? inProject(callProject) : () => {};
-  const offCalls = callProject
-    ? hearCalls(roomHandle, () => {
-        if (call.get()?.room !== roomHandle.url) ask(callProject);
-      })
-    : () => {};
-  const callHere = () => !!callProject && call.get()?.room === roomHandle.url;
-  const callOn = () => !!callProject && onCallIn(roomHandle.url).length > 0;
-  let phone;
-  function pressPhone() {
-    if (callHere()) return hangUp();
-    const box = phone?.getBoundingClientRect();
-    ask(callProject, { at: box && { x: box.left, y: box.bottom + 6 }, focus: true });
+  const [callRoom, setCallRoom] = createSignal(null);
+  const callHere = () => !!callRoom()?.here;
+  const callOn = () => callRoom()?.others > 0;
+  function pressPhone(event) {
+    if (callHere()) return sendCall(element, { action: "hang-up" });
+    const box = event.currentTarget.getBoundingClientRect();
+    sendCall(element, { action: "ask", url: roomHandle.url, at: { x: box.left, y: box.bottom + 6 } });
   }
 
   // ── what's going on in each pane: wm answers patchwork:view-state for
@@ -1925,8 +1926,6 @@ export function mountWorkspace(
           <${For} each=${() => pointersOver(active())}>
             ${(person) => {
               const image = () => pointerImage(person.colour, person.look);
-              // their face on it, while you're in a call with them
-              const inCall = createMemo(() => (call.cursors() ? (call.find(person)?.id ?? null) : null));
               // over what it's over for them, wherever that is in yours now
               // (hidden while that's nowhere to be seen). from before
               // pointers said, where it is in their pane
@@ -1961,10 +1960,9 @@ export function mountWorkspace(
                   alt=""
                 />
                 <span class="lattice-wm-pointer-name">${() => person.name}</span>
-                ${() => {
-                  const id = inCall();
-                  return id ? html`<span class="lattice-wm-pointer-face"><${Face} id=${id} size=${44} title=${false} /></span>` : null;
-                }}
+                <${Show} when=${cursors}>
+                  <${PointerFace} person=${person} />
+                <//>
               </div>`;
             }}
           <//>
@@ -2534,13 +2532,10 @@ export function mountWorkspace(
         <header class="lattice-wm-files-heading">
           <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
-          <${Show} when=${() => callProject && (secret() || callHere() || callOn())}>
+          <${Show} when=${() => roomHandle && (secret() || callHere() || callOn())}>
             <button
               class="lattice-wm-icon-button lattice-wm-phone"
-              ref=${(el) => {
-                phone = el;
-                holdSecret(el);
-              }}
+              ref=${holdSecret}
               data-on=${() => (callHere() ? "" : undefined)}
               data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
               title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
@@ -2801,6 +2796,12 @@ export function mountWorkspace(
   }
 
   const dispose = render(() => {
+    // (held again as the project's renamed, for the name it's called by)
+    createEffect(() => {
+      if (!roomHandle) return;
+      const selector = { type: "patchwork:call-room", url: roomHandle.url, name: projectName() };
+      onCleanup(hearCall(element, selector, setCallRoom));
+    });
     // while anyone's pointer is about, it's placed again every frame: what
     // it's over moves under it as you scroll, zoom and type
     const pointersAbout = createMemo(() => people.some((person) => person.pointer));
@@ -2843,6 +2844,7 @@ export function mountWorkspace(
         <//>
         <div
           class="lattice-wm-frame"
+          data-call-stage=""
           ref=${(el) => {
             root = el;
             listenForDrops(el);
@@ -2862,21 +2864,6 @@ export function mountWorkspace(
           <${ToolMenu} />
         </div>
         <${Show} when=${following}><${InkSheet} /><//>
-        <${Show} when=${() => callProject}>
-          <${CallPrompt} near=${() => phone?.isConnected ? phone : root} />
-          <${CallFloating} panes=${() => root} />
-        <//>
-        <${Show} when=${() => callProject}>
-          <${CallStage}
-            box=${() => {
-              // over the panes: where they are in the project
-              frameSize();
-              return root
-                ? { left: `${root.offsetLeft}px`, top: `${root.offsetTop}px`, width: `${root.offsetWidth}px`, height: `${root.offsetHeight}px` }
-                : { display: "none" };
-            }}
-          />
-        <//>
       </div>`;
   }, element);
 
@@ -2907,8 +2894,6 @@ export function mountWorkspace(
     document.removeEventListener("pointerdown", onPressWhileOpen, true);
     menusOff();
     document.removeEventListener("keyup", onAltKey);
-    offCalls();
-    offCallProject();
     clearTimeout(noticeTimer);
     clearInterval(ticker);
     offPatchworkTools();

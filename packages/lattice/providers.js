@@ -10,6 +10,11 @@ export const frameProviders = (accountUrl) => [
   // listens at the document, so nothing waits for it. and patchwork-view
   // says nothing when a component fails to load, so waiting could hang
   { component: "patchwork-worker-provider", wait: false },
+  // the call (pkg-base's call package): round the whole frame, so the
+  // projects' control panel, the inspector's video and the panes' phone all
+  // reach it, and above the projects, so a call carries on between them.
+  // nothing waits for it: what asks it asks again once it's mounted
+  { component: "call-provider", wait: false },
 ];
 
 export const projectProviders = (projectUrl) => [

@@ -30,9 +30,7 @@ import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid
 import { colourFor, pointerCursor } from "./pointer.js";
 import { parsePath, projectByShort, projectPath } from "./paths.js";
 import { useToolStorage } from "./storage.js";
-import { CallBar } from "./call-bar.js";
-import { call } from "../wm/call/call.js";
-import { CallTiles } from "../wm/call/ui.js";
+import { hearCall } from "../wm/call.js";
 import { swapOnChange } from "./dev-swap.js";
 import { pageBridge, providePage } from "./page.js";
 
@@ -376,6 +374,25 @@ function Frame(props) {
     setPage(null);
   }
 
+  // the call's control panel names the room its call is in, and takes you
+  // there by opening it (patchwork:open-document). a project's room is its
+  // files: which project's those are is known once it's been open. a room
+  // that's a file opens in the panes of the project it's in
+  const projectRooms = new Map();
+  let openInCurrent = null;
+  function onOpenRoom(event) {
+    const panel = event.composedPath().some((el) => el.getAttribute?.("component") === "call-control-panel");
+    const url = event.detail?.url;
+    if (!panel || typeof url !== "string") return;
+    const room = url.split(/[#/]/, 1)[0];
+    event.stopPropagation();
+    const project = projectRooms.get(room);
+    if (project) return choose(project);
+    openInCurrent?.(room);
+  }
+  element.addEventListener("patchwork:open-document", onOpenRoom);
+  onCleanup(() => element.removeEventListener("patchwork:open-document", onOpenRoom));
+
   // what `pnpm page`'s helpers need (page.js)
   if (DEV_SERVER) onCleanup(providePage({ repo, baseRepo, hive, home: homeHandle, projects, choose }));
 
@@ -622,6 +639,8 @@ function Frame(props) {
       const projectRepo = inner.repo ?? repo;
       const project = await projectRepo.find(entry.url);
       if (dead) return;
+      const filesUrl = project.doc()?.files;
+      if (filesUrl) projectRooms.set(String(filesUrl).split(/[#/]/, 1)[0], entry.url);
 
       const area = document.createElement("div");
       area.className = "lattice-panes";
@@ -640,20 +659,34 @@ function Frame(props) {
         sidebar: files,
         onShowing: setShowing,
         onFocused: (file) => setFocusedFile(file ? { ...file } : null),
-        onOpen: (open) => (openInProject = open),
+        onOpen: (open) => (openInProject = openInCurrent = open),
         // an arrow or a mouse, over the panes, for everyone else
         pointer: pointer.kind,
         ...latticeOptions(baseRepo, hive),
       });
       const unmountInspector = render(() => {
         createEffect(() => (inspectorElement.style.width = `${inspector.width()}px`));
+        // the call's video goes in here, as a section, while it's wanted (in
+        // a call, faces "in the sidebar"), and the inspector opens for it.
+        // saying whether it's on screen: while it's not, faces float
+        const [videoWanted, setVideoWanted] = createSignal(false);
+        createEffect(() => {
+          const showing = inspector.open() && videoWanted();
+          onCleanup(
+            hearCall(inspectorElement, { type: "patchwork:call-video", showing }, ({ wanted }) => {
+              // (only as it comes to be wanted: shutting it after is yours)
+              if (wanted && !untrack(videoWanted)) inspector.setOpen(true);
+              setVideoWanted(!!wanted);
+            }),
+          );
+        });
         return html`<${Resizer} sidebar=${inspector} side="left" /><${Inspector}
           sections=${[
             {
               id: "call",
               name: "call",
-              when: () => !!call.get() && call.mode() === "sidebar",
-              render: () => html`<${CallTiles} />`,
+              when: videoWanted,
+              render: () => html`<${CallVideo} />`,
             },
             { id: "versions", was: "drafts", name: "versions", render: () => html`<${Versions} />` },
             {
@@ -680,6 +713,24 @@ function Frame(props) {
       unmount?.();
       providers?.remove();
     };
+  }
+
+  // the call package's video: everyone's faces, as tiles
+  function CallVideo() {
+    const video = document.createElement("patchwork-view");
+    video.className = "lattice-inspector-panel";
+    video.setAttribute("component", "call-video");
+    return video;
+  }
+
+  // the call package's control panel: the call you're in, or one where you
+  // are, to join. it says how much room it wants (data-sidebar-size), and
+  // starts out wanting none
+  function CallPanel() {
+    const panel = document.createElement("patchwork-view");
+    panel.setAttribute("component", "call-control-panel");
+    panel.dataset.sidebarSize = "none";
+    return panel;
   }
 
   // the versions package's own panel (packages/versions). made in the page
@@ -1103,7 +1154,7 @@ function Frame(props) {
         <div class="lattice-tree-children" hidden=${() => !packagesOpen()}></div>
       <//>
       </div>
-      <${CallBar} inspector=${inspector} />
+      <${CallPanel} />
       <${Me} />
     </nav>`;
   }

@@ -12,6 +12,7 @@ import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
 import { shortUrl } from "../wm/doc/files.js";
 import { icon } from "../wm/ui/icons.js";
 import { holdSecret, secret } from "../wm/ui/secret.js";
+import { cursors, setCursors } from "../wm/call.js";
 import { themeValue } from "./themes.js";
 import { ThemePreview } from "./theme-preview.js";
 import { fonts, firstFamily } from "./fonts.js";
@@ -699,6 +700,18 @@ export function SettingsPage(props) {
     </section>`;
   }
 
+  // ── a call (the call package's): whether faces go on cursors too ──────
+
+  function Call() {
+    return html`<section class="lattice-settings-section">
+      <h2>calls</h2>
+      <label class="lattice-setting">
+        <input type="checkbox" checked=${cursors} onChange=${(event) => setCursors(event.currentTarget.checked)} />
+        <span class="lattice-settings-label">faces on everyone's cursors too</span>
+      </label>
+    </section>`;
+  }
+
   // ── packages (secret: ctrl, alt and command, tapped together twice) ─────
 
   // your own packages, beside the site's: pushworked ones, by their
@@ -831,6 +844,7 @@ export function SettingsPage(props) {
     <${You} />
     <${Account} />
     <${Theme} />
+    <${Call} />
     <${Show} when=${() => shells().length > 1}><${Shell} /><//>
     <${Show} when=${secret}><${Packages} /><//>
   </div>`;
