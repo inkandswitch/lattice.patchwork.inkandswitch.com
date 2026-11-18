@@ -120,3 +120,17 @@ test("knitting onto empty needles has nothing to go through: no legs", () => {
 	const {nodes: castOn} = generateTopology({...program, castOn: undefined}, "technical")
 	assert.ok(castOn.some(n => n.isLeg))
 })
+
+// ── knitscape's spline, as lattice has it
+
+import {buildYarnCurve, buildYarnCurveInto} from "../vendor/knitscape/shared/simulation/spline.js"
+
+test("a yarn's curve stays finite through a control point given twice", () => {
+	// (a .k's path can come to the same point twice running: knitscape's
+	// centripetal spline divided by the distance between them)
+	const pts = [0, 0, 0, 1, 0, 0, 1, 0, 0, 2, 1, 0, 3, 1, 0, 4, 0, 0]
+	for (const curve of [buildYarnCurveInto(pts, 12, 0), buildYarnCurve(pts, 12, 0)]) {
+		assert.ok(curve.length > 0)
+		assert.ok(Array.from(curve).every(Number.isFinite), "NaN in the curve")
+	}
+})

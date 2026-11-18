@@ -86,6 +86,14 @@ most of the knitting is other people's work, carried over:
   as Agnes adapted it for the visualiser.
 - **javascript highlighting** is [lezer](https://lezer.codemirror.net)'s
   javascript grammar, by Marijn Haverbeke.
+- **the yarn path** is Hannah Twigg-Smith's
+  [knitscape](https://github.com/knitscape/knitscape): its contact-node
+  model, where a loop is the four points its yarn touches others at and the
+  yarn's a path through them, relaxed as yarn would be, and its fibres, plies
+  and shading (which she brought over from chainstitch). it was her idea that
+  a loop for every stitch can't say what a tuck is, or what tucks and floats
+  beside each other make, and that the yarn can. her code's in
+  `packages/lattice/vendor/knitscape`.
 
 and the patchwork side:
 

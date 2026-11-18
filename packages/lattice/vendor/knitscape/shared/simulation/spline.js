@@ -1,8 +1,13 @@
+// (lattice: no closer than this, so a point given twice running doesn't
+// divide by nothing: a .k's yarn path can, and one NaN in a yarn's curve
+// leaves the fibre renderer with nothing to draw)
+const MIN_SPAN = 1e-6;
+
 function dist3(a, b) {
   const dx = a[0] - b[0],
     dy = a[1] - b[1],
     dz = a[2] - b[2];
-  return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  return Math.max(MIN_SPAN, Math.sqrt(dx * dx + dy * dy + dz * dz));
 }
 
 function add3(a, b) {
@@ -120,14 +125,17 @@ export function buildYarnCurveInto(pts, divisions = 5, tension = 0.5, out) {
     const p3x = pts[i + 9],
       p3y = pts[i + 10],
       p3z = pts[i + 11];
-    const t01 = Math.sqrt(
-      (p1x - p0x) ** 2 + (p1y - p0y) ** 2 + (p1z - p0z) ** 2,
+    const t01 = Math.max(
+      MIN_SPAN,
+      Math.sqrt((p1x - p0x) ** 2 + (p1y - p0y) ** 2 + (p1z - p0z) ** 2),
     );
-    const t12 = Math.sqrt(
-      (p2x - p1x) ** 2 + (p2y - p1y) ** 2 + (p2z - p1z) ** 2,
+    const t12 = Math.max(
+      MIN_SPAN,
+      Math.sqrt((p2x - p1x) ** 2 + (p2y - p1y) ** 2 + (p2z - p1z) ** 2),
     );
-    const t23 = Math.sqrt(
-      (p3x - p2x) ** 2 + (p3y - p2y) ** 2 + (p3z - p2z) ** 2,
+    const t23 = Math.max(
+      MIN_SPAN,
+      Math.sqrt((p3x - p2x) ** 2 + (p3y - p2y) ** 2 + (p3z - p2z) ** 2),
     );
     const m1x =
       k * (p2x - p1x + t12 * ((p1x - p0x) / t01 - (p2x - p0x) / (t01 + t12)));

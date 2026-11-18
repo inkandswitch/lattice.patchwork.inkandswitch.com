@@ -26,3 +26,6 @@ what lattice changed, besides imports (`@shared/…` to relative paths, with
 - `shared/simulation/relaxationDriver.js`: a renderer of its own, and the
   worker made by `options.createWorker(url)` if it's given (lattice's
   `moduleWorker`, for when the package is from another origin)
+- `shared/simulation/spline.js`: the distances between control points are
+  at least `MIN_SPAN`, so a point given twice running doesn't make NaN (and
+  the fibre renderer, given one, draws nothing)
