@@ -10,7 +10,9 @@ let users = 0;
 // a menu → what had the focus when it opened
 const openers = new WeakMap();
 
-const items = (menu) => [...menu.querySelectorAll(ITEMS)].filter((item) => item.getClientRects().length > 0);
+// its own: not those of a menu inside it (a submenu, a popover of its own)
+const items = (menu) =>
+  [...menu.querySelectorAll(ITEMS)].filter((item) => item.closest(MENU) === menu && item.getClientRects().length > 0);
 
 function onToggle(event) {
   const menu = event.target;

@@ -1217,6 +1217,22 @@
 		}
 	}
 
+	/* an item that opens a menu beside it: its arrow at the end */
+	& .lattice-wm-menu-chevron {
+		display: grid;
+		margin-left: auto;
+		color: var(--lattice-wm-muted);
+	}
+
+	/* the + menu's project files, beside it: as many as fit the window,
+	   then it scrolls */
+	&.lattice-wm-files-menu[popover] {
+		width: calc(240 * var(--lattice-px, 1px));
+		max-height: calc(100vh - 8 * var(--lattice-px, 1px));
+		overflow: auto;
+		transform-origin: 0 calc(12 * var(--lattice-px, 1px));
+	}
+
 	& .lattice-wm-menu-empty {
 		padding: calc(4 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px));
 		color: var(--lattice-wm-muted);

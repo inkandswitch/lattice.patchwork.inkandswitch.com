@@ -2263,11 +2263,34 @@ export function mountWorkspace(
       <small>${detail}</small>
     </button>`;
 
+    // the project's files, in a menu of their own beside this one (in the
+    // files' order, and their groups): there can be a lot of them. it opens
+    // on its item: hovered, clicked, or the right arrow. it's inside this
+    // one, so opening it leaves this open
+    let filesMenu;
+    let filesItem;
+    function openFilesMenu() {
+      if (filesMenu.matches(":popover-open")) return;
+      filesMenu.showPopover();
+      const item = filesItem.getBoundingClientRect();
+      const { offsetWidth: width, offsetHeight: height } = filesMenu;
+      const right = menu.getBoundingClientRect().right - 2;
+      const left = right + width > innerWidth - 4 ? menu.getBoundingClientRect().left - width + 2 : right;
+      filesMenu.style.left = `${Math.max(4, left)}px`;
+      filesMenu.style.top = `${Math.max(4, Math.min(item.top - 5, innerHeight - 4 - height))}px`;
+    }
+    const closeFilesMenu = () => filesMenu?.matches(":popover-open") && filesMenu.hidePopover();
+
     return html`<div
       class="lattice-wm-menu"
       popover="auto"
       ref=${(el) => (menu = el)}
-      onToggle=${(event) => event.newState === "closed" && setMenuFor(null)}
+      onToggle=${(event) => event.target === menu && event.newState === "closed" && setMenuFor(null)}
+      onPointerOver=${(event) => {
+        // another of this menu's items, hovered: the files go
+        if (event.pointerType !== "mouse" || filesMenu.contains(event.target) || filesItem.contains(event.target)) return;
+        if (event.target.closest(".lattice-wm-menu-item")) closeFilesMenu();
+      }}
     >
       <${Show} when=${menuItems.length}>
         <div class="lattice-wm-menu-heading">new</div>
@@ -2277,22 +2300,56 @@ export function mountWorkspace(
           ${item(made.icon, made.label, made.detail ?? "", fromMenu((groupId) => create(groupId, made)))}
         <//>`,
       )}
-      <div class="lattice-wm-menu-heading">in this project</div>
-      <${For}
-        each=${() => projectFiles()}
-        fallback=${html`<div class="lattice-wm-menu-empty">nothing yet</div>`}
+      <div class="lattice-wm-menu-rule" role="separator"></div>
+      <button
+        class="lattice-wm-menu-item lattice-wm-menu-more"
+        aria-haspopup="menu"
+        ref=${(el) => (filesItem = el)}
+        onClick=${openFilesMenu}
+        onPointerEnter=${(event) => event.pointerType === "mouse" && openFilesMenu()}
+        onKeyDown=${(event) => {
+          if (event.key !== "ArrowRight") return;
+          event.preventDefault();
+          openFilesMenu();
+        }}
       >
-        ${(file) => html`<button
-          class="lattice-wm-menu-item lattice-wm-menu-file"
-          data-colour=${docColour(file.url)}
-          onClick=${fromMenu((groupId) => openDocs([file.url], groupId))}
-          onPointerEnter=${() => setHovered(file.url)}
-          onPointerLeave=${unhover}
+        ${icon("folder")}
+        in this project
+        <small>${() => projectFiles().length || ""}</small>
+        <span class="lattice-wm-menu-chevron">${icon("chevron-right", 10)}</span>
+      </button>
+      <div
+        class="lattice-wm-menu lattice-wm-files-menu"
+        popover="auto"
+        role="menu"
+        ref=${(el) => (filesMenu = el)}
+        onKeyDown=${(event) => {
+          if (event.key !== "ArrowLeft") return;
+          event.preventDefault();
+          event.stopPropagation();
+          filesMenu.hidePopover();
+        }}
+      >
+        <${For}
+          each=${shownFiles}
+          fallback=${html`<div class="lattice-wm-menu-empty">nothing yet</div>`}
         >
-          <span class="lattice-wm-swatch"></span>
-          ${file.name}
-        </button>`}
-      <//>
+          ${(file) =>
+            file.heading
+              ? html`<div class="lattice-wm-menu-heading">${() => file.heading[0]().label}</div>`
+              : html`<button
+                  class="lattice-wm-menu-item lattice-wm-menu-file"
+                  role="menuitem"
+                  data-colour=${docColour(file.url)}
+                  onClick=${fromMenu((groupId) => openDocs([file.url], groupId))}
+                  onPointerEnter=${() => setHovered(file.url)}
+                  onPointerLeave=${unhover}
+                >
+                  <span class="lattice-wm-swatch"></span>
+                  ${() => file.name}
+                </button>`}
+        <//>
+      </div>
       <form class="lattice-wm-menu-url" onSubmit=${onOpenUrl}>
         <input
           name="url"
