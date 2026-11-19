@@ -1,5 +1,6 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
+import {assignments} from "./assignments.js"
 import {fieldsOf, newPatternstoat, paintColours, paintStitches, paintWristwarmer, resize, setYarns} from "../patternstoat.js"
 
 test("a new patternstoat is out of work everywhere, in yarn 3, half gauge", () => {
@@ -7,7 +8,7 @@ test("a new patternstoat is out of work everywhere, in yarn 3, half gauge", () =
 	assert.equal(doc["@patchwork"].type, "lattice:patternstoat")
 	assert.deepEqual(doc.colours, [[0, 0, 0], [0, 0, 0]])
 	assert.deepEqual(doc.yarns, ["3", "3"])
-	assert.deepEqual(doc.stitches, {})
+	assert.deepEqual(doc.stitches, {0: {}, 1: {}})
 	assert.equal(doc.gauge, 2)
 	assert.equal(doc.charm, null)
 })
@@ -28,15 +29,15 @@ test("fields are runs of one colour", () => {
 	])
 })
 
-test("stitches paint a bed at a time, and rubbing out leaves no empty maps behind", () => {
+test("stitches paint a bed at a time, and rubbing both out takes the cell away", () => {
 	const doc = newPatternstoat({width: 4, height: 2})
 	paintStitches(doc, [[1, 0]], "f", "t")
 	paintStitches(doc, [[1, 0]], "b", "k")
-	assert.deepEqual(doc.stitches, {0: {1: {f: "t", b: "k"}}})
+	assert.deepEqual(doc.stitches[0], {1: {f: "t", b: "k"}})
 	paintStitches(doc, [[1, 0]], "f", null)
-	assert.deepEqual(doc.stitches, {0: {1: {f: null, b: "k"}}})
+	assert.deepEqual(doc.stitches[0], {1: {f: null, b: "k"}})
 	paintStitches(doc, [[1, 0]], "b", null)
-	assert.deepEqual(doc.stitches, {})
+	assert.deepEqual(doc.stitches, {0: {}, 1: {}})
 })
 
 test("yarns are set over rows, inclusive", () => {
@@ -53,7 +54,7 @@ test("resizing keeps a yarn a row, and drops stitches outside", () => {
 	assert.deepEqual(doc.yarns, ["3", "4", "4", "4", "4"])
 	assert.equal(doc.colours.length, 5)
 	assert.ok(doc.colours.every(row => row.length === 2))
-	assert.deepEqual(doc.stitches, {})
+	assert.deepEqual(doc.stitches[1], {})
 	resize(doc, 2, 1)
 	assert.deepEqual(doc.yarns, ["3"])
 	assert.equal(doc.height, 1)
@@ -71,4 +72,28 @@ test("the wristwarmer: a thumb slit cast off and straight back on, stripes, ends
 	assert.deepEqual([doc.yarns[5], doc.yarns[10], doc.yarns[16], doc.yarns[22]], ["1", "3", "4", "3"])
 	assert.ok(doc.colours[79].every(c => c === 6))
 	assert.equal(doc.yarns[79], "3")
+})
+
+test("painting a stitch into an empty row assigns only the cell, never the row's map", () => {
+	const doc = newPatternstoat({width: 4, height: 2})
+	const seen = assignments(doc, d => paintStitches(d, [[1, 0]], "f", "t"))
+	assert.deepEqual(seen.filter(s => s.object).map(s => s.path), ["stitches.0.1"])
+	const rubbed = assignments(doc, d => paintStitches(d, [[1, 0]], "f", null))
+	assert.ok(rubbed.every(s => s.path !== "stitches.0"), "a row's map is never deleted")
+	assert.deepEqual(doc.stitches[0], {})
+})
+
+test("resizing keeps a stitch map a row", () => {
+	const doc = newPatternstoat({width: 2, height: 2})
+	resize(doc, 2, 4)
+	assert.deepEqual(Object.keys(doc.stitches).sort(), ["0", "1", "2", "3"])
+	resize(doc, 2, 1)
+	assert.deepEqual(Object.keys(doc.stitches), ["0"])
+})
+
+test("painting never writes past a row's end (a row two resizes left short)", () => {
+	const doc = newPatternstoat({width: 4, height: 1})
+	doc.colours[0].splice(3, 1) // as two people resizing at once can leave it
+	const seen = assignments(doc, d => paintColours(d, [[3, 0], [1, 0]], 1))
+	assert.deepEqual(seen.map(s => s.path), ["colours.0.1"])
 })

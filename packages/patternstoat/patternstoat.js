@@ -9,7 +9,9 @@
 //   work). row 0 is knitted first
 // - stitches[row][x]: {f, b}, the stitch layer, painted with the kniterate
 //   editor's codes where wanted. only a charm's transparent cells read it.
-//   kept sparse: a cell with nothing painted isn't there
+//   every row has its map from the start (so two people painting a row at
+//   once each add a cell, never each a whole map); in it, a cell with nothing
+//   painted isn't there
 // - yarns[row]: the carrier ("1"–"6") a row knits in: the stripes
 // - charm: the charm's url; knitoutTarget: the .k it writes, as a .js has
 //
@@ -29,7 +31,7 @@ export function newPatternstoat({charm = null, width = 40, height = 80, left = 6
 		left,
 		gauge,
 		colours: grid(width, height, 0),
-		stitches: {},
+		stitches: Object.fromEntries(Array.from({length: height}, (_, row) => [row, {}])),
 		yarns: Array.from({length: height}, () => "3"),
 		charm,
 		knitoutTarget: null,
@@ -41,7 +43,7 @@ const inside = (doc, x, row) => x >= 0 && x < doc.width && row >= 0 && row < doc
 // paint `colour` onto cells, each [x, row]
 export function paintColours(doc, points, colour) {
 	for (const [x, row] of points) {
-		if (inside(doc, x, row) && doc.colours[row][x] !== colour) doc.colours[row][x] = colour
+		if (inside(doc, x, row) && x < doc.colours[row].length && doc.colours[row][x] !== colour) doc.colours[row][x] = colour
 	}
 }
 
@@ -51,19 +53,16 @@ export function paintStitches(doc, points, bed, code) {
 	if (!doc.stitches) doc.stitches = {}
 	for (const [x, row] of points) {
 		if (!inside(doc, x, row)) continue
-		const rowCells = doc.stitches[row]
-		const cell = rowCells?.[x]
+		const cell = doc.stitches[row]?.[x]
 		if (code == null) {
 			if (!cell || cell[bed] == null) continue
-			const other = bed === "f" ? "b" : "f"
-			if (cell[other] == null) {
-				delete rowCells[x]
-				if (!Object.keys(rowCells).length) delete doc.stitches[row]
-			} else cell[bed] = null
+			if (cell[bed === "f" ? "b" : "f"] == null) delete doc.stitches[row][x]
+			else cell[bed] = null
 			continue
 		}
-		if (!rowCells) doc.stitches[row] = {[x]: {f: null, b: null, [bed]: code}}
-		else if (!cell) rowCells[x] = {f: null, b: null, [bed]: code}
+		// (a doc from before every row had its map)
+		if (!doc.stitches[row]) doc.stitches[row] = {}
+		if (!cell) doc.stitches[row][x] = {f: null, b: null, [bed]: code}
 		else if (cell[bed] !== code) cell[bed] = code
 	}
 }
@@ -92,14 +91,15 @@ export function resize(doc, width, height) {
 	const top = doc.yarns[doc.yarns.length - 1] ?? "3"
 	while (doc.colours.length < height) doc.colours.push(Array.from({length: width}, () => 0))
 	while (doc.yarns.length < height) doc.yarns.push(top)
-	for (const row of Object.keys(doc.stitches ?? {})) {
+	if (!doc.stitches) doc.stitches = {}
+	for (const row of Object.keys(doc.stitches)) {
 		if (Number(row) >= height) {
 			delete doc.stitches[row]
 			continue
 		}
 		for (const x of Object.keys(doc.stitches[row])) if (Number(x) >= width) delete doc.stitches[row][x]
-		if (!Object.keys(doc.stitches[row]).length) delete doc.stitches[row]
 	}
+	for (let row = 0; row < height; row++) if (!doc.stitches[row]) doc.stitches[row] = {}
 	if (doc.width !== width) doc.width = width
 	if (doc.height !== height) doc.height = height
 }
