@@ -9,6 +9,7 @@
 import {stylesheet} from "../wm/ui/stylesheet.js"
 import {ANCHORS, addColumn, addRow, columnsOf, groupsOf, moveColumn, paintCell, removeColumn, removeRow, renumberColumn, setColumn, setRow} from "./charm.js"
 import {CHARM_STITCHES, STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
+import {settingProblem} from "./build.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
 const TOOLS = [
@@ -453,8 +454,16 @@ export default function ArrangementTool(handle, element, context = {}) {
 		}
 		editor.onblur = () => {
 			if (editor.hidden) return
-			editor.hidden = true
 			const value = editor.value.trim()
+			const problem = value === "" ? null : settingProblem(id, value)
+			if (problem) {
+				editor.title = problem
+				editor.setCustomValidity(problem)
+				editor.reportValidity()
+				return
+			}
+			editor.setCustomValidity("")
+			editor.hidden = true
 			handle.change(doc => setRow(doc, rowId, {[id]: value === "" ? null : value}))
 		}
 	}

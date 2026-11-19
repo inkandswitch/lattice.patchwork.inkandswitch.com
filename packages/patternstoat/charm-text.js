@@ -16,6 +16,7 @@
 //
 // text has no row ids: parseCharm takes the ids of the charm it's from, and
 // gives them to its rows in order (new ones to any more)
+import {settingProblem} from "./build.js"
 import {CODES, addColumn, columnsOf, removeColumn, removeRow, setColumn, setRow} from "./charm.js"
 
 const DIRS = {">": "+", "<": "-", "~": "~"}
@@ -94,6 +95,8 @@ export function parseCharm(text, ids = []) {
 					const value = setting.slice(1)
 					if (!key || !value) return fail(at, `what's "${setting}"? a setting is s (stitch), v (speed), r (roller) or y (yarn), and its value`)
 					if (key === "yarn" && !/^[1-6]$/.test(value)) return fail(at, `yarn ${value} isn't a carrier (1–6)`)
+					const problem = key === "yarn" ? null : settingProblem(key, value)
+					if (problem) return fail(at, problem)
 					row[key] = value
 				}
 				rows.push(row)

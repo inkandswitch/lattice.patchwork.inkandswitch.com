@@ -108,3 +108,7 @@ test("the text and a charm are the same whatever order the charm's keys come in"
 	assert.ok(!sameCharm(parseCharm(text.replace("(k/. ./k)", "(t/. ./k)"), ids(charm)), sortedKeys(charm)))
 	assert.ok(!sameCharm(parseCharm("rows: >\n<> 1 q #000000 (q/.)"), charm)) // doesn't read: not the same
 })
+
+test("a row's settings in text have to be whole numbers", () => {
+	assert.deepEqual(parseCharm("rows: >[sabc]").error, {line: 1, message: "stitch abc isn't a number"})
+})

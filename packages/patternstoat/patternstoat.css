@@ -25,6 +25,10 @@
 }
 
 .stoat {
+	& [hidden] {
+		display: none !important;
+	}
+
 	& {
 		position: relative;
 		display: flex;

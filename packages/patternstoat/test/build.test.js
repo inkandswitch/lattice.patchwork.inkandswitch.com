@@ -149,3 +149,29 @@ test("the wristwarmer builds with no errors from the checks, and its thumb gap o
 	const after = holding(lines.slice(0, rows[53]))
 	for (let x = 4; x <= 9; x++) assert.equal(after.get(`f${60 + 2 * x}`), 1)
 })
+
+test("a charm with no reference rows is an error, not an empty .k", () => {
+	const charm = newCharm()
+	charm.rows = []
+	assert.deepEqual(buildKnitout(tube(2, 1), charm).error, {row: null, needle: null, message: "the charm has no reference rows"})
+})
+
+test("a patternstoat with no left edge is an error, not needle NaN", () => {
+	const stoat = tube(2, 1)
+	delete stoat.left
+	assert.equal(buildKnitout(stoat, newCharm()).error.message, "past the bed (1–252)")
+})
+
+test("casting off or transferring at full gauge is an error: it would join the tube", () => {
+	const stoat = tube(3, 1, 3, {gauge: 1})
+	assert.deepEqual(buildKnitout(stoat, newCharm()).error, {row: 1, needle: 10, message: "cast off needs half gauge: at full gauge it transfers onto the other bed's loops"})
+	const charm = newCharm()
+	charm.cells[1].b = [{f: "x", b: "k"}]
+	assert.equal(buildKnitout(tube(2, 1, 1, {gauge: 1}), charm).error.message, "transfer needs half gauge: at full gauge it transfers onto the other bed's loops")
+})
+
+test("a pass's settings have to be whole numbers", () => {
+	const charm = newCharm()
+	setRow(charm, "b", {stitch: "abc"})
+	assert.deepEqual(buildKnitout(tube(2, 1), charm).error, {row: 1, needle: null, message: "stitch abc isn't a number"})
+})

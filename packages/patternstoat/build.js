@@ -21,6 +21,18 @@ const STITCH_OP = {k: "knit", t: "tuck", m: "miss"}
 
 const fail = (row, needle, message) => ({error: {row, needle, message}})
 
+// a pass's settings, as the kniterate takes them: a stitch number is digits
+// or a letter A–Z (lattice's machine profiles), speed and roller digits
+export function settingProblem(key, value) {
+	if (value == null) return null
+	const ok = key === "stitch" ? /^(\d+|[A-Z])$/.test(value) : /^\d+$/.test(value)
+	return ok ? null : `${key} ${value} isn't a number`
+}
+
+// at full gauge, a cell's back is across from its front: these would land on
+// the other bed's own loops
+const NEEDS_HALF_GAUGE = {co: "cast off", x: "transfer"}
+
 // cell x's needles, front and back, at the patternstoat's gauge
 function needlesOf(stoat, x) {
 	const gauge = stoat.gauge === 1 ? 1 : 2
@@ -32,6 +44,7 @@ function needlesOf(stoat, x) {
 export function buildKnitout(stoat, charm, {needles = 252} = {}) {
 	if (!charm) return fail(null, null, "no charm linked")
 	const groups = groupsOf(charm)
+	if (!groups.length) return fail(null, null, "the charm has no reference rows")
 	const height = stoat.colours?.length ?? 0
 
 	// first what each design row's passes are, so a carrier can go out after
@@ -47,7 +60,7 @@ export function buildKnitout(stoat, charm, {needles = 252} = {}) {
 			for (let x = field.start; x <= field.end; x++) {
 				const {f, b} = needlesOf(stoat, x)
 				if (!columnOf(charm, field.colour)) return fail(r + 1, f, `colour ${field.colour} isn't in the charm`)
-				for (const n of [f, b]) if (n < 1 || n > needles) return fail(r + 1, n, `past the bed (1–${needles})`)
+				for (const n of [f, b]) if (!(n >= 1 && n <= needles)) return fail(r + 1, Number.isFinite(n) ? n : null, `past the bed (1–${needles})`)
 			}
 		}
 		const passes = []
@@ -61,6 +74,10 @@ export function buildKnitout(stoat, charm, {needles = 252} = {}) {
 					const painted = stoat.stitches?.[r]?.[x]
 					const f = cell.f === "*" ? (painted?.f ?? null) : cell.f
 					const b = cell.b === "*" ? (painted?.b ?? null) : cell.b
+					if (stoat.gauge === 1) {
+						const half = NEEDS_HALF_GAUGE[f] ?? NEEDS_HALF_GAUGE[b]
+						if (half) return fail(r + 1, needlesOf(stoat, x).f, `${half} needs half gauge: at full gauge it transfers onto the other bed's loops`)
+					}
 					if (f || b) cells.push({x, f, b, ...prefix(needlesOf(stoat, x))})
 				}
 			}
@@ -73,6 +90,10 @@ export function buildKnitout(stoat, charm, {needles = 252} = {}) {
 				if (!CARRIERS.includes(carrier)) return fail(r + 1, null, `yarn ${carrier} isn't a carrier (1–6)`)
 				lastDir.set(carrier, dir)
 				lastRow.set(carrier, r)
+			}
+			for (const [key] of SETTINGS) {
+				const problem = settingProblem(key, row[key] == null ? null : String(row[key]))
+				if (problem) return fail(r + 1, null, problem)
 			}
 			const settings = Object.fromEntries(SETTINGS.map(([key]) => [key, String(row[key] ?? DEFAULTS[key])]))
 			passes.push({dir, carrier: knits ? carrier : null, settings, cells})
