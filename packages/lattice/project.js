@@ -59,7 +59,7 @@ function lattice(baseRepo, hive) {
   return {
     name: "lattice",
     // a patternstoat's charm: linked, so they light up together, and are
-    // one lineage in the files. (its type's patternstoat.js's
+    // together in the files. (its type's patternstoat.js's
     // PATTERNSTOAT_TYPE, written out: that's only loaded when it's needed)
     watch(doc) {
       const charm = String(doc?.charm ?? "");

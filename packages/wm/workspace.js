@@ -2529,11 +2529,12 @@ export function mountWorkspace(
   }
 
   // ── the files' order: sorted by name or by when they were last done
-  //    something to, and grouped, or not, by type or by lineage (what's made
-  //    from what: a .js and the .k it writes, a .k and its copies). kept on
-  //    this device, for every project
+  //    something to, and grouped, or not, by type or by what's related
+  //    (what's made from what, as files linked to each other: a .js and the
+  //    .k it writes, a .k and its copies, a patternstoat and its charm). kept
+  //    on this device, for every project
   const SORTS = { name: "name", modified: "last modified" };
-  const GROUPS = { none: "none", type: "type", lineage: "lineage" };
+  const GROUPS = { none: "none", type: "type", related: "related" };
   const ORDER_KEY = "lattice-wm:files-order";
   const keptOrder = remembered(ORDER_KEY, {});
   const [order, setOrderNow] = createSignal({
@@ -2558,10 +2559,10 @@ export function mountWorkspace(
   // a name without its extensions: pattern.knitout.js is "pattern"
   const stem = (name) => name.split(".")[0] || name;
 
-  // the files in lineages: each the files linked to each other, any way, by
-  // what the extensions say (links), in the order they came. a lineage is
-  // called what most of its files are
-  function lineagesOf(files) {
+  // the files that are related: each set the files linked to each other,
+  // any way, by what the extensions say (links), in the order they came. a
+  // set is called what most of its files are
+  function relatedOf(files) {
     const at = new Map(files.map((file, i) => [file.url, i]));
     const parent = files.map((_, i) => i);
     const root = (i) => (parent[i] === i ? i : (parent[i] = root(parent[i])));
@@ -2571,18 +2572,18 @@ export function mountWorkspace(
         if (j != null) parent[root(i)] = root(j);
       }
     });
-    const lineages = new Map();
+    const sets = new Map();
     files.forEach((file, i) => {
       const r = root(i);
-      if (!lineages.has(r)) lineages.set(r, []);
-      lineages.get(r).push(file);
+      if (!sets.has(r)) sets.set(r, []);
+      sets.get(r).push(file);
     });
-    return [...lineages.values()].map((members) => {
+    return [...sets.values()].map((members) => {
       const counts = new Map();
       for (const file of members) counts.set(stem(file.name), (counts.get(stem(file.name)) ?? 0) + 1);
       const [label] = [...counts].sort(([a, m], [b, n]) => n - m || a.localeCompare(b))[0];
       const first = members.map((file) => file.url).sort()[0];
-      return { key: `lineage ${first} ${label}`, label, files: members };
+      return { key: `related ${first} ${label}`, label, files: members };
     });
   }
 
@@ -2613,11 +2614,13 @@ export function mountWorkspace(
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([type, members]) => ({ key: `type ${type}`, label: type, files: members }));
     } else {
-      const lineages = lineagesOf(files);
-      // the ones with nothing linked, together at the end
-      const alone = lineages.filter((lineage) => lineage.files.length === 1).flatMap((lineage) => lineage.files);
-      groups = lineages.filter((lineage) => lineage.files.length > 1);
-      if (alone.length) groups.push({ key: "lineage alone", label: groups.length ? "on their own" : "nothing linked", files: alone });
+      const sets = relatedOf(files);
+      // the ones with nothing linked, together at the end, as "other". if
+      // nothing's related, there's no heading at all
+      const alone = sets.filter((set) => set.files.length === 1).flatMap((set) => set.files);
+      groups = sets.filter((set) => set.files.length > 1);
+      if (!groups.length) return files;
+      if (alone.length) groups.push({ key: "related other", label: "other", files: alone });
     }
     return groups.flatMap(({ key, label, files }) => [heading(key, label, files.length), ...files]);
   });
