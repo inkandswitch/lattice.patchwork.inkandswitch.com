@@ -1,0 +1,185 @@
+/* the patternstoat and charm editors: the kniterate editor's look */
+@layer package {
+	:root,
+	:host,
+	[theme] {
+		--stoat-sheet: var(--editor-fill);
+		--stoat-ink: var(--editor-line);
+		--stoat-sans: var(--studio-family-ui);
+		--stoat-mono: var(--studio-family-code);
+		--stoat-line-soft: var(--editor-fill-offset-20);
+		--stoat-chrome: var(--studio-chrome-fill-offset-20);
+		--stoat-chrome-ink: var(--studio-chrome-line);
+		--stoat-muted: oklch(from var(--stoat-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
+		--stoat-danger: var(--editor-danger-text);
+		--stoat-accent: var(--studio-primary-fill);
+		--stoat-highlighter: var(--editor-selection-fill);
+		/* what each bed does at a needle, as the kniterate editor colours it */
+		--stoat-knit: oklch(0.66 0.13 150);
+		--stoat-tuck: oklch(0.76 0.14 85);
+		--stoat-miss: oklch(0.65 0.01 250);
+		--stoat-xfer: oklch(0.6 0.15 250);
+		--stoat-drop: oklch(0.6 0.19 25);
+		--stoat-star: oklch(0.7 0.12 300);
+	}
+}
+
+.stoat {
+	& {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+		width: 100%;
+		height: 100%;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+		background: var(--stoat-sheet);
+		color: var(--stoat-ink);
+		font: 12px var(--stoat-sans);
+	}
+
+	& .stoat-bar,
+	& .stoat-edit {
+		display: flex;
+		flex: none;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 6px 10px;
+		padding: 5px 6px;
+		border-bottom: 1px solid var(--stoat-line-soft);
+		background: var(--stoat-chrome);
+		color: var(--stoat-chrome-ink);
+	}
+
+	& .stoat-group {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 2px;
+	}
+
+	& .stoat-spacer {
+		flex: 1 1 0;
+	}
+
+	& button,
+	& select,
+	& input {
+		font: inherit;
+		color: inherit;
+		background: var(--stoat-sheet);
+		border: 1px solid var(--stoat-line-soft);
+		border-radius: 4px;
+		padding: 2px 6px;
+		min-height: 22px;
+	}
+
+	& button {
+		cursor: pointer;
+	}
+
+	& button[aria-pressed="true"] {
+		background: var(--stoat-accent);
+		color: var(--stoat-sheet);
+		border-color: var(--stoat-accent);
+	}
+
+	& input[type="number"] {
+		width: 4.5em;
+	}
+
+	& label {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	& .stoat-swatch {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1px;
+		min-width: 24px;
+		min-height: 24px;
+	}
+
+	& .stoat-colour {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+	}
+
+	& .stoat-colour i {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border-radius: 3px;
+		border: 1px solid var(--stoat-line-soft);
+	}
+
+	& .stoat-status {
+		font-family: var(--stoat-mono);
+		font-size: 11px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 40ch;
+	}
+
+	& .stoat-status[data-state="error"] {
+		color: var(--stoat-danger);
+	}
+
+	& .stoat-stage {
+		position: relative;
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	& .stoat-stage canvas {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		touch-action: none;
+		outline: none;
+	}
+
+	& .stoat-note {
+		padding: 6px;
+		color: var(--stoat-muted);
+	}
+
+	/* the charm's text */
+	& .stoat-text {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	& .stoat-text textarea {
+		box-sizing: border-box;
+		width: 100%;
+		height: 100%;
+		resize: none;
+		border: 0;
+		padding: 8px;
+		background: var(--stoat-sheet);
+		color: var(--stoat-ink);
+		font: 13px/1.5 var(--stoat-mono);
+		tab-size: 4;
+		outline: none;
+	}
+
+	& .stoat-problem {
+		flex: none;
+		padding: 4px 8px;
+		font-family: var(--stoat-mono);
+		font-size: 11px;
+		color: var(--stoat-danger);
+		border-top: 1px solid var(--stoat-line-soft);
+	}
+}
