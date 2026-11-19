@@ -1,0 +1,17 @@
+{
+	"name": "@lattice/skitch",
+	"version": "0.0.1",
+	"description": "skitch: a sketch, drawn four ways (atrament, drauu, perfect-freehand and rough.js) in one doc",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/*.test.js",
+		"vendor": "esbuild atrament=atrament atrament-fill=atrament/fill drauu=@drauu/core rough=roughjs --bundle --minify --format=esm --outdir=vendor --legal-comments=inline --banner:js=\"// MIT, its authors: atrament (Jakub Fiala), drauu (Anthony Fu), rough.js (Preet Shihn). vendored by pnpm vendor in packages/skitch from its devDependencies, as they are not in patchwork's importmap\""
+	},
+	"devDependencies": {
+		"@drauu/core": "^1.0.0",
+		"atrament": "^5.1.0",
+		"roughjs": "^4.6.6",
+		"esbuild": "^0.28.2"
+	}
+}

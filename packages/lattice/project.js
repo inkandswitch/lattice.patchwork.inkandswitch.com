@@ -50,8 +50,8 @@ async function newPatternstoat(api) {
 }
 
 // what lattice adds to the + menu, after knitoutjs's: markdown, a
-// patternwitch, and while alt is held, a machine, a yarn, a swatch and a
-// terminal. `baseRepo` is the
+// patternwitch, a skitch, and while alt is held, a patternstoat, a charm, a
+// machine, a yarn, a swatch and a terminal. `baseRepo` is the
 // repo under any draft overlay: latticex shares on the doc itself, never on
 // a draft's copy of it
 function lattice(baseRepo, hive) {
@@ -60,10 +60,12 @@ function lattice(baseRepo, hive) {
     menu: () => [
       datatypeItem({ type: "markdown", icon: "text", label: "markdown" }, hive),
       datatypeItem({ type: "patternwitch", icon: "grid", label: "patternwitch", detail: "a pixel painter: a grid in a few colours" }, hive),
+      datatypeItem({ type: "skitch", icon: "pencil", label: "skitch", detail: "a sketch: paint, ink, a marker and shapes, clean or sketchy" }, hive),
       {
         icon: "grid",
         label: "patternstoat",
         detail: "a design in colours that stand for stitches, built into a .k with a charm",
+        alt: true,
         create: newPatternstoat,
       },
       {

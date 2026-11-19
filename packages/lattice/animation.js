@@ -1,5 +1,6 @@
 import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
+import {filmstrip} from "./filmstrip.js"
 import {docText, knitoutOf} from "./files.js"
 import {WALE, firstLoop} from "./loopsim.js"
 import {NO_FABRIC, settler as newSettler} from "./settler.js"
@@ -152,6 +153,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	flipButton.append(icon("flip"), " flip")
 	flipButton.classList.add("knitout-animation-flip")
 	const yarns = yarnPicker({handle, strands: true})
+	// the scrubber, on a strip of how the knitting looks along the way
+	const strip = filmstrip({
+		scrubber,
+		look: () => ({yarns: colours.yarns, sheet: getComputedStyle(stage).backgroundColor, ink: colours.ink}),
+		request: () => ({squash: settings.squash, size: loopSize}),
+		yarnOf: name => yarnOf(name),
+	})
 
 	bar.append(
 		iconButton("restart", "restart", "back to the start, before the first stitch", () => {
@@ -168,7 +176,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			stepOnce()
 		}),
 		speedSelect,
-		scrubber,
+		strip.element,
 		counter,
 		flipButton,
 		strainLabel,
@@ -290,6 +298,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	readYarns()
 	function onColours() {
 		readYarns()
+		strip.redraw()
 		requestFrame()
 	}
 	addEventListener(YARNS_CHANGED, onColours)
@@ -1003,6 +1012,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		scrubber.max = String(knitout.ops.length)
 		scrubber.value = String(index)
 		counter.textContent = `${index} / ${knitout.ops.length}`
+		strip.at(index, knitout.ops.length)
 		if (pointing != null) return
 		const op = progress > 0 ? knitout.ops[index] : index > 0 ? knitout.ops[index - 1] : null
 		status.textContent = op
@@ -1224,6 +1234,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function onSettings() {
 		settings = readSettings()
 		loopSize = sizeArgs(settings, profiles)
+		strip.again()
 		requestFrame()
 	}
 	function onProfiles(resolved) {
@@ -1262,6 +1273,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		readText = text
 		knitout = readKnitout(text)
 		settler.load(knitout.ops, knitout.carriers)
+		strip.load(knitout.ops, knitout.carriers)
 		snap = true
 		track = carriageTrack(knitout.ops)
 		empty.hidden = knitout.ops.length > 0
@@ -1341,6 +1353,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 
 	return () => {
 		settler.destroy()
+		strip.destroy()
 		view?.stop()
 		delete element.inkSpace
 		playing = false

@@ -1,30 +1,42 @@
 # lattice
 
-## looking in chee's tab: `pnpm page`
+## looking in chee's tab: `node scripts/page.mjs`
 
-While `pnpm dev` is running, `pnpm page` runs code in the lattice tab chee
-has open (its own localhost page, or the site with `?dev=<tunnel>`) and
-prints what came back. Use it to look at the live DOM, styles and console,
-and to make projects and files the way the frame does (through the account's
-home folder, and keyhive when it's on), instead of guessing or asking chee
-to paste things.
+While `pnpm dev` is running, `node scripts/page.mjs` (`pnpm page` for chee)
+runs code in the lattice tab chee has open (its own localhost page, or the
+site with `?dev=<tunnel>`) and prints what came back. Use it to look at the
+live DOM, styles and console, and to make projects and files the way the
+frame does (through the account's home folder, and keyhive when it's on),
+instead of guessing or asking chee to paste things.
+
+Run it with node, not pnpm: a call takes ~0.3s, and pnpm adds ~1.2s to each
+(the global pnpm hands off to the one `packageManager` pins).
 
 ```sh
-pnpm page tabs                         # which tabs are in (none: ask chee to open `pnpm page link`)
-pnpm page eval 'document.title'        # an expression is its value; else `return`
-pnpm page eval - <<'EOF'               # longer code on stdin
+node scripts/page.mjs tabs                  # which tabs are in (none: ask chee to open `pnpm page link`)
+node scripts/page.mjs eval 'document.title' # an expression is its value; else `return`
+node scripts/page.mjs eval - <<'EOF'        # longer code on stdin
 const files = await lattice.files(lattice.projects()[0].url)
 return files.map(f => f.name)
 EOF
-pnpm page dom '.lattice-shell' --depth 2
-pnpm page inspect '.some-pane'          # box + layout styles
-pnpm page logs                          # console errors/warnings, uncaught
-pnpm page projects
-pnpm page new-project 'cables'          # makes it, shows it, prints its url
-pnpm page add-file <project-url> swatch.js < swatch.js
-pnpm page read <file-url>
-pnpm page write <file-url> < swatch.js  # merged in (updateText), not replaced
+node scripts/page.mjs dom '.lattice-shell' --depth 2
+node scripts/page.mjs inspect '.some-pane'  # box + layout styles
+node scripts/page.mjs logs                  # console errors/warnings, uncaught
+node scripts/page.mjs projects
+node scripts/page.mjs new-project 'cables'  # makes it, shows it, prints its url
+node scripts/page.mjs add-file <project-url> swatch.js < swatch.js
+node scripts/page.mjs read <file-url>
+node scripts/page.mjs write <file-url> < swatch.js  # merged in (updateText), not replaced
 ```
+
+Keep it quick: do a check in one `eval -` rather than many, and wait on the
+thing itself (a doc's field changing, an element appearing), polled every
+50ms or so, rather than a fixed sleep. When `document.visibilityState` is
+"hidden" (chee's in another window), the tab runs no animation frames and no
+ResizeObserver callbacks: `requestAnimationFrame` never resolves (the call
+times out), canvases don't draw, and a pane shown since has no size, so
+clicks on it miss. Docs and handles still work; for what needs drawing, ask
+chee to bring the tab to the front.
 
 In code, `lattice` is the helpers (`packages/lattice/page.js`): `projects()
 open(url) newProject(title) files(project) addFile(project, name, content)
@@ -77,9 +89,12 @@ vendored code, not in any lockfile:
 - `packages/lattice/vendor/amtext/`: a copy of
   `../knit.patchwork.inkandswitch.com/packages/amtext/{amtext,patchworkfolder}.js`.
   `diff -q` them, and copy over if knit's have moved.
+- `packages/skitch/vendor/`: atrament, drauu and rough.js, minified from
+  skitch's devDependencies. bump those like any other, then `pnpm vendor`
+  in packages/skitch.
 - `packages/wm/vendor/perfect-freehand.js` (a hand port) and
   `packages/knitoutjs/core/vendor/` (textiles-lab code, adapted): not
   updated from upstream. leave them.
 
 then `pnpm test`, `pnpm build`, `(cd latticex && pnpm test)`, and if
-`pnpm dev` is up, look at the tab with `pnpm page logs`.
+`pnpm dev` is up, look at the tab with `node scripts/page.mjs logs`.

@@ -73,6 +73,7 @@ export const TOOLS = {
     title: "the yarn itself, a path through where it touches other yarn, relaxed and drawn with its fibres: Hannah Twigg-Smith's knitscape",
     position: 6,
     extensions: ["k"],
+    offered: "alt",
     load: () => import("./yarnpath.js"),
   },
   editor: {

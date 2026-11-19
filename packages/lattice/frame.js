@@ -8,7 +8,7 @@ import { PROJECT_TYPES, latticeOptions } from "./project.js";
 import { CommentsInspector } from "./comments.js";
 import { Inspector } from "./inspector.js";
 import { projectTitle, typeOf } from "../wm/doc/project.js";
-import { createProject, mountProject, mountUpdate, partsFrom } from "../wm/project-view.js";
+import { createProject, filesOf, mountProject, mountUpdate, partsFrom } from "../wm/project-view.js";
 import { isOldLatticeFolder, updateLatticeFolder, updatedTo } from "./migrate.js";
 import { OLD_KNITOUTJS_TYPES, isOldKnitoutjs, updateKnitoutjs } from "../knitoutjs/app/migrate.js";
 import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
@@ -22,6 +22,7 @@ import { tooltips } from "../wm/ui/tooltip.js";
 import { menuKeys } from "../wm/ui/menus.js";
 import { rowMenu, showMenuAt } from "../wm/ui/context-menu.js";
 import { arrivals } from "../wm/ui/arriving.js";
+import { carrying } from "../wm/ui/carrying.js";
 import { holdSecret, secret } from "../wm/ui/secret.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
@@ -781,6 +782,39 @@ function Frame(props) {
     </header>`;
   }
 
+  // a file from the open project's files, dragged onto another project:
+  // moved there, or with alt held, linked from both (the same doc, in each).
+  // not onto the one it's from, nor one from before
+  const [dropOn, setDropOn] = createSignal(null);
+  const takesFile = (event, project) =>
+    !!carrying() &&
+    event.dataTransfer?.types.includes("text/x-patchwork-dnd") &&
+    !isOld(project) &&
+    project.url !== currentUrl();
+
+  async function dropFile(event, project) {
+    const file = carrying();
+    const link = event.altKey;
+    // what was dropped is what's carried, not one left over from before
+    let dropped = null;
+    try {
+      dropped = JSON.parse(event.dataTransfer.getData("text/x-patchwork-dnd"))?.items?.[0]?.url;
+    } catch {}
+    if (!file || dropped !== file.url) return;
+    say(link ? "linking it…" : "moving it…");
+    try {
+      const files = String((await findSoon(repo, project.url))?.files ?? "");
+      if (!isValidAutomergeUrl(files)) throw new Error(`couldn't find ${project.name}'s files`);
+      await filesOf(await repo.find(files), repo).add([file.url]);
+    } catch (error) {
+      console.error("[lattice] couldn't put it in", project.name, error);
+      return say(`couldn't ${link ? "link" : "move"} ${file.name}: ${String(error?.message ?? error)}`, true);
+    }
+    if (!link) file.remove();
+    say(`${link ? "linked" : "moved"} ${file.name} to ${project.name}`);
+    noteTimer = setTimeout(() => setNote(null), 3000);
+  }
+
   // a project made or added while you're here comes in (ui/arriving.js)
   const projectArriving = arrivals();
   function ProjectItem(props) {
@@ -802,8 +836,24 @@ function Frame(props) {
         : html`<button
             class="lattice-tree-item"
             aria-current=${() => (!page() && currentUrl() === project.url ? "page" : undefined)}
-            title="double click to rename · right click for menu"
+            title="double click to rename · right click for menu · drop a file on it to move it here, or with alt to link it"
             onClick=${() => choose(project.url)}
+            data-drop=${() => (dropOn() === project ? "" : undefined)}
+            onDragOver=${(event) => {
+              if (!takesFile(event, project)) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = event.altKey ? "link" : "move";
+              setDropOn(project);
+            }}
+            onDragLeave=${(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setDropOn(null);
+            }}
+            onDrop=${(event) => {
+              setDropOn(null);
+              if (!takesFile(event, project)) return;
+              event.preventDefault();
+              dropFile(event, project);
+            }}
             onDblClick=${() => setRenaming(project.url)}
             data-menu=${() => (projectMenuOpen() && menuProject() === project ? "" : undefined)}
             data-arriving=${arriving}

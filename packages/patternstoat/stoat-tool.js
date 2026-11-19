@@ -8,6 +8,7 @@ import {setBuild} from "../knitoutjs/core/builds.js"
 import {buildInto} from "./build-into.js"
 import {paintColours, paintStitches, resize as resizeStoat, setYarns} from "./patternstoat.js"
 import {columnsOf} from "./charm.js"
+import {followView} from "./follow-view.js"
 import {STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
@@ -182,6 +183,11 @@ export default function StoatTool(handle, element, context = {}) {
 	let kDoc = null
 	let problem = null
 	let fitted = false
+	// following someone, it's where they've moved and zoomed to (follow-view.js)
+	const follow = followView(element, repo, view, () => {
+		fitted = true
+		draw()
+	})
 	// a stroke, before it's kept: cell → what it'll be
 	let pending = new Map()
 	let pendingYarns = null
@@ -277,6 +283,7 @@ export default function StoatTool(handle, element, context = {}) {
 	function paint() {
 		const d = doc()
 		if (!d || !colours || !size.width) return
+		follow.shared()
 		ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
 		ctx.fillStyle = colours.sheet
 		ctx.fillRect(0, 0, size.width, size.height)
@@ -697,6 +704,7 @@ export default function StoatTool(handle, element, context = {}) {
 
 	return () => {
 		disposed = true
+		follow.stop()
 		cancelAnimationFrame(frame)
 		clearTimeout(buildTimer)
 		resizeObserver.disconnect()

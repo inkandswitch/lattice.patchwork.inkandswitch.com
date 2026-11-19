@@ -205,4 +205,25 @@ export const plugins = [
       return (await import("../patternwitch/tool.js")).default;
     },
   },
+  // skitch, a sketch drawn four ways (atrament, drauu, perfect-freehand and
+  // rough.js): packages/skitch. a project's + menu makes one (project.js)
+  {
+    type: "patchwork:datatype",
+    id: "skitch",
+    name: "Skitch",
+    icon: "Brush",
+    async load() {
+      return (await import("../skitch/marks.js")).SkitchDatatype;
+    },
+  },
+  {
+    type: "patchwork:tool",
+    id: "skitch",
+    name: "Skitch",
+    icon: "Brush",
+    supportedDatatypes: ["skitch"],
+    async load() {
+      return (await import("../skitch/tool.js")).default;
+    },
+  },
 ];

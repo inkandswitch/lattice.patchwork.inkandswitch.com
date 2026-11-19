@@ -10,6 +10,7 @@ import {stylesheet} from "../wm/ui/stylesheet.js"
 import {ANCHORS, addColumn, addRow, columnsOf, groupsOf, moveColumn, paintCell, removeColumn, removeRow, renumberColumn, setColumn, setRow} from "./charm.js"
 import {CHARM_STITCHES, STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
 import {settingProblem} from "./build.js"
+import {followView} from "./follow-view.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
 const TOOLS = [
@@ -184,6 +185,8 @@ export default function ArrangementTool(handle, element, context = {}) {
 	let colours = null
 	let size = {width: 0, height: 0}
 	const view = {cell: 22, x: 0, y: 0}
+	// following someone, it's where they've moved and zoomed to (follow-view.js)
+	const follow = followView(element, context.repo ?? element.repo, view, () => draw())
 	let pending = new Map()
 	let drag = null
 
@@ -303,6 +306,7 @@ export default function ArrangementTool(handle, element, context = {}) {
 	function paint() {
 		const d = doc()
 		if (!d || !colours || !size.width) return
+		follow.shared()
 		ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0)
 		ctx.fillStyle = colours.sheet
 		ctx.fillRect(0, 0, size.width, size.height)
@@ -583,6 +587,7 @@ export default function ArrangementTool(handle, element, context = {}) {
 	showColumnBar()
 
 	return () => {
+		follow.stop()
 		cancelAnimationFrame(frame)
 		resizeObserver.disconnect()
 		scheme.removeEventListener("change", onTheme)

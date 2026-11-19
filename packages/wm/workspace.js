@@ -26,6 +26,7 @@ import { holdSecret, secret } from "./ui/secret.js";
 import { scrollsAlong } from "./ui/along.js";
 import { rowMenu, showMenuAt } from "./ui/context-menu.js";
 import { arrivals } from "./ui/arriving.js";
+import { carry, putDown } from "./ui/carrying.js";
 import { createInk } from "./ink.js";
 import { anchorAt, inside, placeAnchor } from "./anchor.js";
 import { FOLLOW_GRACE, keptFollow } from "./kept.js";
@@ -2446,17 +2447,35 @@ export function mountWorkspace(
   }
 
   // a file's menu (ui/context-menu.js), as a project's is in lattice's
-  // sidebar: renaming it,
-  // and taking it out of the project, which asks twice. delete on the file
-  // opens it asking already
+  // sidebar: renaming it, and taking it out of the project, which asks
+  // twice. delete on the file opens it asking already. while alt is held
+  // there's more (as there is in the + menu): copying its automerge url
   let fileMenu;
   const [fileMenuFor, setFileMenuFor] = createSignal(null);
   const [fileMenuOpen, setFileMenuOpen] = createSignal(false);
   const [fileRemoving, setFileRemoving] = createSignal(false);
-  function openFileMenu(at, url, { removing = false } = {}) {
+  function openFileMenu(at, url, { removing = false, alt = false } = {}) {
     setFileMenuFor(url);
     setFileRemoving(removing);
+    setFileCopied(false);
+    setAltHeld(alt);
     showMenuAt(fileMenu, at);
+  }
+
+  // copying: it says so, a moment, before the menu goes
+  const [fileCopied, setFileCopied] = createSignal(false);
+  let fileCopiedTimer = null;
+  async function copyFromFileMenu(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error("[wm] couldn't copy it", error);
+      fileMenu.hidePopover();
+      return;
+    }
+    setFileCopied(true);
+    clearTimeout(fileCopiedTimer);
+    fileCopiedTimer = setTimeout(() => fileMenu.hidePopover(), 600);
   }
 
   function removeFromMenu(url) {
@@ -2566,13 +2585,18 @@ export function mountWorkspace(
             data-menu=${() => (fileMenuFor() === file.url && fileMenuOpen() ? "" : undefined)}
             data-arriving=${arriving(file.url)}
             draggable="true"
-            ref=${rowMenu((at) => openFileMenu(at, file.url))}
+            ref=${rowMenu((at, event) => openFileMenu(at, file.url, { alt: !!event?.altKey }))}
             onDragStart=${(event) => {
               event.dataTransfer.setData(
                 "text/x-patchwork-dnd",
                 JSON.stringify({ items: [{ url: file.url, name: file.name }] }),
               );
-              event.dataTransfer.effectAllowed = "copy";
+              // onto a pane it's a copy; onto another project (lattice's,
+              // down the side) a move, or a link with alt held
+              event.dataTransfer.effectAllowed = "all";
+              const carried = { url: file.url, name: file.name, remove: () => removeFile(file.url) };
+              carry(carried);
+              event.currentTarget.addEventListener("dragend", () => putDown(carried), { once: true });
             }}
             onPointerEnter=${() => setHovered(file.url)}
             onPointerLeave=${unhover}
@@ -2605,7 +2629,7 @@ export function mountWorkspace(
                       if (event.key === "Delete" || event.key === "Backspace") {
                         event.preventDefault();
                         const box = event.currentTarget.getBoundingClientRect();
-                        openFileMenu({ x: box.left + 10, y: box.bottom - 4 }, file.url, { removing: true });
+                        openFileMenu({ x: box.left + 10, y: box.bottom - 4 }, file.url, { removing: true, alt: event.altKey });
                       }
                       if (event.key === "F2") {
                         event.preventDefault();
@@ -2637,9 +2661,23 @@ export function mountWorkspace(
         setFileMenuOpen(event.newState === "open");
         if (event.newState === "closed") {
           setFileRemoving(false);
+          setFileCopied(false);
+          clearTimeout(fileCopiedTimer);
         }
       }}
     >
+      <${Show} when=${() => altHeld() || fileCopied()}>
+        <button
+          class="lattice-wm-menu-item"
+          role="menuitem"
+          title="its automerge url, to open it or link it from anywhere"
+          data-copied=${() => (fileCopied() ? "" : undefined)}
+          onClick=${() => copyFromFileMenu(url())}
+        >
+          ${() => icon(fileCopied() ? "check" : "link")} copy url
+          <${Show} when=${fileCopied}><small class="lattice-wm-copied">copied</small><//>
+        </button>
+      <//>
       <button
         class="lattice-wm-menu-item"
         role="menuitem"
@@ -2895,6 +2933,7 @@ export function mountWorkspace(
     menusOff();
     document.removeEventListener("keyup", onAltKey);
     clearTimeout(noticeTimer);
+    clearTimeout(fileCopiedTimer);
     clearInterval(ticker);
     offPatchworkTools();
     for (const [id, host] of hosts) destroyHost(id, host);
