@@ -7,7 +7,7 @@
 // with the kniterate editor's brushes and stitches, and a charm's own: ✦
 // (as painted), cast off, cast on
 import {stylesheet} from "../wm/ui/stylesheet.js"
-import {ANCHORS, addColumn, addRow, groupsOf, moveColumn, paintCell, removeColumn, removeRow, setColumn, setRow} from "./charm.js"
+import {ANCHORS, addColumn, addRow, columnsOf, groupsOf, moveColumn, paintCell, removeColumn, removeRow, renumberColumn, setColumn, setRow} from "./charm.js"
 import {CHARM_STITCHES, STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
@@ -130,17 +130,8 @@ export default function ArrangementTool(handle, element, context = {}) {
 	numberInput.addEventListener("change", () => {
 		const next = Math.round(Number(numberInput.value))
 		if (!(next >= 1) || selectedColour == null || doc().columns.some(column => column.colour === next)) return showColumnBar()
-		handle.change(d => {
-			const old = d.columns.find(column => column.colour === selectedColour)
-			if (!old) return
-			const at = d.columns.indexOf(old)
-			const cells = JSON.parse(JSON.stringify(d.cells?.[selectedColour] ?? {}))
-			const {name, hex, width, anchor} = old
-			removeColumn(d, selectedColour)
-			addColumn(d, {colour: next, name, hex, width, anchor})
-			moveColumn(d, next, at)
-			d.cells[next] = cells
-		})
+		const from = selectedColour
+		handle.change(d => renumberColumn(d, from, next))
 		selectedColour = next
 	})
 	nameInput.addEventListener("change", () => changeColumn({name: nameInput.value}))
@@ -166,7 +157,7 @@ export default function ArrangementTool(handle, element, context = {}) {
 
 	function moveBy(step) {
 		if (selectedColour == null) return
-		const at = doc().columns.findIndex(column => column.colour === selectedColour)
+		const at = columnsOf(doc()).findIndex(column => column.colour === selectedColour)
 		handle.change(d => moveColumn(d, selectedColour, Math.max(0, at + step)))
 	}
 
@@ -234,7 +225,7 @@ export default function ArrangementTool(handle, element, context = {}) {
 	function layout() {
 		const out = []
 		let x = GUTTER_WIDTH + GAP - view.x
-		for (const column of doc()?.columns ?? []) {
+		for (const column of columnsOf(doc())) {
 			const width = Math.max(1, column.width || 1) * s()
 			out.push({column, x, width})
 			x += width + GAP

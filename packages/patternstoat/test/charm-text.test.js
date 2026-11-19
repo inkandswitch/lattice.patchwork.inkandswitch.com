@@ -26,7 +26,7 @@ test("a wide column with an anchor, and rows with settings and a fixed yarn", ()
 	const text = 'rows: > +<[s6 v100 r100 y5] ~\n<> 9 "ilana\'s tile" #4caf50 x3 *| (t/.,k/.,./. ./.,./k,t/. ./.,./.,./.)\n'
 	const parsed = parseCharm(text)
 	assert.equal(parsed.error, undefined)
-	assert.deepEqual(parsed.columns, [{colour: 9, name: "ilana's tile", hex: "#4caf50", width: 3, anchor: "colour-right"}])
+	assert.deepEqual(parsed.columns, [{colour: 9, name: "ilana's tile", hex: "#4caf50", width: 3, anchor: "colour-right", order: 0}])
 	assert.deepEqual(parsed.rows.map(({id, ...r}) => r), [
 		{ref: true, dir: "+", yarn: "row", stitch: null, speed: null, roller: null},
 		{ref: false, dir: "-", yarn: "5", stitch: "6", speed: "100", roller: "100"},
@@ -94,5 +94,5 @@ test("a row added in the text is added, and its cells with it", () => {
 	applyCharm(doc, parsed)
 	assert.equal(doc.rows.length, 3)
 	assert.deepEqual(doc.cells[1][doc.rows[2].id], [{f: "t", b: null}])
-	assert.equal(doc.cells[2][doc.rows[2].id], undefined)
+	assert.deepEqual(doc.cells[2][doc.rows[2].id], [{f: null, b: null}])
 })

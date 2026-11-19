@@ -7,6 +7,7 @@ import {YARNS_CHANGED, yarnColours} from "../knitoutjs/core/yarns.js"
 import {setBuild} from "../knitoutjs/core/builds.js"
 import {buildInto} from "./build-into.js"
 import {paintColours, paintStitches, resize as resizeStoat, setYarns} from "./patternstoat.js"
+import {columnsOf} from "./charm.js"
 import {STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
@@ -207,7 +208,7 @@ export default function StoatTool(handle, element, context = {}) {
 	function showPalette() {
 		palette.replaceChildren()
 		if (layer === "colours") {
-			for (const column of charm()?.columns ?? []) {
+			for (const column of columnsOf(charm())) {
 				const b = button("", `${column.colour}: ${column.name}`, () => {
 					colour = column.colour
 					showPalette()
@@ -502,7 +503,7 @@ export default function StoatTool(handle, element, context = {}) {
 		if (/^[0-9]$/.test(event.key)) {
 			if (layer === "stitches") stitch = STITCHES.find(t => t.key === event.key) ?? stitch
 			else {
-				const column = charm()?.columns?.[(Number(event.key) + 9) % 10]
+				const column = columnsOf(charm())[(Number(event.key) + 9) % 10]
 				if (column) colour = column.colour
 			}
 			showPalette()

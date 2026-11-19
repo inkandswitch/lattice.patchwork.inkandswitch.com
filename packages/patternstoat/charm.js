@@ -6,12 +6,16 @@
 //
 // - a column: {colour (a number, and who it is: a patternstoat's cells say
 //   it), name, hex, width (in needles: a tile like ilana's is 3), anchor
-//   (where its tile repeats from, stoll's four: see cellAt)}
+//   (where its tile repeats from, stoll's four: see cellAt), order (where
+//   it's shown: moving a column changes this, never the list, which two
+//   people moving at once would leave with it twice). read them with
+//   columnsOf
 // - a row: {id, ref (a reference row, or a + row after one), dir ("+" →,
 //   "-" ←, "~" the other way from its carrier's last pass), yarn ("row":
 //   the patternstoat's yarn column; or a carrier, "1"–"6"), stitch, speed,
 //   roller (null: the kniterate's defaults)}
-// - cells[colour][row id]: a column's needles on that row, each {f, b}:
+// - cells[colour][row id]: a column's needles on that row, each {f, b}
+//   (made whenever a column or a row is, so painting only ever sets a bed):
 //   what the front bed and the back bed do there. a code, as the kniterate
 //   editor paints them (k knit, t tuck, m miss, x transfer, d drop), or *
 //   (transparent: what the patternstoat's stitch layer has there), co (cast
@@ -42,19 +46,34 @@ const STARTER = [
 	[7, "as painted", "#a4a19a", {a: {f: "*"}, b: {b: "*"}}],
 ]
 
+const blank = width => Array.from({length: Math.max(1, width || 1)}, () => ({...NOTHING}))
+
 export function newCharm() {
 	const cells = {}
 	for (const [colour, , , rows] of STARTER) {
 		cells[colour] = {}
-		for (const [id, cell] of Object.entries(rows)) cells[colour][id] = [{...NOTHING, ...cell}]
+		for (const id of ["a", "b"]) cells[colour][id] = [{...NOTHING, ...rows[id]}]
 	}
 	return {
 		"@patchwork": {type: CHARM_TYPE},
 		title: "charm",
 		rows: [row("a", true, "+"), row("b", false, "-")],
-		columns: STARTER.map(([colour, name, hex]) => ({colour, name, hex, width: 1, anchor: "colour-left"})),
+		columns: STARTER.map(([colour, name, hex], order) => ({colour, name, hex, width: 1, anchor: "colour-left", order})),
 		cells,
 	}
+}
+
+// the columns, in order, each colour once
+export function columnsOf(charm) {
+	const seen = new Set()
+	const columns = []
+	;(charm?.columns ?? []).forEach((column, index) => {
+		if (seen.has(column.colour)) return
+		seen.add(column.colour)
+		columns.push({column, index})
+	})
+	const key = ({column, index}) => (typeof column.order === "number" ? column.order : index)
+	return columns.sort((a, b) => key(a) - key(b) || a.index - b.index).map(({column}) => column)
 }
 
 // each reference row with the + rows after it (rows before the first
@@ -98,6 +117,11 @@ export function addRow(doc, {after = null, ref = false} = {}) {
 	const added = row(id, ref, "~")
 	if (at < 0) doc.rows.push(added)
 	else doc.rows.splice(at + 1, 0, added)
+	if (!doc.cells) doc.cells = {}
+	for (const column of doc.columns) {
+		if (!doc.cells[column.colour]) doc.cells[column.colour] = {}
+		doc.cells[column.colour][id] = blank(column.width)
+	}
 	return id
 }
 
@@ -115,11 +139,12 @@ export function setRow(doc, id, fields) {
 	for (const [key, value] of Object.entries(fields)) if (r[key] !== value) r[key] = value
 }
 
-export function addColumn(doc, {colour, name = "", hex = "#888888", width = 1, anchor = "colour-left"}) {
+export function addColumn(doc, {colour, name = "", hex = "#888888", width = 1, anchor = "colour-left", order = null}) {
 	if (columnOf(doc, colour)) return
-	doc.columns.push({colour, name, hex, width, anchor})
+	const last = Math.max(-1, ...doc.columns.map((column, index) => (typeof column.order === "number" ? column.order : index)))
+	doc.columns.push({colour, name, hex, width, anchor, order: order ?? last + 1})
 	if (!doc.cells) doc.cells = {}
-	if (!doc.cells[colour]) doc.cells[colour] = {}
+	if (!doc.cells[colour]) doc.cells[colour] = Object.fromEntries(doc.rows.map(r => [r.id, blank(width)]))
 }
 
 export function removeColumn(doc, colour) {
@@ -142,13 +167,26 @@ export function setColumn(doc, colour, fields) {
 	}
 }
 
-// move a column to `index` among the columns
+// move a column to `index` among the columns: only orders change
 export function moveColumn(doc, colour, index) {
-	const at = doc.columns.findIndex(column => column.colour === colour)
-	if (at < 0 || at === index) return
-	const {colour: c, name, hex, width, anchor} = doc.columns[at]
-	doc.columns.splice(at, 1)
-	doc.columns.splice(Math.max(0, Math.min(index, doc.columns.length)), 0, {colour: c, name, hex, width, anchor})
+	const shown = columnsOf(doc)
+	const at = shown.findIndex(column => column.colour === colour)
+	if (at < 0) return
+	const [moving] = shown.splice(at, 1)
+	shown.splice(Math.max(0, Math.min(index, shown.length)), 0, moving)
+	shown.forEach((column, order) => {
+		if (column.order !== order) column.order = order
+	})
+}
+
+// give a colour a new number, its cells going with it
+export function renumberColumn(doc, from, to) {
+	const column = columnOf(doc, from)
+	if (!column || from === to || columnOf(doc, to)) return
+	column.colour = to
+	if (!doc.cells) doc.cells = {}
+	doc.cells[to] = JSON.parse(JSON.stringify(doc.cells[from] ?? {}))
+	if (doc.cells[from] !== undefined) delete doc.cells[from]
 }
 
 // paint `code` onto bed `bed` ("f" or "b") of a column's needle `i`, on a
@@ -159,7 +197,8 @@ export function paintCell(doc, colour, rowId, i, bed, code) {
 	if (!doc.cells) doc.cells = {}
 	if (!doc.cells[colour]) doc.cells[colour] = {}
 	const width = Math.max(1, column.width || 1)
-	if (!doc.cells[colour][rowId]) doc.cells[colour][rowId] = Array.from({length: width}, () => ({...NOTHING}))
+	// (a charm from before every row's cells were made)
+	if (!doc.cells[colour][rowId]) doc.cells[colour][rowId] = blank(width)
 	const cell = doc.cells[colour][rowId][i]
 	if (cell && cell[bed] !== code) cell[bed] = code
 }

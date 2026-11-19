@@ -1,6 +1,7 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
-import {addColumn, addRow, cellAt, columnOf, groupsOf, newCharm, paintCell, removeColumn, removeRow, setColumn, setRow} from "../charm.js"
+import {addColumn, addRow, cellAt, columnOf, columnsOf, groupsOf, moveColumn, newCharm, paintCell, removeColumn, removeRow, renumberColumn, setColumn, setRow} from "../charm.js"
+import {assignments} from "./assignments.js"
 
 test("a new charm has the wristwarmer's colours, a tube a row and a +1", () => {
 	const charm = newCharm()
@@ -68,4 +69,40 @@ test("rows are added where asked, and taken out with their cells", () => {
 	removeRow(charm, "b")
 	assert.deepEqual(charm.rows.map(r => r.id), ["a", id])
 	assert.equal(charm.cells[1].b, undefined)
+})
+
+test("painting a cell never assigns a row's cells or a cell, only a bed", () => {
+	const charm = newCharm()
+	const id = addRow(charm, {after: "b"})
+	addColumn(charm, {colour: 9, name: "tile", hex: "#4caf50", width: 3})
+	for (const [colour, rowId] of [[2, "a"], [1, id], [9, "a"], [9, id]]) {
+		const seen = assignments(charm, d => paintCell(d, colour, rowId, 0, "f", "t"))
+		assert.deepEqual(seen, [{op: "set", path: `cells.${colour}.${rowId}.0.f`, object: false}])
+	}
+	assert.equal(charm.cells[9].b.length, 3)
+})
+
+test("moving a column changes only orders, never the list", () => {
+	const charm = newCharm()
+	const seen = assignments(charm, d => moveColumn(d, 3, 0))
+	assert.ok(seen.length > 0)
+	assert.ok(seen.every(s => s.op === "set" && s.path.endsWith(".order")), JSON.stringify(seen))
+	assert.deepEqual(columnsOf(charm).map(c => c.colour), [3, 1, 2, 4, 5, 6, 7])
+	moveColumn(charm, 3, 6)
+	assert.deepEqual(columnsOf(charm).map(c => c.colour), [1, 2, 4, 5, 6, 7, 3])
+})
+
+test("a colour twice in the list (two moves at once, before) is read once", () => {
+	const charm = newCharm()
+	charm.columns.push({...charm.columns[2]})
+	assert.deepEqual(columnsOf(charm).map(c => c.colour), [1, 2, 3, 4, 5, 6, 7])
+})
+
+test("renumbering a colour takes its cells with it", () => {
+	const charm = newCharm()
+	renumberColumn(charm, 3, 30)
+	assert.equal(columnOf(charm, 3), undefined)
+	assert.deepEqual(charm.cells[30].a, [{f: "co", b: null}])
+	assert.equal(charm.cells[3], undefined)
+	assert.equal(columnsOf(charm)[2].colour, 30)
 })

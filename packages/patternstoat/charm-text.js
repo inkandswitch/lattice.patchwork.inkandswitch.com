@@ -16,7 +16,7 @@
 //
 // text has no row ids: parseCharm takes the ids of the charm it's from, and
 // gives them to its rows in order (new ones to any more)
-import {CODES, addColumn, moveColumn, removeColumn, removeRow, setColumn, setRow} from "./charm.js"
+import {CODES, addColumn, columnsOf, removeColumn, removeRow, setColumn, setRow} from "./charm.js"
 
 const DIRS = {">": "+", "<": "-", "~": "~"}
 const DIR_TOKENS = {"+": ">", "-": "<", "~": "~"}
@@ -38,7 +38,7 @@ export function printCharm(charm) {
 		return `${row.ref ? "" : "+"}${DIR_TOKENS[row.dir] ?? "~"}${settings.length ? `[${settings.join(" ")}]` : ""}`
 	})
 	const lines = [`rows: ${rows.join(" ")}`]
-	for (const column of charm.columns) {
+	for (const column of columnsOf(charm)) {
 		const width = Math.max(1, column.width || 1)
 		const groups = charm.rows.map(row => {
 			const cells = charm.cells?.[column.colour]?.[row.id]
@@ -128,9 +128,9 @@ export function parseCharm(text, ids = []) {
 				}
 				parsed.push({f: f === "." ? null : f, b: b === "." ? null : b})
 			}
-			if (parsed.some(cell => cell.f || cell.b)) cells[colour][rows[r].id] = parsed
+			cells[colour][rows[r].id] = parsed
 		}
-		columns.push({colour, name, hex: m[3], width, anchor: m[5] ? ANCHOR_OF[m[5]] : "colour-left"})
+		columns.push({colour, name, hex: m[3], width, anchor: m[5] ? ANCHOR_OF[m[5]] : "colour-left", order: columns.length})
 	}
 	if (!rows) return fail(1, "rows: has to come first")
 	return {rows, columns, cells}
@@ -139,31 +139,24 @@ export function parseCharm(text, ids = []) {
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 // write a parsed charm into a charm's doc, changing only what's different:
-// rows by id (in the parsed order), columns by colour (in the parsed order)
+// rows by id (text gives them by position, so they're never moved: kept,
+// added at the end, or taken off it), columns by colour, put in the parsed
+// order by their order fields
 export function applyCharm(doc, parsed) {
 	const keep = new Set(parsed.rows.map(row => row.id))
 	for (const row of [...doc.rows]) if (!keep.has(row.id)) removeRow(doc, row.id)
-	parsed.rows.forEach((row, i) => {
+	for (const row of parsed.rows) {
 		const {id, ...fields} = row
-		const at = doc.rows.findIndex(r => r.id === id)
-		if (at < 0) doc.rows.splice(i, 0, {...row})
-		else {
-			if (at !== i) {
-				const moved = {...doc.rows[at]}
-				doc.rows.splice(at, 1)
-				doc.rows.splice(i, 0, moved)
-			}
-			setRow(doc, id, fields)
-		}
-	})
+		if (doc.rows.some(r => r.id === id)) setRow(doc, id, fields)
+		else doc.rows.push({...row})
+	}
 
 	const colours = new Set(parsed.columns.map(column => column.colour))
-	for (const column of [...doc.columns]) if (!colours.has(column.colour)) removeColumn(doc, column.colour)
-	parsed.columns.forEach((column, i) => {
+	for (const column of columnsOf(doc)) if (!colours.has(column.colour)) removeColumn(doc, column.colour)
+	parsed.columns.forEach(column => {
 		const {colour, ...fields} = column
 		if (!doc.columns.some(c => c.colour === colour)) addColumn(doc, column)
 		else setColumn(doc, colour, fields)
-		moveColumn(doc, colour, i)
 		if (!doc.cells[colour]) doc.cells[colour] = {}
 		const theirs = parsed.cells[colour] ?? {}
 		const ours = doc.cells[colour]
@@ -180,4 +173,3 @@ export function applyCharm(doc, parsed) {
 		}
 	})
 }
-
