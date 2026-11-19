@@ -1,0 +1,10 @@
+{
+	"name": "@lattice/patternstoat",
+	"version": "0.0.1",
+	"description": "patternstoat (a design in colours that stand for stitches) and charms (lattice's colour arrangements)",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"test": "node --test test/*.test.js"
+	}
+}
