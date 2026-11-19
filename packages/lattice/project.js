@@ -22,6 +22,33 @@ const PROFILES = [
   { icon: "fit", label: "swatch", detail: "a swatch: how it was knit, and what it measures", make: newSwatch },
 ];
 
+// a patternstoat (the wristwarmer, to start from), the charm it's knitted
+// with and the .k it writes, side by side, built once so there's something
+// to see: as knitoutjs's newPattern makes a .js and its .k
+async function newPatternstoat(api) {
+  const [{ newCharm }, stoats, { buildInto }, { setBuild }] = await Promise.all([
+    import("../patternstoat/charm.js"),
+    import("../patternstoat/patternstoat.js"),
+    import("../patternstoat/build-into.js"),
+    import("../knitoutjs/core/builds.js"),
+  ]);
+  const charm = await api.repo.create2({ ...newCharm(), title: "wristwarmer" });
+  const k = await api.createFile("wristwarmer.k");
+  const doc = stoats.newPatternstoat({ charm: charm.url });
+  stoats.paintWristwarmer(doc);
+  const stoat = await api.repo.create2({ ...doc, title: "wristwarmer", knitoutTarget: k });
+  api.openRow([
+    [
+      { url: stoat.url, tool: "patternstoat" },
+      { url: charm.url, tool: "arrangement" },
+    ],
+    [{ url: k, tool: "visualizer" }],
+  ]);
+  setBuild(stoat.url, { state: "running" });
+  const { error } = await buildInto(stoat, await api.repo.find(k), api.repo);
+  setBuild(stoat.url, error ? { state: "error", message: error.message } : { state: "ok" });
+}
+
 // what lattice adds to the + menu, after knitoutjs's: markdown, a
 // patternwitch, and while alt is held, a machine, a yarn, a swatch and a
 // terminal. `baseRepo` is the
@@ -33,6 +60,22 @@ function lattice(baseRepo, hive) {
     menu: () => [
       datatypeItem({ type: "markdown", icon: "text", label: "markdown" }, hive),
       datatypeItem({ type: "patternwitch", icon: "grid", label: "patternwitch", detail: "a pixel painter: a grid in a few colours" }, hive),
+      {
+        icon: "grid",
+        label: "patternstoat",
+        detail: "a design in colours that stand for stitches, built into a .k with a charm",
+        create: newPatternstoat,
+      },
+      {
+        icon: "grid",
+        label: "charm",
+        detail: "a colour arrangement: what each colour of a patternstoat does",
+        alt: true,
+        async create(api) {
+          const { newCharm } = await import("../patternstoat/charm.js");
+          return { url: (await api.repo.create2(newCharm())).url, tool: "arrangement" };
+        },
+      },
       ...PROFILES.map(({ icon, label, detail, make }) => ({
         icon,
         label,

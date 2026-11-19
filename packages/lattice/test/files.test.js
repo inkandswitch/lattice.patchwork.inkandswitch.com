@@ -33,3 +33,10 @@ test("the kniterate editor is offered for a .k only while alt is held", async ()
 	assert.deepEqual(altToolsFor("k").map(tool => tool.id), ["kniterate"])
 	assert.deepEqual(altToolsFor("js"), [])
 })
+
+test("a patternstoat and a charm are known by their types, and open in their editors", () => {
+	assert.equal(fileExtension({"@patchwork": {type: "lattice:patternstoat"}}), "patternstoat")
+	assert.equal(fileExtension({"@patchwork": {type: "lattice:charm"}}), "charm")
+	assert.deepEqual(toolsFor("patternstoat").map(t => t.id), ["patternstoat"])
+	assert.deepEqual(toolsFor("charm").map(t => t.id), ["arrangement", "charm-text"])
+})

@@ -21,6 +21,8 @@ export function shareUrl(filesUrl, name) {
 export function fileExtension(doc) {
   const type = doc?.["@patchwork"]?.type;
   if (type === "latticex") return "latticex";
+  if (type === "lattice:patternstoat") return "patternstoat";
+  if (type === "lattice:charm") return "charm";
   const kind = profileKind(doc);
   if (kind) return kind;
   const own = fileExtensionOf(doc);
@@ -109,6 +111,32 @@ export const TOOLS = {
     extensions: ["yarn"],
     patchworkId: "lattice:yarn",
     load: () => import("./yarn.js"),
+  },
+  patternstoat: {
+    id: "patternstoat",
+    name: "patternstoat",
+    title: "a design in colours that stand for stitches, with stitches painted on top, built into a .k with a charm",
+    position: 1,
+    extensions: ["patternstoat"],
+    patchworkId: "lattice:patternstoat",
+    load: () => import("../patternstoat/stoat-tool.js"),
+  },
+  arrangement: {
+    id: "arrangement",
+    name: "arrangement",
+    title: "a charm: what each colour of a patternstoat does, a pass a row, as the kniterate editor paints them",
+    position: 1,
+    extensions: ["charm"],
+    patchworkId: "lattice:charm",
+    load: () => import("../patternstoat/arrangement-tool.js"),
+  },
+  "charm-text": {
+    id: "charm-text",
+    name: "text",
+    title: "the charm as text: a rule a colour",
+    position: 2,
+    extensions: ["charm"],
+    load: () => import("../patternstoat/text-tool.js"),
   },
   swatch: {
     id: "swatch",

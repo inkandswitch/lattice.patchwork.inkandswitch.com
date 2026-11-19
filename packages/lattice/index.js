@@ -122,6 +122,34 @@ export const plugins = [
       },
     },
   ]),
+  // a patternstoat (a design in colours that stand for stitches) and the
+  // charm it's knitted with (lattice's colour arrangement): packages/
+  // patternstoat. a project's + menu makes them (project.js)
+  ...[
+    ["lattice:patternstoat", "Patternstoat", "Grid3x3", "PatternstoatDatatype", () => import("../patternstoat/stoat-tool.js")],
+    ["lattice:charm", "Charm", "Sparkles", "CharmDatatype", () => import("../patternstoat/arrangement-tool.js")],
+  ].flatMap(([id, name, icon, datatype, editor]) => [
+    {
+      type: "patchwork:datatype",
+      id,
+      name,
+      icon,
+      unlisted: true,
+      async load() {
+        return (await import("../patternstoat/datatypes.js"))[datatype];
+      },
+    },
+    {
+      type: "patchwork:tool",
+      id,
+      name,
+      icon,
+      supportedDatatypes: [id],
+      async load() {
+        return (await editor()).default;
+      },
+    },
+  ]),
   // a terminal latticex shares from someone's computer. unlisted: you make
   // one from a frame's + menu, holding alt
   {
