@@ -100,19 +100,19 @@ export default function StoatTool(handle, element, context = {}) {
 	charmSelect.title = "the charm this is knitted with: what each colour does"
 	charmSelect.addEventListener("change", () => {
 		const url = charmSelect.value || null
-		handle.change(d => {
+		changeHere(d => {
 			if (d.charm !== url) d.charm = url
 		})
 	})
-	const width = numberField("width", "cells across", value => handle.change(d => resizeStoat(d, value, d.height)), {max: 252})
-	const height = numberField("rows", "rows up", value => handle.change(d => resizeStoat(d, d.width, value)), {max: 2000})
-	const left = numberField("from needle", "the bed needle its left edge is on", value => handle.change(d => {
+	const width = numberField("width", "cells across", value => changeHere(d => resizeStoat(d, value, d.height)), {max: 252})
+	const height = numberField("rows", "rows up", value => changeHere(d => resizeStoat(d, d.width, value)), {max: 2000})
+	const left = numberField("from needle", "the bed needle its left edge is on", value => changeHere(d => {
 		if (d.left !== value) d.left = value
 	}))
 	const gaugeSelect = document.createElement("select")
 	gaugeSelect.title = "half gauge: a cell's front and back are a pair of needles, so a cast off has empty needles to go through. full: both on one"
 	gaugeSelect.append(new Option("half gauge", "2"), new Option("full gauge", "1"))
-	gaugeSelect.addEventListener("change", () => handle.change(d => {
+	gaugeSelect.addEventListener("change", () => changeHere(d => {
 		const gauge = Number(gaugeSelect.value)
 		if (d.gauge !== gauge) d.gauge = gauge
 	}))
@@ -188,6 +188,8 @@ export default function StoatTool(handle, element, context = {}) {
 	let drag = null
 	let last = null
 	let spaceHeld = false
+	// closed: anything still on its way is dropped
+	let disposed = false
 
 	const charm = () => charmHandle?.doc() ?? null
 	const hexOf = c => charm()?.columns?.find(column => column.colour === c)?.hex ?? null
@@ -379,7 +381,7 @@ export default function StoatTool(handle, element, context = {}) {
 			groups.get(id).points.push(at.split(",").map(Number))
 		}
 		pending = new Map()
-		handle.change(d => {
+		changeHere(d => {
 			for (const {value, points} of groups.values()) {
 				if (layer === "colours") paintColours(d, points, value)
 				else {
@@ -462,7 +464,7 @@ export default function StoatTool(handle, element, context = {}) {
 		if (done.kind === "yarn") {
 			const rows = [...pendingYarns.keys()]
 			pendingYarns = null
-			if (rows.length) handle.change(d => setYarns(d, Math.min(...rows), Math.max(...rows), yarnSelect.value))
+			if (rows.length) changeHere(d => setYarns(d, Math.min(...rows), Math.max(...rows), yarnSelect.value))
 		} else if (done.kind === "brush" || done.kind === "shape") {
 			last = done.at ?? null
 			keep()
@@ -578,7 +580,7 @@ export default function StoatTool(handle, element, context = {}) {
 	}
 
 	function scheduleBuild() {
-		if (!autoBox.checked) return
+		if (!autoBox.checked || disposed) return
 		clearTimeout(buildTimer)
 		buildTimer = setTimeout(build, BUILD_DELAY)
 	}
@@ -604,21 +606,27 @@ export default function StoatTool(handle, element, context = {}) {
 	function onCharm() {
 		showPalette()
 		draw()
+	}
+
+	// the charm changed (here, in its arrangement, or someone's): built again,
+	// and the .k's only written if what it's built from is new
+	function onCharmChange() {
+		onCharm()
 		scheduleBuild()
 	}
 
 	async function watchCharm() {
 		const url = doc()?.charm ?? null
 		if (url === charmUrl) return
-		charmHandle?.off?.("change", onCharm)
+		charmHandle?.off?.("change", onCharmChange)
 		charmHandle = null
 		charmUrl = url
 		if (url) {
 			try {
 				const found = await repo.find(url)
-				if (charmUrl !== url) return
+				if (charmUrl !== url || disposed) return
 				charmHandle = found
-				charmHandle.on("change", onCharm)
+				charmHandle.on("change", onCharmChange)
 			} catch (error) {
 				showStatus(`couldn't load the charm: ${error?.message ?? error}`, "error")
 			}
@@ -640,6 +648,12 @@ export default function StoatTool(handle, element, context = {}) {
 		showCharms()
 		watchCharm()
 		draw()
+	}
+
+	// a change made here: build as you go builds it (other people's edits
+	// are built by them, as knitoutjs's editor only autobuilds your own)
+	function changeHere(fn) {
+		handle.change(fn)
 		scheduleBuild()
 	}
 
@@ -682,13 +696,14 @@ export default function StoatTool(handle, element, context = {}) {
 	}
 
 	return () => {
+		disposed = true
 		cancelAnimationFrame(frame)
 		clearTimeout(buildTimer)
 		resizeObserver.disconnect()
 		scheme.removeEventListener("change", onTheme)
 		removeEventListener(YARNS_CHANGED, onTheme)
 		handle.off("change", onChange)
-		charmHandle?.off?.("change", onCharm)
+		charmHandle?.off?.("change", onCharmChange)
 		link.remove()
 		root.remove()
 	}

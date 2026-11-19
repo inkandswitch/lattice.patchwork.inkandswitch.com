@@ -20,7 +20,7 @@ export function sourceHash(stoat, charm) {
 	return textHash(JSON.stringify([colours, stitches, yarns, left, gauge, rows, columns, cells]))
 }
 
-// {knitout, rows} or {error: {row, needle, message}}. `immutable` wraps the
+// {knitout, rows, unchanged?} or {error: {row, needle, message}}. `immutable` wraps the
 // knitout for the doc (automerge's ImmutableString, unless it's given)
 export async function buildInto(stoatHandle, kHandle, repo, {immutable = null} = {}) {
 	const stoat = stoatHandle.doc()
@@ -35,8 +35,11 @@ export async function buildInto(stoatHandle, kHandle, repo, {immutable = null} =
 	}
 	const result = buildKnitout(stoat, charm)
 	if (result.error) return result
-	const wrap = immutable ?? (await automergeImmutable())
 	const hash = sourceHash(stoat, charm)
+	// built from just this already: nothing to write (unchanged: true)
+	const k = kHandle.doc()
+	if (k?.knitoutSource === stoatHandle.url && k?.knitoutSourceHash === hash) return {...result, unchanged: true}
+	const wrap = immutable ?? (await automergeImmutable())
 	kHandle.change(doc => {
 		doc.content = wrap(result.knitout)
 		doc.knitoutSource = stoatHandle.url

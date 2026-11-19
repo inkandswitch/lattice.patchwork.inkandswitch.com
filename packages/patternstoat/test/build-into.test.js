@@ -77,3 +77,25 @@ test("the datatypes start new docs as new ones are", () => {
 	assert.equal(PatternstoatDatatype.getTitle({}), "patternstoat")
 	assert.equal(CharmDatatype.getTitle({title: "wrist"}), "wrist")
 })
+
+test("building what's already built leaves the .k alone", async () => {
+	const charm = handle("charm", newCharm())
+	const doc = newPatternstoat({charm: "charm", width: 4, height: 4})
+	doc.colours = doc.colours.map(row => row.map(() => 1))
+	const stoat = handle("stoat", doc)
+	const k = handle("k", {content: "before"})
+	let changes = 0
+	const change = k.change.bind(k)
+	k.change = fn => {
+		changes++
+		change(fn)
+	}
+	await buildInto(stoat, k, repoOf({charm}), {immutable})
+	const result = await buildInto(stoat, k, repoOf({charm}), {immutable})
+	assert.equal(changes, 1)
+	assert.equal(result.error, undefined)
+	assert.ok(result.unchanged)
+	stoat.doc().colours[0][0] = 7
+	await buildInto(stoat, k, repoOf({charm}), {immutable})
+	assert.equal(changes, 2)
+})
