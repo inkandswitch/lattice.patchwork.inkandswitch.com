@@ -14,7 +14,7 @@ import {
 import { docColour, fileExtension, shortUrl, newFileDoc, withExtension } from "./doc/files.js";
 import * as Layout from "./doc/layout.js";
 import { urlFromText, loadDatatype, whenFound } from "./patchwork/docs.js";
-import { Resizer, sidebarState } from "./ui/sidebars.js";
+import { Resizer, remember, remembered, sidebarState } from "./ui/sidebars.js";
 import { menuKeys } from "./ui/menus.js";
 import { icon } from "./ui/icons.js";
 import { readActive, writeActive, activeChannel } from "./active.js";
@@ -1420,6 +1420,26 @@ export function mountWorkspace(
     drop(event, target.groupId, target.zone, group ? activeIn(group) : null, target.before ?? null);
   }
 
+  // files pasted (a screenshot, files copied in the finder): into the
+  // project, as if dropped on its files. not while typing somewhere, nor if
+  // a tool took the paste itself (markdown makes a pasted image an embed);
+  // anywhere else in the project, or with nothing focused
+  function onPaste(event) {
+    if (event.defaultPrevented) return;
+    const files = [...(event.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    const target = event.composedPath()[0];
+    const nowhere = target === document.body || target === document.documentElement;
+    if (!nowhere && !element.contains(event.target)) return;
+    const typing = event
+      .composedPath()
+      .some((node) => node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement || node.isContentEditable);
+    if (typing) return;
+    event.preventDefault();
+    importFiles(files, lastGroupId());
+  }
+  document.addEventListener("paste", onPaste);
+
   function listenForDrops(el) {
     el.addEventListener("dragenter", onRootDragEnter, true);
     el.addEventListener("dragleave", onRootDragLeave, true);
@@ -2508,6 +2528,139 @@ export function mountWorkspace(
     return `${done.verb} ${when.startsWith("on ") ? exactly : `${when} · ${exactly}`}`;
   }
 
+  // ── the files' order: sorted by name or by when they were last done
+  //    something to, and grouped, or not, by type or by lineage (what's made
+  //    from what: a .js and the .k it writes, a .k and its copies). kept on
+  //    this device, for every project
+  const SORTS = { name: "name", modified: "last modified" };
+  const GROUPS = { none: "none", type: "type", lineage: "lineage" };
+  const ORDER_KEY = "lattice-wm:files-order";
+  const keptOrder = remembered(ORDER_KEY, {});
+  const [order, setOrderNow] = createSignal({
+    sort: keptOrder?.sort in SORTS ? keptOrder.sort : "name",
+    group: keptOrder?.group in GROUPS ? keptOrder.group : "none",
+  });
+  function setOrder(change) {
+    setOrderNow((was) => ({ ...was, ...change }));
+    remember(ORDER_KEY, order());
+  }
+
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
+  // newest first; what's never been done anything to, last
+  const byModified = (a, b) => (lastDone(b.url)?.at ?? -Infinity) - (lastDone(a.url)?.at ?? -Infinity) || byName(a, b);
+
+  // what a file's grouped as by type: its extension, else its datatype
+  function typeOfFile(file) {
+    if (file.extension) return `.${file.extension}`;
+    return docInfo(file.url).type ?? "other";
+  }
+
+  // a name without its extensions: pattern.knitout.js is "pattern"
+  const stem = (name) => name.split(".")[0] || name;
+
+  // the files in lineages: each the files linked to each other, any way, by
+  // what the extensions say (links), in the order they came. a lineage is
+  // called what most of its files are
+  function lineagesOf(files) {
+    const at = new Map(files.map((file, i) => [file.url, i]));
+    const parent = files.map((_, i) => i);
+    const root = (i) => (parent[i] === i ? i : (parent[i] = root(parent[i])));
+    files.forEach((file, i) => {
+      for (const link of linksOf(file.url)) {
+        const j = at.get(link.url);
+        if (j != null) parent[root(i)] = root(j);
+      }
+    });
+    const lineages = new Map();
+    files.forEach((file, i) => {
+      const r = root(i);
+      if (!lineages.has(r)) lineages.set(r, []);
+      lineages.get(r).push(file);
+    });
+    return [...lineages.values()].map((members) => {
+      const counts = new Map();
+      for (const file of members) counts.set(stem(file.name), (counts.get(stem(file.name)) ?? 0) + 1);
+      const [label] = [...counts].sort(([a, m], [b, n]) => n - m || a.localeCompare(b))[0];
+      const first = members.map((file) => file.url).sort()[0];
+      return { key: `lineage ${first} ${label}`, label, files: members };
+    });
+  }
+
+  // a group's heading, the same object while it's the same group, so the
+  // list keeps its rows (and files are projectFiles' own, for the same)
+  const headings = new Map();
+  function heading(key, label, count) {
+    let made = headings.get(key);
+    if (!made) headings.set(key, (made = { key, heading: createSignal({ label, count }) }));
+    made.heading[1]({ label, count });
+    return made;
+  }
+
+  // the list as it shows: files, sorted, with a heading before each group
+  const shownFiles = createMemo(() => {
+    const { sort, group } = order();
+    const files = [...projectFiles()].sort(sort === "modified" ? byModified : byName);
+    if (group === "none") return files;
+    let groups;
+    if (group === "type") {
+      const types = new Map();
+      for (const file of files) {
+        const type = typeOfFile(file);
+        if (!types.has(type)) types.set(type, []);
+        types.get(type).push(file);
+      }
+      groups = [...types]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([type, members]) => ({ key: `type ${type}`, label: type, files: members }));
+    } else {
+      const lineages = lineagesOf(files);
+      // the ones with nothing linked, together at the end
+      const alone = lineages.filter((lineage) => lineage.files.length === 1).flatMap((lineage) => lineage.files);
+      groups = lineages.filter((lineage) => lineage.files.length > 1);
+      if (alone.length) groups.push({ key: "lineage alone", label: groups.length ? "on their own" : "nothing linked", files: alone });
+    }
+    return groups.flatMap(({ key, label, files }) => [heading(key, label, files.length), ...files]);
+  });
+
+  // the menu the order's chosen from: it stays open, to choose both
+  let orderMenu;
+  function openOrderMenu(event) {
+    if (pressedToClose(orderMenu, event.currentTarget)) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    orderMenu.style.top = `${rect.bottom + 4}px`;
+    orderMenu.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - 200))}px`;
+    orderMenu.showPopover();
+  }
+  const orderTitle = () => {
+    const { sort, group } = order();
+    return `sorted by ${SORTS[sort]}${group === "none" ? "" : `, grouped by ${GROUPS[group]}`}`;
+  };
+
+  function OrderMenu() {
+    const choices = (kind, all) =>
+      Object.entries(all).map(
+        ([value, label]) => html`<button
+          class="lattice-wm-menu-item"
+          role="menuitemradio"
+          aria-checked=${() => String(order()[kind] === value)}
+          onClick=${() => setOrder({ [kind]: value })}
+        >
+          ${label}
+        </button>`,
+      );
+    return html`<div
+      class="lattice-wm-menu lattice-wm-order-menu"
+      popover="auto"
+      role="menu"
+      ref=${(el) => (orderMenu = el)}
+    >
+      <div class="lattice-wm-menu-heading">sort by</div>
+      ${choices("sort", SORTS)}
+      <div class="lattice-wm-menu-heading">group by</div>
+      ${choices("group", GROUPS)}
+    </div>`;
+  }
+
   // the project's files, down the side of its panes
   function Files() {
     // the file whose name is being changed, in the files: double click it,
@@ -2566,6 +2719,15 @@ export function mountWorkspace(
           <//>
           <button
             class="lattice-wm-icon-button"
+            title=${orderTitle}
+            aria-label=${orderTitle}
+            data-on=${() => (order().sort !== "name" || order().group !== "none" ? "" : undefined)}
+            onClick=${openOrderMenu}
+          >
+            ${icon("sort", 14)}
+          </button>
+          <button
+            class="lattice-wm-icon-button"
             title="a new file, or open one"
             aria-label="a new file, or open one"
             onClick=${(event) => openMenu(event, null)}
@@ -2574,10 +2736,13 @@ export function mountWorkspace(
           </button>
         </header>
         <${For}
-          each=${projectFiles}
+          each=${shownFiles}
           fallback=${html`<p class="lattice-wm-files-empty">no files yet</p>`}
         >
-          ${(file) => html`<div
+          ${(file) => file.heading ? html`<div class="lattice-wm-files-group">
+            <span class="lattice-wm-files-group-name">${() => file.heading[0]().label}</span>
+            <span class="lattice-wm-files-group-count">${() => file.heading[0]().count}</span>
+          </div>` : html`<div
             class="lattice-wm-file"
             data-url=${file.url}
             data-colour=${docColour(file.url)}
@@ -2647,6 +2812,7 @@ export function mountWorkspace(
         <//>
       </div>
       <${FileMenu} rename=${setRenamingFile} />
+      <${OrderMenu} />
     </nav>`;
   }
 
@@ -2928,6 +3094,7 @@ export function mountWorkspace(
     document.removeEventListener("dragover", onDocumentDragOver);
     document.removeEventListener("dragend", stopDragging);
     document.removeEventListener("drop", stopDragging);
+    document.removeEventListener("paste", onPaste);
     document.removeEventListener("keydown", onAltKey);
     document.removeEventListener("pointerdown", onPressWhileOpen, true);
     menusOff();

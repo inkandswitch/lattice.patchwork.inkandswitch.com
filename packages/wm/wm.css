@@ -1427,6 +1427,47 @@ lattice-pane {
 		}
 	}
 
+	/* the files' order: in the accent while it's not by name, ungrouped */
+	& .lattice-wm-icon-button[data-on]:not(.lattice-wm-phone) {
+		color: var(--lattice-wm-accent);
+	}
+
+	& .lattice-wm-order-menu[popover] {
+		width: calc(160 * var(--lattice-px, 1px));
+
+		& .lattice-wm-menu-item {
+			&::before {
+				content: "";
+				width: 1em;
+			}
+			&[aria-checked="true"]::before {
+				content: "✓";
+			}
+		}
+	}
+
+	/* a group of files' heading, when they're grouped: what they are, and
+	   how many */
+	& .lattice-wm-files-group {
+		display: flex;
+		align-items: baseline;
+		gap: calc(6 * var(--lattice-px, 1px));
+		padding: calc(8 * var(--lattice-px, 1px)) calc(8 * var(--lattice-px, 1px)) calc(2 * var(--lattice-px, 1px)) calc(12 * var(--lattice-px, 1px));
+		color: var(--lattice-wm-muted);
+		font-size: calc(10 * var(--lattice-px, 1px));
+		letter-spacing: 0.04em;
+	}
+
+	& .lattice-wm-files-group-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	& .lattice-wm-files-group-count {
+		color: var(--lattice-wm-quiet);
+	}
+
 	/* who else is here, by the project's name. one's pressed while it's
 	   being followed. more than there's room for, they scroll along
 	   (.lattice-wm-along), leaving the name half. the padding's room for a

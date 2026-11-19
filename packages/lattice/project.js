@@ -1,6 +1,7 @@
 // lattice's project tool: wm's workspace on a project, with lattice's tools.
 // the frame shows the same in its middle
 import { createRoot } from "solid-js";
+import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { mountProject } from "../wm/project-view.js";
 import { datatypeItem } from "../wm/patchwork/docs.js";
 import { knitout } from "../knitoutjs/wm.js";
@@ -57,6 +58,17 @@ async function newPatternstoat(api) {
 function lattice(baseRepo, hive) {
   return {
     name: "lattice",
+    // a patternstoat's charm: linked, so they light up together, and are
+    // one lineage in the files. (its type's patternstoat.js's
+    // PATTERNSTOAT_TYPE, written out: that's only loaded when it's needed)
+    watch(doc) {
+      const charm = String(doc?.charm ?? "");
+      return { charm: doc?.["@patchwork"]?.type === "lattice:patternstoat" && isValidAutomergeUrl(charm) ? charm : null };
+    },
+    links(url, api) {
+      const charm = api.docInfo(url).ext?.lattice?.charm;
+      return charm ? [{ url: charm, live: true }] : [];
+    },
     menu: () => [
       datatypeItem({ type: "markdown", icon: "text", label: "markdown" }, hive),
       datatypeItem({ type: "patternwitch", icon: "grid", label: "patternwitch", detail: "a pixel painter: a grid in a few colours" }, hive),

@@ -23,6 +23,8 @@ const PATHS = {
   beside: "M2.5 3.5h11v9h-11ZM8.5 3.5v9",
   "arrow-right": "M3 8h10M9.5 4.5 13 8l-3.5 3.5",
   copy: "M5.5 5.5h7v7h-7ZM10.5 5.5v-2h-7v7h2",
+  // lines, shorter as they go down: an order
+  sort: "M3 4.5h10M3 8h7M3 11.5h4",
   check: "M3.5 8.5l3 3 6-7",
   rebuild: "M13 8a5 5 0 1 1-1.46-3.54M8.8 4.46h2.74V1.72",
   lock: "M4 7.5h8v6H4ZM5.5 7.5v-2a2.5 2.5 0 0 1 5 0v2",
