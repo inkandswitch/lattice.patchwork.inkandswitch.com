@@ -18,6 +18,12 @@ in the project there too. it's at
 - [`packages/versions`](packages/versions): the history down the right.
 - [`packages/patternwitch`](packages/patternwitch): a pixel painter, our
   copy of pkg-base's patternwitch. a project's + menu makes one.
+- [`packages/patternstoat`](packages/patternstoat): a light stoll create+ for
+  the kniterate. a `.patternstoat` is a design painted in colours that stand
+  for technique (with stitches painted on top, and a yarn a row for
+  stripes), and a `.charm` is lattice's colour arrangement: what each colour
+  does, a pass a row, as the kniterate editor paints them. the two build a
+  `.k`. a project's + menu makes one (a striped wristwarmer, to start from).
 - [`latticex`](latticex): a terminal on your computer, shared into a project.
 - `src/main.ts`, `vite/`, `scripts/`: the site, and running it.
 
