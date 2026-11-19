@@ -119,8 +119,10 @@ export function fieldsOf(row) {
 }
 
 // the wristwarmer, on a 40 × 80 patternstoat, in the starter charm's colours
-// (charm.js): cast on, waste yarn, a striped tube with a thumb hole cast off
-// on the front and cast back on, and cast off at the top
+// (charm.js): cast on, waste yarn, a striped tube with a thumb slit (cast
+// off on the front and cast straight back on in the next row, as a thumb
+// hole knitted in the round is: held open over more rows, the front's yarn
+// would float across it), and cast off at the top
 export function paintWristwarmer(doc) {
 	resize(doc, 40, 80)
 	const all = row => Array.from({length: 40}, (_, x) => [x, row])
@@ -128,8 +130,7 @@ export function paintWristwarmer(doc) {
 	paintColours(doc, all(0), 5)
 	for (let row = 1; row < 79; row++) paintColours(doc, all(row), 1)
 	paintColours(doc, gap(50), 3)
-	for (let row = 51; row <= 58; row++) paintColours(doc, gap(row), 2)
-	paintColours(doc, gap(59), 4)
+	paintColours(doc, gap(51), 4)
 	paintColours(doc, all(79), 6)
 	setYarns(doc, 0, 9, "1")
 	for (let row = 10; row < 79; row++) setYarns(doc, row, row, Math.floor((row - 10) / 6) % 2 ? "4" : "3")

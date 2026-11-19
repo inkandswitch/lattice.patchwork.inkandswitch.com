@@ -59,16 +59,15 @@ test("resizing keeps a yarn a row, and drops stitches outside", () => {
 	assert.equal(doc.height, 1)
 })
 
-test("the wristwarmer: a thumb gap on the front, stripes, ends cast on and off", () => {
+test("the wristwarmer: a thumb slit cast off and straight back on, stripes, ends cast on and off", () => {
 	const doc = newPatternstoat()
 	paintWristwarmer(doc)
 	assert.equal(doc.width, 40)
 	assert.equal(doc.height, 80)
 	assert.ok(doc.colours[0].every(c => c === 5))
 	assert.deepEqual(doc.colours[50].slice(3, 11), [1, 3, 3, 3, 3, 3, 3, 1])
-	assert.equal(doc.colours[55][4], 2)
-	assert.equal(doc.colours[59][9], 4)
-	assert.equal(doc.colours[60][4], 1)
+	assert.deepEqual(doc.colours[51].slice(3, 11), [1, 4, 4, 4, 4, 4, 4, 1])
+	assert.equal(doc.colours[52][4], 1)
 	assert.deepEqual([doc.yarns[5], doc.yarns[10], doc.yarns[16], doc.yarns[22]], ["1", "3", "4", "3"])
 	assert.ok(doc.colours[79].every(c => c === 6))
 	assert.equal(doc.yarns[79], "3")
