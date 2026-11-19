@@ -2,11 +2,11 @@
 // it's typed, and, when it reads, written into the charm (only what's
 // different, so the arrangement and anyone else keep theirs). when it
 // doesn't read, the line it's stuck on is marked and the charm's left alone
-import {EditorState, StateEffect, StateField, Annotation} from "@codemirror/state"
+import {Annotation, EditorState, StateEffect, StateField, Transaction} from "@codemirror/state"
 import {Decoration, EditorView, highlightActiveLine, keymap, lineNumbers} from "@codemirror/view"
 import {defaultKeymap, history, historyKeymap} from "@codemirror/commands"
 import {stylesheet} from "../wm/ui/stylesheet.js"
-import {applyCharm, parseCharm, printCharm} from "./charm-text.js"
+import {applyCharm, parseCharm, printCharm, sameCharm} from "./charm-text.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
 const READ_DELAY = 300
@@ -40,11 +40,14 @@ const theme = EditorView.theme({
 	"&.cm-focused": {outline: "none"},
 })
 
-// what a charm says, without its ids' and cells' order mattering
-function sameCharm(parsed, charm) {
-	if (!parsed || parsed.error || !charm) return false
-	const shape = c => JSON.stringify([c.rows, c.columns, Object.fromEntries(Object.entries(c.cells ?? {}).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).sort())]).sort())])
-	return shape(parsed) === shape(charm)
+// the smallest change from one text to another: what's between their common
+// start and end
+function smallestChange(from, to) {
+	let start = 0
+	while (start < from.length && start < to.length && from[start] === to[start]) start++
+	let end = 0
+	while (end < from.length - start && end < to.length - start && from[from.length - 1 - end] === to[to.length - 1 - end]) end++
+	return {from: start, to: from.length - end, insert: to.slice(start, to.length - end)}
 }
 
 export default function CharmTextTool(handle, element) {
@@ -65,6 +68,8 @@ export default function CharmTextTool(handle, element) {
 	let timer = 0
 	// typed, and not yet read into the charm
 	let unread = false
+	// writing what was typed into the charm (its change isn't news here)
+	let applying = false
 
 	function showProblem(text) {
 		problem.hidden = !text
@@ -82,13 +87,19 @@ export default function CharmTextTool(handle, element) {
 		view.dispatch({effects: setStuck.of(null)})
 		showProblem(null)
 		unread = false
-		if (!sameCharm(parsed, doc())) handle.change(d => applyCharm(d, parsed))
+		if (sameCharm(parsed, doc())) return
+		applying = true
+		try {
+			handle.change(d => applyCharm(d, parsed))
+		} finally {
+			applying = false
+		}
 	}
 
 	const view = new EditorView({
 		parent: host,
 		state: EditorState.create({
-			doc: doc() ? printCharm(doc()) : "",
+			doc: doc()?.rows && doc()?.columns ? printCharm(doc()) : "",
 			extensions: [
 				lineNumbers(),
 				highlightActiveLine(),
@@ -111,14 +122,19 @@ export default function CharmTextTool(handle, element) {
 	// here hasn't been read yet
 	function onChange() {
 		const charm = doc()
-		if (!charm) return
+		if (applying || !charm?.rows || !charm?.columns) return
 		const text = view.state.doc.toString()
 		if (sameCharm(parseCharm(text, ids()), charm)) return
 		if (unread) {
 			showProblem("the charm's changed since you started typing: finish this line, and it'll be read in")
 			return
 		}
-		view.dispatch({changes: {from: 0, to: view.state.doc.length, insert: printCharm(charm)}, annotations: fromCharm.of(true)})
+		// only what's different, so the cursor stays where it was, and not
+		// into this text's undo: it's not something typed here
+		view.dispatch({
+			changes: smallestChange(text, printCharm(charm)),
+			annotations: [fromCharm.of(true), Transaction.addToHistory.of(false)],
+		})
 	}
 
 	handle.on("change", onChange)

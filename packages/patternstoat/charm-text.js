@@ -173,3 +173,10 @@ export function applyCharm(doc, parsed) {
 		}
 	})
 }
+
+// whether parsed text says what a charm does: compared as text, so the order
+// a doc's keys come back in (automerge sorts them) doesn't matter
+export function sameCharm(parsed, charm) {
+	if (!parsed || parsed.error || !charm?.rows || !charm?.columns) return false
+	return printCharm(parsed) === printCharm(charm)
+}

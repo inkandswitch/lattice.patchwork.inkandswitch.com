@@ -1,6 +1,6 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
-import {applyCharm, parseCharm, printCharm} from "../charm-text.js"
+import {applyCharm, parseCharm, printCharm, sameCharm} from "../charm-text.js"
 import {newCharm} from "../charm.js"
 
 const ids = charm => charm.rows.map(r => r.id)
@@ -95,4 +95,16 @@ test("a row added in the text is added, and its cells with it", () => {
 	assert.equal(doc.rows.length, 3)
 	assert.deepEqual(doc.cells[1][doc.rows[2].id], [{f: "t", b: null}])
 	assert.deepEqual(doc.cells[2][doc.rows[2].id], [{f: null, b: null}])
+})
+
+// as automerge hands a doc back: every map's keys in sorted order
+const sortedKeys = value =>
+	Array.isArray(value) ? value.map(sortedKeys) : value && typeof value === "object" ? Object.fromEntries(Object.keys(value).sort().map(k => [k, sortedKeys(value[k])])) : value
+
+test("the text and a charm are the same whatever order the charm's keys come in", () => {
+	const charm = newCharm()
+	const text = printCharm(charm)
+	assert.ok(sameCharm(parseCharm(text, ids(charm)), sortedKeys(charm)))
+	assert.ok(!sameCharm(parseCharm(text.replace("(k/. ./k)", "(t/. ./k)"), ids(charm)), sortedKeys(charm)))
+	assert.ok(!sameCharm(parseCharm("rows: >\n<> 1 q #000000 (q/.)"), charm)) // doesn't read: not the same
 })
