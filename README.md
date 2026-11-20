@@ -16,8 +16,6 @@ in the project there too. it's at
 - [`packages/wm`](packages/wm): the panes, the files, who else is here, and
   calls.
 - [`packages/versions`](packages/versions): the history down the right.
-- [`packages/patternwitch`](packages/patternwitch): a pixel painter, our
-  copy of pkg-base's patternwitch. a project's + menu makes one.
 - [`packages/patternstoat`](packages/patternstoat): a light stoll create+ for
   the kniterate. a `.patternstoat` is a design painted in colours that stand
   for technique (with stitches painted on top, and a yarn a row for

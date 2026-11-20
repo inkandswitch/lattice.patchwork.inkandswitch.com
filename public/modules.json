@@ -19,6 +19,7 @@
 		"./packages/call/",
 		"./packages/theming/",
 		"./packages/lattice-themes/",
-		"./packages/tldraw5/"
+		"./packages/tldraw5/",
+		"./packages/patternwitch/"
 	]
 }

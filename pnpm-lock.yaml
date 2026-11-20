@@ -35,8 +35,6 @@ importers:
 
   packages/patternstoat: {}
 
-  packages/patternwitch: {}
-
   packages/skitch:
     devDependencies:
       '@drauu/core':
