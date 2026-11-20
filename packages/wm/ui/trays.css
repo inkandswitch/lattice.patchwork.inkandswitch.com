@@ -1,0 +1,219 @@
+/* a bar of trays, as skitch's (packages/skitch/tool.js's): trays of icon
+   buttons, a pressed one outlined with a shadow under it, round swatches,
+   keys in the corner of what you point at */
+.trays {
+	--trays-fill: var(--editor-fill, #fff);
+	--trays-line: var(--editor-line, #1a1a1a);
+	--trays-soft: color-mix(in oklch, var(--trays-fill), var(--trays-line) 7%);
+	--trays-hover: color-mix(in oklch, var(--trays-fill), var(--trays-line) 13%);
+	--trays-edge: color-mix(in oklch, var(--trays-fill), var(--trays-line) 18%);
+	--trays-ease: cubic-bezier(0.23, 1, 0.32, 1);
+	position: relative;
+	display: flex;
+	flex: none;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	padding: 8px;
+	background: var(--trays-fill);
+	color: var(--trays-line);
+	border-bottom: 1px solid var(--trays-edge);
+	font: 13px var(--editor-family-sans, system-ui, sans-serif);
+	user-select: none;
+}
+
+.trays .tray {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+	padding: 3px;
+	border-radius: 12px;
+	background: var(--trays-soft);
+}
+
+.trays .tray-spacer {
+	flex: 1 1 0;
+}
+
+.trays .tray-divider {
+	width: 1px;
+	height: 22px;
+	margin: 0 4px;
+	background: var(--trays-edge);
+}
+
+.trays .tray-button {
+	position: relative;
+	display: inline-grid;
+	grid-auto-flow: column;
+	place-items: center;
+	gap: 4px;
+	min-width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 9px;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	transition:
+		background-color 0.12s ease,
+		box-shadow 0.12s ease,
+		transform 0.1s var(--trays-ease);
+}
+
+.trays .tray-button:has(.tray-text) {
+	padding: 0 10px;
+}
+
+.trays .tray-button:active:not(:disabled) {
+	transform: scale(0.9);
+}
+
+.trays .tray-button[aria-pressed="true"] {
+	background: var(--trays-fill);
+	box-shadow:
+		0 0 0 1px var(--trays-line),
+		1px 1px 0 1px var(--trays-line);
+}
+
+.trays .tray-button:disabled {
+	opacity: 0.3;
+	cursor: default;
+	background: none;
+}
+
+.trays .tray-icon {
+	width: 18px;
+	height: 18px;
+}
+
+.trays .tray-button kbd {
+	position: absolute;
+	top: 2px;
+	right: 3px;
+	font: 600 8px/1 var(--editor-family-mono, ui-monospace, monospace);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.12s ease;
+}
+
+/* round swatches: a colour, or something drawn in one */
+.trays .tray-swatch {
+	min-width: 22px;
+	width: 22px;
+	height: 22px;
+	margin: 0 2px;
+	border-radius: 50%;
+	background: var(--c, transparent);
+	box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+	overflow: hidden;
+}
+
+.trays .tray-swatch[aria-pressed="true"] {
+	background: var(--c, transparent);
+	box-shadow:
+		inset 0 0 0 1px rgba(0, 0, 0, 0.18),
+		0 0 0 2px var(--trays-soft),
+		0 0 0 3.5px var(--trays-line);
+}
+
+.trays .tray-swatch kbd {
+	position: static;
+	color: #fff;
+	font-size: 10px;
+	text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+}
+
+.trays .tray-swatch > :is(canvas, svg) {
+	grid-area: 1 / 1;
+	width: 100%;
+	height: 100%;
+}
+
+/* what doesn't need to be out all the time, opening from its button */
+.trays .tray-popover {
+	position: absolute;
+	z-index: 5;
+	display: grid;
+	gap: 8px;
+	min-width: 200px;
+	padding: 10px;
+	border-radius: 12px;
+	background: var(--trays-fill);
+	color: var(--trays-line);
+	box-shadow:
+		0 0 0 1px var(--trays-line),
+		2px 2px 0 1px var(--trays-line);
+	transform-origin: var(--origin, 50% 0);
+	opacity: 0;
+	transform: scale(0.96);
+	transition:
+		opacity 0.16s var(--trays-ease),
+		transform 0.16s var(--trays-ease);
+}
+
+.trays .tray-popover[data-open] {
+	opacity: 1;
+	transform: none;
+}
+
+.trays .tray-popover[data-instant] {
+	transition: none;
+}
+
+.trays .tray-popover label {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+
+.trays .tray-popover :is(input, select) {
+	font: inherit;
+	color: inherit;
+	background: var(--trays-soft);
+	border: 0;
+	border-radius: 7px;
+	padding: 4px 8px;
+}
+
+.trays .tray-popover input[type="number"] {
+	width: 5em;
+}
+
+.trays .tray-popover input[type="checkbox"] {
+	padding: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.trays .tray-button:hover:not(:disabled) {
+		background: var(--trays-hover);
+	}
+
+	.trays .tray-button:hover:not(:disabled) kbd {
+		opacity: 0.55;
+	}
+
+	.trays .tray-swatch:hover kbd {
+		opacity: 0.95;
+	}
+
+	.trays .tray-swatch:hover:not(:disabled) {
+		background: var(--c, var(--trays-hover));
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.trays .tray-button:active:not(:disabled) {
+		transform: none;
+	}
+
+	.trays .tray-popover {
+		transform: none;
+		transition: opacity 0.16s ease;
+	}
+}
