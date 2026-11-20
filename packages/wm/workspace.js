@@ -1039,22 +1039,56 @@ export function mountWorkspace(
     room?.view(id, null);
   }
 
+  // a tool's element, between the slot it's left and the one it's going to
+  // (a tab dragged to another group, a group split or floated): kept in the
+  // page, so moveBefore can take it there with its state (iframes, focus,
+  // scroll, what a canvas has drawn) instead of taking it out and putting it
+  // back. only where there's moveBefore: elsewhere a move starts it over
+  const canMove = typeof Element.prototype.moveBefore === "function";
+  let parking = null;
+  function park(el) {
+    if (!canMove || !el.isConnected || !element.isConnected) return;
+    if (!parking?.isConnected) {
+      parking = document.createElement("div");
+      parking.className = "lattice-wm-parking";
+      parking.hidden = true;
+      element.append(parking);
+    }
+    try {
+      parking.moveBefore(el, null);
+    } catch {}
+  }
+  // put a tool's element in a slot: moved, if it can be, or else put
+  function place(slot, el) {
+    if (el.parentNode === slot) return;
+    for (const child of [...slot.childNodes]) if (child !== el) child.remove();
+    if (canMove && el.isConnected && slot.isConnected) {
+      try {
+        slot.moveBefore(el, null);
+        return;
+      } catch {}
+    }
+    slot.replaceChildren(el);
+  }
+
   function Slot(props) {
     const panel = props.panel;
     let slot;
     createEffect(() => {
       const host = hostFor(panel);
-      slot.replaceChildren(host.el);
+      place(slot, host.el);
       const owner = {};
       host.owner = owner;
-      // if nobody picks it up again this tick, it's really gone
-      onCleanup(() =>
+      // its slot's going (before it's out of the page): kept about, for
+      // the next one. if nobody picks it up again this tick, it's really gone
+      onCleanup(() => {
+        if (host.el.parentNode === slot) park(host.el);
         queueMicrotask(() => {
-          if (host.owner === owner && !host.el.isConnected) {
+          if (host.owner === owner && (!host.el.isConnected || host.el.parentNode === parking)) {
             destroyHost(panel.id, host);
           }
-        }),
-      );
+        });
+      });
     });
     return html`<div class="lattice-wm-slot" ref=${(el) => (slot = el)}></div>`;
   }
@@ -1781,6 +1815,10 @@ export function mountWorkspace(
   function Group(props) {
     const group = props.node;
     const active = createMemo(() => activeIn(group));
+    // its panes, in an order that's theirs and not the tabs' (only one
+    // shows): reordering the tabs then moves none of them in the page,
+    // which would start them over
+    const panelsInPlace = () => [...group.panels].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     let tabs;
     let body;
     let section;
@@ -1926,7 +1964,7 @@ export function mountWorkspace(
         return panel && html`<${Bar} panel=${panel} />`;
       }}
       <div class="lattice-wm-body" ref=${(el) => (body = el)}>
-        <${For} each=${() => group.panels}>
+        <${For} each=${panelsInPlace}>
           ${(panel) => html`<${Panel} panel=${panel} active=${() => active() === panel} />`}
         <//>
         <${Show} when=${dragging}>
