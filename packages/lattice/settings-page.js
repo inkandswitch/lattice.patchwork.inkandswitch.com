@@ -656,7 +656,9 @@ export function SettingsPage(props) {
 
   // the shells installed here (frame tools), lattice among them. there's only a choice
   // when there's another: then which the site opens in is your account's
-  // frameToolId (patchwork's router reads it once, so changing it reloads)
+  // frameToolId (patchwork's router reads it once, so changing it reloads).
+  // the lattice site itself always opens in lattice (src/main.ts), so there
+  // it's no choice at all
   const tools = getRegistry("patchwork:tool");
   const readShells = () =>
     tools
@@ -844,7 +846,7 @@ export function SettingsPage(props) {
     <${Account} />
     <${Theme} />
     <${Call} />
-    <${Show} when=${() => shells().length > 1}><${Shell} /><//>
+    <${Show} when=${() => !window.latticeSite && shells().length > 1}><${Shell} /><//>
     <${Show} when=${secret}><${Packages} /><//>
   </div>`;
 }

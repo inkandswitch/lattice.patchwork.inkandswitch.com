@@ -1,45 +1,35 @@
-// a patternstoat's editor: the design painted in its charm's colours, with a
-// stitch layer on top, and a yarn a row down the side (the stripes). painted
-// as the kniterate editor paints (lattice/kniterate.js), and built into its
-// .k (by hand, or as you go)
+// a patternstoat's editor, as a pixel painter: a bar of trays (skitch's,
+// wm/ui/trays.js) with the tools, one palette (the charm's colours, then
+// stitches, then yarns: what's picked is what's painted), undo, and the
+// setup out of the way under ⚙. a stitch painted anywhere is what that bed
+// knits (build.js). built into its .k (by hand with ✓, or as you go)
 import {stylesheet} from "../wm/ui/stylesheet.js"
+import {TRAYS_STYLESHEET, popover, press, swatch, tray, trayBar, trayButton} from "../wm/ui/trays.js"
 import {YARNS_CHANGED, yarnColours} from "../knitoutjs/core/yarns.js"
 import {setBuild} from "../knitoutjs/core/builds.js"
 import {buildInto} from "./build-into.js"
-import {paintColours, paintStitches, resize as resizeStoat, setYarns} from "./patternstoat.js"
+import {resize as resizeStoat} from "./patternstoat.js"
+import {applyRecord, floodCells, recordOf, undoOf} from "./painting.js"
 import {columnsOf} from "./charm.js"
 import {followView} from "./follow-view.js"
 import {STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
 
 const STYLESHEET = new URL("./patternstoat.css", import.meta.url).href
 const TOOLS = [
-	{id: "brush", name: "brush", key: "b", title: "paint the colour (or stitch) picked onto cells (shift click: a line from the last)"},
-	{id: "line", name: "line", key: "l", title: "paint a line of it"},
-	{id: "rect", name: "rect", key: "r", title: "paint a rectangle of it"},
-	{id: "eraser", name: "rub out", key: "e", title: "take colours out of work (or stitches off the stitch layer)"},
-	{id: "picker", name: "pick", key: "i", title: "pick the colour (or stitch) a cell has"},
-	{id: "hand", name: "move", key: "h", title: "move round the design (or hold space, or scroll)"},
+	{id: "brush", icon: "pencil", name: "pencil", key: "b", title: "paint what's picked onto cells (shift click: a line from the last)"},
+	{id: "line", icon: "line", name: "line", key: "l", title: "a line of it"},
+	{id: "rect", icon: "rect", name: "box", key: "r", title: "a box of it"},
+	{id: "fill", icon: "fill", name: "fill", key: "f", title: "pour it into the cells joined to this one that are the same"},
+	{id: "eraser", icon: "eraser", name: "rub out", key: "e", title: "rub out colours (or, with a stitch picked, stitches)"},
+	{id: "picker", icon: "eyedropper", name: "pick", key: "i", title: "pick what a cell has: its stitch, or else its colour"},
+	{id: "hand", icon: "hand", name: "move", key: "h", title: "move round the design (or hold space, or scroll)"},
 ]
-const PAINTS = new Set(["brush", "line", "rect", "eraser"])
 const GUTTER = 48
 const YARN_STRIP = 10
 const BUILD_DELAY = 500
-
-function button(text, title, onClick) {
-	const element = document.createElement("button")
-	element.type = "button"
-	element.textContent = text
-	element.title = title
-	element.addEventListener("click", onClick)
-	return element
-}
-
-function group(...children) {
-	const element = document.createElement("div")
-	element.className = "stoat-group"
-	element.append(...children)
-	return element
-}
+const HISTORY = 200
+// what each kind of thing picked paints, in painting.js's records
+const KIND = {colour: "colours", stitch: "stitches", yarn: "yarns"}
 
 function numberField(label, title, onValue, {min = 1, max = 252} = {}) {
 	const input = document.createElement("input")
@@ -91,12 +81,12 @@ export default function StoatTool(handle, element, context = {}) {
 	const root = document.createElement("div")
 	root.className = "stoat patternstoat"
 	const link = stylesheet(STYLESHEET, root)
-	element.append(link, root)
+	const traysLink = stylesheet(TRAYS_STYLESHEET, root)
+	element.append(link, traysLink, root)
 
-	// ── the bar: which charm, how big, where on the bed, the gauge, building
+	// ── the setup, under ⚙: which charm, how big, where on the bed, the
+	// gauge, building as you go
 
-	const bar = document.createElement("div")
-	bar.className = "stoat-bar"
 	const charmSelect = document.createElement("select")
 	charmSelect.title = "the charm this is knitted with: what each colour does"
 	charmSelect.addEventListener("change", () => {
@@ -105,6 +95,8 @@ export default function StoatTool(handle, element, context = {}) {
 			if (d.charm !== url) d.charm = url
 		})
 	})
+	const charmLabel = document.createElement("label")
+	charmLabel.append("charm", charmSelect)
 	const width = numberField("width", "cells across", value => changeHere(d => resizeStoat(d, value, d.height)), {max: 252})
 	const height = numberField("rows", "rows up", value => changeHere(d => resizeStoat(d, d.width, value)), {max: 2000})
 	const left = numberField("from needle", "the bed needle its left edge is on", value => changeHere(d => {
@@ -117,49 +109,43 @@ export default function StoatTool(handle, element, context = {}) {
 		const gauge = Number(gaugeSelect.value)
 		if (d.gauge !== gauge) d.gauge = gauge
 	}))
-	const status = document.createElement("span")
-	status.className = "stoat-status"
+	const gaugeLabel = document.createElement("label")
+	gaugeLabel.append("gauge", gaugeSelect)
 	const autoBox = document.createElement("input")
 	autoBox.type = "checkbox"
 	autoBox.checked = true
 	const auto = document.createElement("label")
 	auto.title = "build the .k again whenever this or its charm changes"
-	auto.append(autoBox, "as you go")
-	const spacer = document.createElement("div")
-	spacer.className = "stoat-spacer"
-	bar.append(
-		group(charmSelect),
-		group(width.wrap, height.wrap, left.wrap, gaugeSelect),
-		spacer,
-		status,
-		group(button("build", "build the .k this writes", () => build()), auto, button("fit", "fit the design in view", () => {
-			fit()
-			draw()
-		})),
-	)
-	root.append(bar)
+	auto.append("build as you go", autoBox)
 
-	// ── the editing bar: tools, which layer, what to paint, which yarn
+	// ── the bar: tools, the palette, yarns, undo, setup, building
 
-	const editBar = document.createElement("div")
-	editBar.className = "stoat-edit"
+	const bar = trayBar("stoat-trays")
 	const toolButtons = new Map()
-	const tools = group()
+	const tools = tray()
 	for (const each of TOOLS) {
-		const b = button(each.name, `${each.title} (${each.key})`, () => setTool(each.id))
+		const b = trayButton({icon: each.icon, label: each.name, title: `${each.name}: ${each.title}`, key: each.key, onClick: () => setTool(each.id)})
 		toolButtons.set(each.id, b)
 		tools.append(b)
 	}
-	const coloursButton = button("colours", "paint colours: what each cell is knitted as (c)", () => setLayer("colours"))
-	const stitchesButton = button("stitches", "paint the stitch layer, on top: what a charm's ✦ cells knit (s)", () => setLayer("stitches"))
-	const layers = group(coloursButton, stitchesButton)
-	const palette = group()
-	const yarnSelect = document.createElement("select")
-	yarnSelect.title = "the yarn to give rows: click or drag down the yarn column at the left"
-	for (let c = 1; c <= 6; c++) yarnSelect.append(new Option(`yarn ${c}`, String(c)))
-	yarnSelect.value = "3"
-	editBar.append(tools, layers, palette, group(yarnSelect))
-	root.append(editBar)
+	const palette = tray()
+	palette.classList.add("stoat-palette")
+	const yarns = tray()
+	const undoButton = trayButton({icon: "undo", label: "undo", title: "undo what you painted", key: "⌘z", onClick: () => undo()})
+	const redoButton = trayButton({icon: "redo", label: "redo", title: "redo it", key: "⇧⌘z", onClick: () => redo()})
+	const setupButton = trayButton({icon: "gear", label: "setup", title: "the charm, the size, where it's knitted, building as you go"})
+	const buildButton = trayButton({icon: "check", label: "build", title: "build the .k this writes", onClick: () => build()})
+	buildButton.classList.add("stoat-build")
+	const fitButton = trayButton({icon: "fit", text: "fit", label: "fit", title: "fit the design in view", onClick: () => {
+		fit()
+		draw()
+		setup.close()
+	}})
+	const setup = popover(setupButton, charmLabel, width.wrap, height.wrap, left.wrap, gaugeLabel, auto, fitButton)
+	const spacer = document.createElement("div")
+	spacer.className = "tray-spacer"
+	bar.append(tools, palette, yarns, tray(undoButton, redoButton), spacer, tray(setupButton, buildButton), setup.element)
+	root.append(bar)
 
 	const stage = document.createElement("div")
 	stage.className = "stoat-stage"
@@ -172,9 +158,9 @@ export default function StoatTool(handle, element, context = {}) {
 	// ── state
 
 	let tool = "brush"
-	let layer = "colours"
-	let colour = 1
-	let stitch = STITCHES[0]
+	// what's painted: {kind: "colour", value: 1} | {kind: "stitch", value:
+	// one of STITCHES} | {kind: "yarn", value: "3"}
+	let picked = {kind: "colour", value: 1}
 	const view = {cell: 12, x: 0, y: 0}
 	let size = {width: 0, height: 0}
 	let colours = null
@@ -188,12 +174,15 @@ export default function StoatTool(handle, element, context = {}) {
 		fitted = true
 		draw()
 	})
-	// a stroke, before it's kept: cell → what it'll be
+	// a stroke, before it's kept: cell → what it'll be, of `pendingKind`
 	let pending = new Map()
-	let pendingYarns = null
+	let pendingKind = "colours"
 	let drag = null
 	let last = null
 	let spaceHeld = false
+	// strokes, to take back and do again: {before, after} (painting.js)
+	const history = []
+	const future = []
 	// closed: anything still on its way is dropped
 	let disposed = false
 
@@ -202,46 +191,54 @@ export default function StoatTool(handle, element, context = {}) {
 
 	function setTool(id) {
 		tool = id
-		for (const [each, b] of toolButtons) b.setAttribute("aria-pressed", String(each === id))
+		for (const [each, b] of toolButtons) press(b, each === id)
 		canvas.style.cursor = id === "hand" ? "grab" : "crosshair"
 	}
 
-	function setLayer(id) {
-		layer = id
-		coloursButton.setAttribute("aria-pressed", String(id === "colours"))
-		stitchesButton.setAttribute("aria-pressed", String(id === "stitches"))
+	function pick(next) {
+		picked = next
 		showPalette()
 	}
 
+	const isPicked = (kind, value) => picked.kind === kind && (kind === "stitch" ? picked.value.id === value.id : picked.value === value)
+
 	function showPalette() {
 		palette.replaceChildren()
-		if (layer === "colours") {
-			for (const column of columnsOf(charm())) {
-				const b = button("", `${column.colour}: ${column.name}`, () => {
-					colour = column.colour
-					showPalette()
-				})
-				b.className = "stoat-colour"
-				const chip = document.createElement("i")
-				chip.style.background = column.hex
-				b.append(chip, String(column.colour))
-				b.setAttribute("aria-pressed", String(column.colour === colour))
+		columnsOf(charm()).forEach((column, i) => {
+			const b = swatch({
+				colour: column.hex,
+				label: `${column.colour}: ${column.name}`,
+				key: i < 9 ? String(i + 1) : undefined,
+				onClick: () => pick({kind: "colour", value: column.colour}),
+			})
+			press(b, isPicked("colour", column.colour))
+			palette.append(b)
+		})
+		if (!charm()) palette.append(Object.assign(document.createElement("span"), {className: "stoat-note", textContent: "no charm: pick one under ⚙"}))
+		if (colours) {
+			const divider = document.createElement("span")
+			divider.className = "tray-divider"
+			palette.append(divider)
+			for (const each of STITCHES) {
+				if (!each.f && !each.b) continue
+				const b = swatch({content: stitchSwatch(each, colours, 22), label: each.name, className: "stoat-stitch", onClick: () => pick({kind: "stitch", value: each})})
+				press(b, isPicked("stitch", each))
 				palette.append(b)
 			}
-			if (!charm()) palette.append(Object.assign(document.createElement("span"), {className: "stoat-note", textContent: "no charm: pick one for its colours"}))
-			return
 		}
-		if (!colours) return
-		for (const each of STITCHES) {
-			const b = button("", each.name + (each.key ? ` (${each.key})` : ""), () => {
-				stitch = each
-				showPalette()
-			})
-			b.className = "stoat-swatch"
-			b.append(stitchSwatch(each, colours))
-			b.setAttribute("aria-pressed", String(each.id === stitch.id))
-			palette.append(b)
+		yarns.replaceChildren()
+		const hexes = yarnColours(kDoc)
+		for (let c = 1; c <= 6; c++) {
+			const yarn = String(c)
+			const number = document.createElement("span")
+			number.className = "stoat-yarn-number"
+			number.textContent = yarn
+			const b = swatch({colour: hexes[c - 1], content: number, label: `yarn ${c}`, title: `yarn ${c}: paint rows in it (or drag down the strip at the left)`, onClick: () => pick({kind: "yarn", value: yarn})})
+			press(b, isPicked("yarn", yarn))
+			yarns.append(b)
 		}
+		undoButton.disabled = !history.length
+		redoButton.disabled = !future.length
 	}
 
 	function readTheme() {
@@ -297,7 +294,7 @@ export default function StoatTool(handle, element, context = {}) {
 			const top = rowTop(row)
 			for (let x = firstX; x <= lastX; x++) {
 				const at = key(x, row)
-				const c = layer === "colours" && pending.has(at) ? pending.get(at) : d.colours[row]?.[x]
+				const c = pendingKind === "colours" && pending.has(at) ? pending.get(at) : d.colours[row]?.[x]
 				if (!c) continue
 				const hex = hexOf(c)
 				ctx.fillStyle = hex ?? colours.danger
@@ -307,7 +304,7 @@ export default function StoatTool(handle, element, context = {}) {
 			}
 			for (let x = firstX; x <= lastX; x++) {
 				const at = key(x, row)
-				const painted = layer === "stitches" && pending.has(at) ? pending.get(at) : d.stitches?.[row]?.[x]
+				const painted = pendingKind === "stitches" && pending.has(at) ? pending.get(at) : d.stitches?.[row]?.[x]
 				if (!painted || (!painted.f && !painted.b)) continue
 				const half = cell / 2
 				const pad = cell >= 10 ? 1 : 0
@@ -345,7 +342,7 @@ export default function StoatTool(handle, element, context = {}) {
 		ctx.textBaseline = "middle"
 		for (let row = firstRow; row <= lastRow; row++) {
 			const top = rowTop(row)
-			const yarn = pendingYarns?.has(row) ? pendingYarns.get(row) : d.yarns?.[row]
+			const yarn = pendingKind === "yarns" && pending.has(key(0, row)) ? pending.get(key(0, row)) : d.yarns?.[row]
 			ctx.fillStyle = yarnHex[Number(yarn) - 1] ?? colours.danger
 			ctx.fillRect(GUTTER - YARN_STRIP, top, YARN_STRIP - 1, cell)
 			if (cell >= 10 || (row + 1) % 10 === 0) {
@@ -357,14 +354,26 @@ export default function StoatTool(handle, element, context = {}) {
 
 	// ── painting
 
-	function valueOf(erasing) {
-		if (layer === "colours") return erasing ? 0 : colour
-		return erasing ? {f: null, b: null} : {f: stitch.f, b: stitch.b}
+	// what a stroke paints, and as what kind (rubbing out with a yarn picked
+	// rubs out colours: a row has to have a yarn)
+	function strokeKind(erasing) {
+		if (erasing) return picked.kind === "stitch" ? "stitches" : "colours"
+		return KIND[picked.kind]
+	}
+	function valueOf(kind, erasing) {
+		if (kind === "colours") return erasing ? 0 : picked.value
+		if (kind === "stitches") return erasing ? {f: null, b: null} : {f: picked.value.f, b: picked.value.b}
+		return picked.value
 	}
 
+	// cells into the stroke: a yarn's are their rows (each kept at x 0)
 	function addCells(cells, erasing) {
-		const value = valueOf(erasing)
-		for (const cell of cells) if (inside(cell)) pending.set(key(cell.x, cell.row), value)
+		pendingKind = strokeKind(erasing)
+		const value = valueOf(pendingKind, erasing)
+		for (const cell of cells) {
+			if (!inside(cell)) continue
+			pending.set(pendingKind === "yarns" ? key(0, cell.row) : key(cell.x, cell.row), value)
+		}
 	}
 
 	function previewShape(a, b, erasing) {
@@ -379,41 +388,77 @@ export default function StoatTool(handle, element, context = {}) {
 		}
 	}
 
-	function keep() {
-		if (!pending.size) return
-		const groups = new Map()
-		for (const [at, value] of pending) {
-			const id = JSON.stringify(value)
-			if (!groups.has(id)) groups.set(id, {value, points: []})
-			groups.get(id).points.push(at.split(",").map(Number))
-		}
-		pending = new Map()
-		changeHere(d => {
-			for (const {value, points} of groups.values()) {
-				if (layer === "colours") paintColours(d, points, value)
-				else {
-					paintStitches(d, points, "f", value.f)
-					paintStitches(d, points, "b", value.b)
-				}
-			}
-		})
+	// the cells a fill pours into: the same colour (with a stitch picked, the
+	// same colour and stitch; with a yarn, the run of rows in the same yarn)
+	function fillCells(cell) {
+		const d = doc()
+		if (picked.kind === "yarn") return floodCells(d.yarns.map(yarn => [yarn]), 0, cell.row).map(([, row]) => ({x: 0, row}))
+		const grid =
+			picked.kind === "stitch"
+				? d.colours.map((row, r) => row.map((c, x) => `${c}|${d.stitches?.[r]?.[x]?.f ?? ""}|${d.stitches?.[r]?.[x]?.b ?? ""}`))
+				: d.colours
+		return floodCells(grid, cell.x, cell.row).map(([x, row]) => ({x, row}))
 	}
 
-	function pick(cell) {
-		const d = doc()
-		if (!inside(cell)) return
-		if (layer === "colours") {
-			const c = d.colours[cell.row][cell.x]
-			if (c) colour = c
-		} else {
-			const painted = d.stitches?.[cell.row]?.[cell.x]
-			stitch = STITCHES.find(each => each.f === (painted?.f ?? null) && each.b === (painted?.b ?? null)) ?? stitch
+	// the stroke, into the doc in one change, kept to take back
+	function keep() {
+		if (!pending.size) return
+		const kind = pendingKind
+		const record = {kind, cells: [...pending].map(([at, value]) => [...at.split(",").map(Number), value])}
+		pending = new Map()
+		const points = record.cells.map(([x, row]) => [x, row])
+		const before = recordOf(doc(), kind, points)
+		changeHere(d => applyRecord(d, record))
+		remember({before, after: recordOf(doc(), kind, points)})
+	}
+
+	function remember(stroke) {
+		history.push(stroke)
+		if (history.length > HISTORY) history.shift()
+		future.length = 0
+		showPalette()
+	}
+
+	// take back the last stroke (what's still as it left it), or do it again
+	function undo() {
+		while (history.length) {
+			const stroke = history.pop()
+			const record = undoOf(doc(), stroke)
+			if (!record) continue
+			changeHere(d => applyRecord(d, record))
+			future.push(stroke)
+			break
 		}
 		showPalette()
+		draw()
+	}
+	function redo() {
+		while (future.length) {
+			const stroke = future.pop()
+			const record = undoOf(doc(), {before: stroke.after, after: stroke.before})
+			if (!record) continue
+			changeHere(d => applyRecord(d, record))
+			history.push(stroke)
+			break
+		}
+		showPalette()
+		draw()
+	}
+
+	// pick what a cell has: its stitch, if it has one, or its colour
+	function pickFrom(cell) {
+		const d = doc()
+		if (!inside(cell)) return
+		const painted = d.stitches?.[cell.row]?.[cell.x]
+		const stitch = (painted?.f || painted?.b) && STITCHES.find(each => each.f === (painted.f ?? null) && each.b === (painted.b ?? null))
+		if (stitch) return pick({kind: "stitch", value: stitch})
+		const c = d.colours[cell.row][cell.x]
+		if (c) pick({kind: "colour", value: c})
 	}
 
 	function onPointerDown(event) {
 		canvas.focus()
+		setup.close()
 		const rect = canvas.getBoundingClientRect()
 		const px = event.clientX - rect.left
 		const py = event.clientY - rect.top
@@ -422,19 +467,29 @@ export default function StoatTool(handle, element, context = {}) {
 			drag = {kind: "pan", px, py, x: view.x, y: view.y}
 			return
 		}
+		if (event.button !== 0) return
 		if (px < GUTTER) {
+			// the yarn strip: rows in the yarn picked (or yarn 3, with none)
 			const {row} = cellAt(GUTTER, py)
-			pendingYarns = new Map()
-			drag = {kind: "yarn", from: row}
-			pendingYarns.set(row, yarnSelect.value)
+			const yarn = picked.kind === "yarn" ? picked.value : "3"
+			pending = new Map()
+			pendingKind = "yarns"
+			if (row >= 0 && row < doc().height) pending.set(key(0, row), yarn)
+			drag = {kind: "yarn", from: row, yarn}
 			draw()
 			return
 		}
 		const cell = cellAt(px, py)
-		if (tool === "picker") return pick(cell)
+		if (tool === "picker") return pickFrom(cell)
 		const erasing = tool === "eraser"
+		pending = new Map()
+		if (tool === "fill") {
+			if (inside(cell)) addCells(fillCells(cell), false)
+			keep()
+			draw()
+			return
+		}
 		if (tool === "brush" || tool === "eraser") {
-			pending = new Map()
 			addCells(event.shiftKey && last ? lineCells(last, cell) : [cell], erasing)
 			drag = {kind: "brush", erasing, at: cell}
 		} else {
@@ -454,8 +509,8 @@ export default function StoatTool(handle, element, context = {}) {
 			view.y = drag.y + (py - drag.py)
 		} else if (drag.kind === "yarn") {
 			const {row} = cellAt(GUTTER, py)
-			pendingYarns = new Map()
-			for (let r = Math.min(drag.from, row); r <= Math.max(drag.from, row); r++) if (r >= 0 && r < doc().height) pendingYarns.set(r, yarnSelect.value)
+			pending = new Map()
+			for (let r = Math.min(drag.from, row); r <= Math.max(drag.from, row); r++) if (r >= 0 && r < doc().height) pending.set(key(0, r), drag.yarn)
 		} else if (drag.kind === "brush") {
 			const cell = cellAt(px, py)
 			addCells(lineCells(drag.at, cell), drag.erasing)
@@ -468,14 +523,8 @@ export default function StoatTool(handle, element, context = {}) {
 		if (!drag) return
 		const done = drag
 		drag = null
-		if (done.kind === "yarn") {
-			const rows = [...pendingYarns.keys()]
-			pendingYarns = null
-			if (rows.length) changeHere(d => setYarns(d, Math.min(...rows), Math.max(...rows), yarnSelect.value))
-		} else if (done.kind === "brush" || done.kind === "shape") {
-			last = done.at ?? null
-			keep()
-		}
+		if (done.kind === "brush" || done.kind === "shape") last = done.at ?? null
+		if (done.kind !== "pan") keep()
 		draw()
 	}
 
@@ -498,24 +547,24 @@ export default function StoatTool(handle, element, context = {}) {
 	}
 
 	function onKey(event) {
-		if (event.target !== canvas) return
-		if (event.key === " ") {
+		if (event.target.closest?.("input, select, textarea")) return
+		if (event.key === " " && event.target === canvas) {
 			spaceHeld = event.type === "keydown"
 			event.preventDefault()
 			return
 		}
-		if (event.type !== "keydown" || event.metaKey || event.ctrlKey || event.altKey) return
+		if (event.type !== "keydown" || event.altKey) return
+		const mod = event.metaKey || event.ctrlKey
+		if (mod && event.key.toLowerCase() === "z") {
+			event.preventDefault()
+			return event.shiftKey ? redo() : undo()
+		}
+		if (mod) return
 		const each = TOOLS.find(t => t.key === event.key)
 		if (each) return setTool(each.id)
-		if (event.key === "c") return setLayer("colours")
-		if (event.key === "s") return setLayer("stitches")
-		if (/^[0-9]$/.test(event.key)) {
-			if (layer === "stitches") stitch = STITCHES.find(t => t.key === event.key) ?? stitch
-			else {
-				const column = columnsOf(charm())[(Number(event.key) + 9) % 10]
-				if (column) colour = column.colour
-			}
-			showPalette()
+		if (/^[1-9]$/.test(event.key)) {
+			const column = columnsOf(charm())[Number(event.key) - 1]
+			if (column) pick({kind: "colour", value: column.colour})
 		}
 	}
 
@@ -524,8 +573,8 @@ export default function StoatTool(handle, element, context = {}) {
 	canvas.addEventListener("pointerup", onPointerUp)
 	canvas.addEventListener("pointercancel", onPointerUp)
 	canvas.addEventListener("wheel", onWheel, {passive: false})
-	canvas.addEventListener("keydown", onKey)
-	canvas.addEventListener("keyup", onKey)
+	root.addEventListener("keydown", onKey)
+	root.addEventListener("keyup", onKey)
 
 	// ── building
 
@@ -593,9 +642,9 @@ export default function StoatTool(handle, element, context = {}) {
 	}
 
 	function showStatus(text, state) {
-		status.textContent = text
-		status.title = text
-		status.dataset.state = state
+		// on ✓: what happened, when it's pointed at; red when it went wrong
+		buildButton.title = text
+		buildButton.dataset.state = state
 	}
 
 	// ── keeping up: the doc, its charm, the project's charms
@@ -690,7 +739,6 @@ export default function StoatTool(handle, element, context = {}) {
 	handle.on("change", onChange)
 
 	setTool("brush")
-	setLayer("colours")
 	readTheme()
 	showFields()
 	showCharms()
@@ -698,6 +746,7 @@ export default function StoatTool(handle, element, context = {}) {
 	if (doc()?.knitoutTarget) {
 		repo.find(doc().knitoutTarget).then(k => {
 			kDoc = k.doc()
+			showPalette()
 			draw()
 		}, () => {})
 	}

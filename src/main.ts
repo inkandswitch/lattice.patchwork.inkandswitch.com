@@ -34,6 +34,20 @@ async function devPackages(): Promise<string[] | null> {
 // what used to say which frame: forget it
 localStorage.removeItem("latticeFrameURL")
 
+// this site is lattice's, whichever shell the account picked (its
+// frameToolId, which patchwork's router puts ahead of ours): the root gets
+// lattice unless a #frame= link asks for another. it's caught as the router
+// sets it, so the other shell never starts mounting
+const root = document.getElementById("root")
+if (root) {
+	const setAttribute = root.setAttribute.bind(root)
+	root.setAttribute = (name: string, value: string) => {
+		const framed = new URLSearchParams(location.hash.slice(1)).has("frame")
+		setAttribute(name, name === "tool-id" && !framed ? "lattice" : value)
+	}
+}
+;(window as any).latticeSite = true
+
 showLoadingAnimation()
 
 const packageListURL = (await devPackages()) ?? [

@@ -884,7 +884,7 @@ function Frame(props) {
             onDblClick=${() => setRenaming(project.url)}
             data-menu=${() => (projectMenuOpen() && menuProject() === project ? "" : undefined)}
             data-arriving=${arriving}
-            ref=${rowMenu((at, event) => openProjectMenu(at, event, project))}
+            ref=${rowMenu((at) => openProjectMenu(at, project))}
           >
             <span class="lattice-tree-name">${project.name}</span>
             <${Show} when=${calling}>
@@ -1009,20 +1009,8 @@ function Frame(props) {
   const [menuFiles, setMenuFiles] = createSignal(null);
   const [packing, setPacking] = createSignal(null);
 
-  // the project menu has more in it while alt is held (copy link), as the
-  // panes' + menu does
-  const [menuAlt, setMenuAlt] = createSignal(false);
-  const onMenuAlt = (event) => event.key === "Alt" && setMenuAlt(event.type === "keydown");
-  document.addEventListener("keydown", onMenuAlt);
-  document.addEventListener("keyup", onMenuAlt);
-  onCleanup(() => {
-    document.removeEventListener("keydown", onMenuAlt);
-    document.removeEventListener("keyup", onMenuAlt);
-  });
-
-  // where it was asked for (ui/context-menu.js), and with alt held or not
-  function openProjectMenu(at, event, project) {
-    setMenuAlt(!!event.altKey);
+  // where it was asked for (ui/context-menu.js)
+  function openProjectMenu(at, project) {
     setMenuProject(project);
     setPacking(null);
     setRemoving(false);
@@ -1086,18 +1074,16 @@ function Frame(props) {
       ref=${(el) => (projectMenu = el)}
       onToggle=${(event) => setProjectMenuOpen(event.newState === "open")}
     >
-      <${Show} when=${() => menuAlt() || copied()}>
-        <button
-          class="lattice-wm-menu-item lattice-copy-link"
-          disabled=${() => !menuFiles()}
-          data-copied=${() => (copied() ? "" : undefined)}
-          onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
-        >
-          ${() => icon(copied() ? "check" : "link")}
-          copy link
-          <${Show} when=${copied}><small class="lattice-copied">copied</small><//>
-        </button>
-      <//>
+      <button
+        class="lattice-wm-menu-item lattice-copy-link"
+        disabled=${() => !menuFiles()}
+        data-copied=${() => (copied() ? "" : undefined)}
+        onClick=${() => copyFromMenu(shareUrl(menuFiles(), menuProject()?.name))}
+      >
+        ${() => icon(copied() ? "check" : "link")}
+        copy link
+        <${Show} when=${copied}><small class="lattice-copied">copied</small><//>
+      </button>
       <button
         class="lattice-wm-menu-item"
         disabled=${() => packing() === "packing it…"}
