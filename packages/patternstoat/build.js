@@ -1,8 +1,10 @@
 // a patternstoat and its charm, as knitout: each design row, bottom up,
 // takes its reference row of the charm and the + rows after it, and each of
 // those is a pass: what every cell's column does there (its tile from its
-// anchor, transparent cells from the stitch layer), in the row's direction
-// and yarn. a pass with nothing in it is left out
+// anchor), in the row's direction and yarn, with the stitch layer on top: a
+// stitch painted on a bed is what that bed does, in every pass the charm
+// does something on it (and in the first, if it does nothing on it at all).
+// a pass with nothing in it is left out
 //
 // what the kniterate can't knit isn't fixed here: it's built as it is, and
 // checks (lattice's checks.js) say so, as they do for a .js's .k
@@ -65,15 +67,38 @@ export function buildKnitout(stoat, charm, {needles = 252} = {}) {
 		}
 		const passes = []
 		const group = groups.length ? groups[r % groups.length] : []
-		for (const row of group) {
+		// which beds the charm does something on, at each cell, in any of
+		// the group's passes: a stitch painted on a bed it never uses goes in
+		// the first
+		const used = new Map()
+		for (const field of fields) {
+			const column = columnOf(charm, field.colour)
+			for (let x = field.start; x <= field.end; x++) {
+				const beds = {f: false, b: false}
+				for (const row of group) {
+					const cell = cellAt(charm, column, row.id, x, field, stoat.width)
+					if (cell.f != null) beds.f = true
+					if (cell.b != null) beds.b = true
+				}
+				used.set(x, beds)
+			}
+		}
+		for (const [index, row] of group.entries()) {
 			const cells = []
 			for (const field of fields) {
 				const column = columnOf(charm, field.colour)
 				for (let x = field.start; x <= field.end; x++) {
 					const cell = cellAt(charm, column, row.id, x, field, stoat.width)
 					const painted = stoat.stitches?.[r]?.[x]
-					const f = cell.f === "*" ? (painted?.f ?? null) : cell.f
-					const b = cell.b === "*" ? (painted?.b ?? null) : cell.b
+					// a painted stitch is what its bed does wherever the charm
+					// does something on it (✦ included), or in the first pass
+					const onBed = bed => {
+						const mine = painted?.[bed] ?? null
+						if (cell[bed] != null) return mine ?? (cell[bed] === "*" ? null : cell[bed])
+						return index === 0 && !used.get(x)[bed] ? mine : null
+					}
+					const f = onBed("f")
+					const b = onBed("b")
 					if (stoat.gauge === 1) {
 						const half = NEEDS_HALF_GAUGE[f] ?? NEEDS_HALF_GAUGE[b]
 						if (half) return fail(r + 1, needlesOf(stoat, x).f, `${half} needs half gauge: at full gauge it transfers onto the other bed's loops`)

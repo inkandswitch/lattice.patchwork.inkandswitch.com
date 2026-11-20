@@ -72,6 +72,37 @@ test("transparent cells knit what's painted", () => {
 	assert.doesNotMatch(knitout, /f10|f14/) // nothing painted there: nothing
 })
 
+test("a stitch painted on a tube replaces the charm's on its bed, in its pass", () => {
+	const stoat = tube(3, 1) // the tube: row a knits the front, row b the back
+	paintStitches(stoat, [[1, 0]], "f", "t")
+	const {knitout} = buildKnitout(stoat, newCharm())
+	assert.match(knitout, /^tuck \+ f12 3$/m)
+	assert.doesNotMatch(knitout, /^knit \+ f12 3$/m)
+	assert.match(knitout, /^knit - b13 3$/m) // the back is the charm's still
+})
+
+test("a stitch painted on a bed the charm leaves empty knits in the first pass", () => {
+	const stoat = tube(3, 1, 2) // back only: row a nothing, row b knits the back
+	paintStitches(stoat, [[1, 0]], "f", "k")
+	const lines = buildKnitout(stoat, newCharm()).knitout.split("\n")
+	const front = lines.findIndex(l => /^knit \+ f12 3$/.test(l))
+	assert.ok(front >= 0)
+	assert.ok(front < lines.findIndex(l => /^knit - b1[135] 3$/.test(l)))
+})
+
+test("a stitch painted in a cast off knits there, and the cast off either side still binds off", () => {
+	const stoat = tube(5, 1, 6) // cast off, both beds
+	paintStitches(stoat, [[2, 0]], "f", "k")
+	const {knitout} = buildKnitout(stoat, newCharm())
+	assert.match(knitout, /^knit \+ f14 3$/m)
+	assert.deepEqual(checkKnitout(knitout).problems.filter(p => p.level === "error"), [])
+	// the run left of it ends on it: f10 and f12's loops are on f14
+	const held = holding(knitout.split("\n"))
+	assert.equal(held.get("f10") ?? 0, 0)
+	assert.equal(held.get("f12") ?? 0, 0)
+	assert.ok(held.get("f14") >= 1)
+})
+
 test("either goes the other way from the carrier's last pass", () => {
 	const charm = newCharm()
 	setRow(charm, "a", {dir: "~"})
