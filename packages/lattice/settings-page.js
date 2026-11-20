@@ -17,6 +17,7 @@ import { themeValue } from "./themes.js";
 import { ThemePreview } from "./theme-preview.js";
 import { fonts, firstFamily } from "./fonts.js";
 import { COLOURS, colourFor, MOUSE, POINTER_PATH } from "./pointer.js";
+import { christen } from "./newcomer.js";
 
 const string = (value) => (value == null ? "" : String(value));
 
@@ -174,9 +175,7 @@ export function SettingsPage(props) {
     const url = contactUrl();
     if (url) return contact() ?? repo.find(url);
     making ??= createDoc(repo, { "@patchwork": { type: "contact" }, type: "anonymous" }, hive).then((handle) => {
-      handle.change((doc) => {
-        doc.color = colourFor(handle.url);
-      });
+      handle.change((doc) => void christen(doc));
       account.change((doc) => {
         doc.contactUrl = handle.url;
       });

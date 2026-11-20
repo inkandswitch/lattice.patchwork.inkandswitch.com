@@ -29,6 +29,7 @@ import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
 import { RepoContext, makeDocumentProjection, useDocument } from "./vendor/solid-automerge.js";
 import { colourFor, pointerCursor } from "./pointer.js";
+import { christen, isNewcomer } from "./newcomer.js";
 import { parsePath, projectByShort, projectPath } from "./paths.js";
 import { useToolStorage } from "./storage.js";
 import { hearCall } from "../wm/call.js";
@@ -468,8 +469,14 @@ function Frame(props) {
     const url = String(account.contactUrl ?? "");
     return isValidAutomergeUrl(url) ? url : undefined;
   };
-  const [me] = useDocument(contactUrl);
+  const [me, myContact] = useDocument(contactUrl);
   const myName = () => String(me()?.name ?? "").trim();
+  // someone new (patchwork's just made their contact, nameless and
+  // colourless) is someone at random till they say who they are
+  createEffect(() => {
+    const contact = myContact();
+    if (contact && isNewcomer(me())) contact.change((doc) => void christen(doc));
+  });
   // your mouse, in the frame: your pointer, in your colour
   // (an arrow, or a mouse: lattice's own, in the account's tool storage, so
   // it's yours wherever you open lattice, from as soon as it's loaded)
