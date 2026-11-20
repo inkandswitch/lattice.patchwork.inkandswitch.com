@@ -128,6 +128,21 @@ export function findPanelShowing(nodes, url) {
   return null;
 }
 
+// the docs on show: each group's tab that `active` (group id → panel id)
+// says, or its first. each url once
+export function shownUrls(nodes, active = {}) {
+  const { root, floats } = read(nodes);
+  const urls = new Set();
+  const walk = (tree) => {
+    if (!tree || tree.type === "panel") return;
+    if (tree.type === "split") return tree.children.forEach(walk);
+    const panel = tree.panels.find((panel) => panel.id === active[tree.id]) ?? tree.panels[0];
+    if (panel) urls.add(panel.url);
+  };
+  [root, ...floats].forEach(walk);
+  return [...urls];
+}
+
 function* panelsIn(trees) {
   for (const tree of trees) {
     if (!tree) continue;

@@ -316,6 +316,14 @@
 		text-overflow: ellipsis;
 	}
 
+	/* a call on in it: a phone, at the end of its row */
+	& .lattice-tree-call {
+		display: grid;
+		flex: none;
+		margin-left: auto;
+		color: var(--lattice-shell-primary);
+	}
+
 	& .lattice-tree-item[aria-current="page"] {
 		background: var(--lattice-current);
 		box-shadow: inset 2px 0 var(--lattice-shell-primary);

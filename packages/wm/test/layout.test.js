@@ -20,6 +20,7 @@ import {
   float,
   dock,
   findPanelShowing,
+  shownUrls,
 } from "../doc/layout.js";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
@@ -570,4 +571,16 @@ test("random edits by three people, merged in random orders, always read as a tr
     const again = change(fork(all), (nodes) => repair(nodes));
     assert.deepEqual(Automerge.getHeads(again), Automerge.getHeads(all), `seed ${seed}: repairs didn't agree`);
   }
+});
+
+test("the docs on show are each group's showing tab, or its first", () => {
+  const nodes = {};
+  openPanels(nodes, null, "center", [{ url: "a", tool: "editor" }, { url: "b", tool: "editor" }]);
+  openPanels(nodes, groupWith(nodes, "a"), "right", [{ url: "c", tool: "editor" }, { url: "d", tool: "editor" }]);
+  assert.deepEqual(shownUrls(nodes).sort(), ["a", "c"]);
+  const active = { [groupWith(nodes, "c")]: findPanelShowing(nodes, "d") };
+  assert.deepEqual(shownUrls(nodes, active).sort(), ["a", "d"]);
+  // one that's gone: the first again
+  assert.deepEqual(shownUrls(nodes, { [groupWith(nodes, "a")]: "nope" }).sort(), ["a", "c"]);
+  assert.deepEqual(shownUrls({}), []);
 });

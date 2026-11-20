@@ -815,11 +815,31 @@ function Frame(props) {
     noteTimer = setTimeout(() => setNote(null), 3000);
   }
 
+  // a call in a project: in its room (its files), whether you or anyone
+  // else is on one, from the call (wm/call.js). null till it's known
+  function callIn(url) {
+    const [state, setState] = createSignal(null);
+    let off = null;
+    let dead = false;
+    findSoon(repo, url).then((doc) => {
+      const files = String(doc?.files ?? "");
+      if (dead || !isValidAutomergeUrl(files.split(/[#/]/, 1)[0])) return;
+      off = hearCall(element, { type: "patchwork:call", url: files }, setState);
+    });
+    onCleanup(() => {
+      dead = true;
+      off?.();
+    });
+    return state;
+  }
+
   // a project made or added while you're here comes in (ui/arriving.js)
   const projectArriving = arrivals();
   function ProjectItem(props) {
     const project = props.project;
     const arriving = projectArriving(project.url);
+    const call = callIn(project.url);
+    const calling = () => !!call()?.here || call()?.others > 0;
     return () =>
       renaming() === project.url
         ? html`<input
@@ -860,6 +880,16 @@ function Frame(props) {
             ref=${rowMenu((at, event) => openProjectMenu(at, event, project))}
           >
             <span class="lattice-tree-name">${project.name}</span>
+            <${Show} when=${calling}>
+              <span
+                class="lattice-tree-call"
+                data-here=${() => (call()?.here ? "" : undefined)}
+                title=${() => (call()?.here ? "you're in its call" : "there's a call on in it")}
+                aria-label=${() => (call()?.here ? "you're in its call" : "there's a call on in it")}
+              >
+                ${icon("phone", 12)}
+              </span>
+            <//>
           </button>`;
   }
 

@@ -22,7 +22,6 @@ import { joinRoom, faceImage } from "./presence.js";
 import { PANE_TAG, paneRepo, provideViewState } from "./view-state.js";
 import { pointerImage } from "./pointer.js";
 import { tooltips } from "./ui/tooltip.js";
-import { holdSecret, secret } from "./ui/secret.js";
 import { scrollsAlong } from "./ui/along.js";
 import { rowMenu, showMenuAt } from "./ui/context-menu.js";
 import { arrivals } from "./ui/arriving.js";
@@ -437,10 +436,12 @@ export function mountWorkspace(
       for (const person of list) theirs.set(person.peer, person);
       setPeople(
         reconcile(
-          list.map(({ peer, contact, name, colour, avatar, pointer, look, shared }) => {
+          list.map(({ peer, contact, name, colour, avatar, pointer, look, nodes, active, shared }) => {
             const ext = {};
             for (const { name, key, channel } of presenceKeys) (ext[name] ??= {})[key] = shared[channel];
-            return { peer, contact, name, colour, avatar, pointer, look, ext };
+            // the files they're in: what their panes are showing
+            const showing = Layout.shownUrls(nodes, active);
+            return { peer, contact, name, colour, avatar, pointer, look, showing, ext };
           }),
           { key: "peer" },
         ),
@@ -460,9 +461,8 @@ export function mountWorkspace(
   // ── a call, in the project (call.js: the call package's, through its
   //    provider). the project's files are the room, called what the
   //    project is, for as long as you're here (patchwork:call-room), so a
-  //    call on it is offered in the call's control panel. the phone,
-  //    beside the +, is there while one's on, or while it's not a secret
-  //    (ui/secret.js: ctrl, alt and command, tapped together twice)
+  //    call on it is offered in the call's control panel. the phone is
+  //    beside the +
   const [callRoom, setCallRoom] = createSignal(null);
   const callHere = () => !!callRoom()?.here;
   const callOn = () => callRoom()?.others > 0;
@@ -2764,10 +2764,9 @@ export function mountWorkspace(
         <header class="lattice-wm-files-heading">
           <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
-          <${Show} when=${() => roomHandle && (secret() || callHere() || callOn())}>
+          <${Show} when=${() => roomHandle}>
             <button
               class="lattice-wm-icon-button lattice-wm-phone"
-              ref=${holdSecret}
               data-on=${() => (callHere() ? "" : undefined)}
               data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
               title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
@@ -2864,6 +2863,7 @@ export function mountWorkspace(
                   >
                     <span class="lattice-wm-swatch"></span>
                     <span class="lattice-wm-file-name">${() => file.name}</span>
+                    <${FileFaces} url=${file.url} />
                     <span class="lattice-wm-file-when" title=${() => touchedWhen(file.url)}>
                       <span>${() => lastTouched(file.url)}</span>
                     </span>
@@ -2926,6 +2926,31 @@ export function mountWorkspace(
         ${icon("close")} ${() => (fileRemoving() ? "remove?" : "remove")}
       </button>
     </div>`;
+  }
+
+  // who's in a file (has it showing in a pane): a little face each, on its
+  // row. not to be pressed: it's the row that's pressed
+  function FileFaces(props) {
+    const here = () => people.filter((person) => person.showing.includes(props.url));
+    return html`<${Show} when=${() => here().length}>
+      <span class="lattice-wm-file-faces" aria-label=${() => `${here().map((person) => person.name).join(", ")} in it`}>
+        <${For} each=${here}>
+          ${(person) => {
+            const image = () => faceImage(person.avatar);
+            return html`<span
+              class="lattice-wm-file-face"
+              title=${() => `${person.name} is in it`}
+              style=${() => ({
+                "--lattice-wm-face": person.colour || null,
+                "background-image": image() ? `url("${image()}")` : null,
+              })}
+            >
+              ${() => (image() ? "" : (person.name[0] ?? "?").toUpperCase())}
+            </span>`;
+          }}
+        <//>
+      </span>
+    <//>`;
   }
 
   // who else is here: a face each. clicking one follows them, clicking it

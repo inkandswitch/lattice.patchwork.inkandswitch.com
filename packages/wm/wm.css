@@ -1617,6 +1617,30 @@ lattice-pane {
 		text-overflow: ellipsis;
 	}
 
+	/* who's in it: little faces after its name, overlapping a bit */
+	& .lattice-wm-file-faces {
+		display: flex;
+		flex: none;
+		padding-left: calc(2 * var(--lattice-px, 1px));
+	}
+
+	& .lattice-wm-file-face {
+		display: grid;
+		place-items: center;
+		box-sizing: border-box;
+		width: calc(14 * var(--lattice-px, 1px));
+		height: calc(14 * var(--lattice-px, 1px));
+		border: 1.5px solid var(--lattice-wm-face);
+		border-radius: 50%;
+		background: var(--lattice-wm-chrome) center / cover;
+		font: 600 calc(7 * var(--lattice-px, 1px))/1 var(--lattice-wm-sans);
+		font-style: normal;
+
+		& + .lattice-wm-file-face {
+			margin-left: calc(-4 * var(--lattice-px, 1px));
+		}
+	}
+
 	/* how long since it was last built or changed: in what room the name
 	   leaves, all of it or none (it's in the tooltip). what doesn't fit beside
 	   the empty ::before wraps onto a line that's out of sight */
