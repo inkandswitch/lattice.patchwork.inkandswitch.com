@@ -762,6 +762,7 @@ export default function StoatTool(handle, element, context = {}) {
 		handle.off("change", onChange)
 		charmHandle?.off?.("change", onCharmChange)
 		link.remove()
+		traysLink.remove()
 		root.remove()
 	}
 }

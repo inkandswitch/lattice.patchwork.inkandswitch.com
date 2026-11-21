@@ -157,6 +157,35 @@
 		color: var(--stoat-muted);
 	}
 
+	/* the patternstoat's bar (trays.css): ✓ says how the build went */
+	& .stoat-build[data-state="error"] {
+		color: var(--stoat-danger);
+	}
+
+	& .stoat-build[data-state="running"] .tray-icon {
+		opacity: 0.4;
+	}
+
+	& .stoat-yarn-number {
+		grid-area: 1 / 1;
+		font: 600 10px/1 var(--stoat-mono);
+		color: #fff;
+		text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+	}
+
+	/* a yarn's number is always there, so its key isn't */
+	& .stoat-trays .tray-swatch:has(.stoat-yarn-number) kbd {
+		display: none;
+	}
+
+	& .stoat-trays .stoat-stitch {
+		border-radius: 6px;
+	}
+
+	& .stoat-trays .stoat-note {
+		padding: 0 6px;
+	}
+
 	/* the charm's text */
 	& .stoat-text {
 		flex: 1 1 auto;
