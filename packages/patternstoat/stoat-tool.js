@@ -668,7 +668,8 @@ export default function StoatTool(handle, element, context = {}) {
 	}
 
 	// the charm changed (here, in its arrangement, or someone's): built again,
-	// and the .k's only written if what it's built from is new
+	// and the .k's only written if what it's built from is new, or is the
+	// same at newer heads (so the .k says which heads it was built from)
 	function onCharmChange() {
 		onCharm()
 		scheduleBuild()
