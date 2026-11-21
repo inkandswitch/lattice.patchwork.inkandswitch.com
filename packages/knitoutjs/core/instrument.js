@@ -59,7 +59,7 @@ function docString(code, call) {
 // every place a pattern names a doc: `import … from "x"`, `import "x"`,
 // `import("x")`, `doc("x")`. only a literal url counts, since that's all
 // that can be known before the pattern runs
-function scan(code) {
+export function scan(code) {
   const lineAt = (pos) => code.slice(0, pos).split("\n").length;
   const found = [];
   parser.parse(code).iterate({
