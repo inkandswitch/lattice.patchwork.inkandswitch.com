@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { ImmutableString } from "@automerge/automerge";
 import { asksFirst, createBuilder, readAutobuild, writeAutobuild } from "../core/builder-logic.js";
 import { jsBuild } from "../core/js-build.js";
-import { kcodeBuild } from "../../lattice/kcode.js";
-import { stoatBuild } from "../../patternstoat/build-kind.js";
 
 const JS = "automerge:js";
 const K = "automerge:k";
+
+// a kind that's off to start with, as a .k's kcode is
+const offToStart = { key: (url) => `lattice:kcode-autobuild:${url}`, default: false };
 
 // a handle that's only a doc, changed in place, telling whoever listens
 function fakeHandle(url, doc) {
@@ -89,11 +90,10 @@ function setUp({ kind = testKind(), source = {}, docs = {}, storage = fakeStorag
 test("each kind says where its autobuild is remembered, and whether it's on to start with", () => {
   assert.equal(jsBuild.autobuild.key(JS), `knitoutjs:autorun:${JS}`);
   assert.equal(jsBuild.autobuild.default, true);
-  assert.equal(kcodeBuild.autobuild.key(K), `lattice:kcode-autobuild:${K}`);
-  assert.equal(kcodeBuild.autobuild.default, false);
-  assert.equal(stoatBuild.autobuild.default, true);
-  assert.equal([jsBuild, kcodeBuild, stoatBuild].map((kind) => kind.targetExtension).join(" "), "k kc k");
-  assert.equal([jsBuild, kcodeBuild, stoatBuild].map((kind) => kind.targetField).join(" "), "knitoutTarget kcodeTarget knitoutTarget");
+  assert.equal(jsBuild.targetExtension, "k");
+  assert.equal(jsBuild.targetField, "knitoutTarget");
+  assert.equal(jsBuild.targetName({ name: "cable.knitout.js" }), "cable.k");
+  assert.equal(jsBuild.targetName({ name: "cable.js" }), "cable.k");
 });
 
 test("autobuild is stored only when it isn't the default: a .js's as off, a .k's as on", () => {
@@ -105,11 +105,11 @@ test("autobuild is stored only when it isn't the default: a .js's as off, a .k's
   writeAutobuild(jsBuild.autobuild, JS, true, storage);
   assert.deepEqual(storage.values, {});
 
-  assert.equal(readAutobuild(kcodeBuild.autobuild, K, storage), false);
-  writeAutobuild(kcodeBuild.autobuild, K, true, storage);
+  assert.equal(readAutobuild(offToStart, K, storage), false);
+  writeAutobuild(offToStart, K, true, storage);
   assert.deepEqual(storage.values, { [`lattice:kcode-autobuild:${K}`]: "on" });
-  assert.equal(readAutobuild(kcodeBuild.autobuild, K, storage), true);
-  writeAutobuild(kcodeBuild.autobuild, K, false, storage);
+  assert.equal(readAutobuild(offToStart, K, storage), true);
+  writeAutobuild(offToStart, K, false, storage);
   assert.deepEqual(storage.values, {});
 });
 
@@ -126,7 +126,7 @@ test("storage that throws is the default, and writing to it doesn't throw", () =
     },
   };
   assert.equal(readAutobuild(jsBuild.autobuild, JS, broken), true);
-  assert.equal(readAutobuild(kcodeBuild.autobuild, K, broken), false);
+  assert.equal(readAutobuild(offToStart, K, broken), false);
   writeAutobuild(jsBuild.autobuild, JS, false, broken);
 });
 

@@ -4,7 +4,9 @@
 // imports nothing of wm's: what it needs of the workspace is `api` (see
 // packages/wm/workspace.js)
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
-import { builds, setBuild } from "./core/builds.js";
+import { builds } from "./core/builds.js";
+import { buildOnce } from "./core/builder.js";
+import { jsBuild } from "./core/js-build.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
 import { headsNow } from "./core/heads.js";
 import { buildOf as buildOfIn, buildState as buildStateIn, importsOf, links, linksOf as linksOfIn, pinsOf } from "./core/knitout-links.js";
@@ -17,24 +19,12 @@ const linksOf = linksOfIn;
 const buildOf = (jsUrl, api) => buildOfIn(jsUrl, api, builds);
 const buildState = (kUrl, api) => buildStateIn(kUrl, api, { builds, headsNow: (url) => headsNow(url, api.repo) });
 
-// build a .js into its .k again: by its editor, if it's open in one, so its
-// build bar shows it too
+// build a .js into its .k again: by its builder, if it has one (it's shown
+// somewhere), so its build bar shows it too
 async function rebuild(jsUrl, kUrl, api) {
   const builder = builds[jsUrl]?.builder;
   if (builder) return builder.now();
-  const [{ runInto }, jsHandle, kHandle] = await Promise.all([
-    import("./core/run.js"),
-    api.repo.find(jsUrl),
-    api.repo.find(kUrl),
-  ]);
-  setBuild(jsUrl, { state: "running", line: undefined, message: undefined });
-  const { error } = await runInto(jsHandle, kHandle, api.repo);
-  setBuild(
-    jsUrl,
-    error
-      ? { state: "error", line: error.line ?? undefined, message: String(error.message ?? error) }
-      : { state: "ok" },
-  );
+  return buildOnce(jsBuild, jsUrl, kUrl, api.repo);
 }
 
 // a build that failed: show the .js, at the line it failed on

@@ -1,13 +1,14 @@
 import { createStore, unwrap } from "solid-js/store";
 
-// how each .js's builds are going, for the whole frame: its editor builds it
+// how each source's builds are going (a .js's, a .k's into its .kc, a
+// patternstoat's), for the whole frame: its builder (builder.js) builds it
 // (by hand, or by itself with autobuild on) and says so here, so the panes
-// showing the .k it writes can say so too. keyed by the .js's url:
+// showing what it writes can say so too. keyed by the source's url:
 // { state: "idle" | "running" | "ok" | "error" | "ask", line?, message?, at,
 //   auto, failed, builder?: { now(), goToLine(line) → whether it could } }
-// there's only a builder while that .js is open in an editor. failed is how
-// its last build that finished went, kept while it's edited and built again.
-// at is when its state was last said
+// there's only a builder while the source is shown somewhere (or edited).
+// failed is how its last build that finished went, kept while it's edited
+// and built again. at is when its state was last said
 const [builds, setBuilds] = createStore({});
 
 export { builds };

@@ -1,4 +1,4 @@
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createSignal, onCleanup, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { EditorState, Prec, Transaction } from "@codemirror/state";
@@ -8,16 +8,15 @@ import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
 import { definitionDoc, dropImport, importLineAt, toolFor } from "./doc-refs.js";
 import { languageServerDocs } from "./language-server.js";
-import { runInto } from "./run.js";
-import { importsOf, pinsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
-import { headsOf } from "./sources.js";
-import { builderOf, setBuild } from "./builds.js";
+import { importsOf } from "./knitout-links.js";
+import { builderOf } from "./builds.js";
+import { takeBuilder } from "./builder.js";
+import { BuildBar } from "./build-bar.js";
+import { jsBuild } from "./js-build.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
 
 const STYLESHEET = new URL("./editor.css", import.meta.url).href;
-
-const AUTO_RUN_DELAY = 600;
 
 // patchwork's file tool asks for extra CodeMirror extensions with this event,
 // just before it makes its editor (see base/file's README)
@@ -45,16 +44,30 @@ const DEFINITION_WAIT = 2000;
  *   showing somewhere already
  * - docColour(url): the colour a doc wears in every pane showing it (a css
  *   colour)
+ * - bars: whether whoever's showing this draws its build bar over it (wm
+ *   does, for a .js: its extensions' `bar`). if not, it's drawn here
  *
- * a .js file gets a build bar: it writes its knitout into a .k file. docs
- * dropped onto its code become imports (the frame asks `element.dropInto`)
+ * a .js file builds into a .k file (its builder, ./builder.js: ⌘↵ builds,
+ * and your own edits autobuild). docs dropped onto its code become imports
+ * (the frame asks `element.dropInto`)
  */
 export default function KnitoutEditorTool(handle, element, context) {
   const { repo, events, project, hover, open, openIfClosed, docColour } = context;
   const isJs = fileExtension(handle.doc()) === "js";
 
   let view = null;
-  let run;
+
+  // a .js's builder, shared with its bar and whatever else shows it: this
+  // builds on ⌘↵ and after your own edits, marks the line a build failed on
+  // in the code, and goes to it when asked
+  const taken = isJs
+    ? takeBuilder(jsBuild, handle.url, {
+      repo,
+      createFile: project.createFile,
+      openIfClosed: (url, tool) => openIfClosed(url, element, "right", tool),
+    }, { source: handle })
+    : null;
+  const run = taken?.builder ?? null;
 
   // the file tool's editor, once it's made
   const holdView = ViewPlugin.define((made) => {
@@ -162,371 +175,21 @@ export default function KnitoutEditorTool(handle, element, context) {
   }
   element.addEventListener(DEFINITION_EVENT, onDefinition);
 
-  // build the pattern into its target .k: by hand, or after every pause in
-  // your typing when autobuild is on (the default). turning it off is
-  // remembered in this browser, for each .js (not in the doc, so it's each
-  // person's choice). how it's going is shared with the frame (builds.js), for
-  // the panes showing the .k
-  function createRunner() {
-    const [target, setTarget] = createSignal(knitoutOf(handle.doc()).target);
-    const autorunKey = `knitoutjs:autorun:${handle.url}`;
-    const [auto, setAutoSignal] = createSignal(readAutorun());
-
-    function readAutorun() {
-      try {
-        return localStorage.getItem(autorunKey) !== "off";
-      } catch {
-        return true;
-      }
-    }
-
-    function setAuto(on) {
-      setAutoSignal(on);
-      setBuild(handle.url, { auto: on });
-      try {
-        if (on) localStorage.removeItem(autorunKey);
-        else localStorage.setItem(autorunKey, "off");
-      } catch {}
-    }
-    const [status, setStatusSignal] = createSignal({ state: "idle" });
-    const setStatus = (next) => {
-      setStatusSignal(next);
-      setBuild(handle.url, { line: undefined, message: undefined, ...next });
-    };
-    const running = () => status().state === "running";
-    let timer;
-    let current;
-
-    // every doc that can make the target .k stale (the .js's imports, and
-    // what the .k was last built from) is watched, so a change to one
-    // rebuilds, if autobuild is on. never the .js or the .k themselves: a
-    // build writes the .k. wm says a .k is "building…" on the promise of this
-    const watching = new Map(); // unpinned url → { handle? }
-    const warned = new Set();
-    let kWatch = null; // { url, handle? }: the target .k, for its sources
-    let closed = false;
-
-    function warnOnce(url, error) {
-      if (warned.has(url)) return;
-      warned.add(url);
-      console.warn(`knitoutjs: can't watch ${url}`, error);
-    }
-
-    // the heads a watched doc has now, as a pin says them, once it's found
-    function headsNow(url) {
-      const found = watching.get(url)?.handle;
-      return found ? headsOf(found.view(found.heads()).url) : undefined;
-    }
-
-    // the docs the code reads at fixed heads (`#heads` written in it), which
-    // never move: the .js's own, and those of the modules it uses, as found
-    function pinnedNow() {
-      return [handle.doc(), ...[...watching.values()].map((entry) => entry.handle?.doc())].flatMap(pinsOf);
-    }
-
-    // a doc the .k was built from may have moved before this was open (or
-    // while it was being found), with no change to come to say so: if one
-    // has, that's an edit too (so with autobuild off, still nothing). only
-    // once for each set of sources the .k has: a build that comes out the
-    // same (or fails) isn't tried again and again
-    let builtFor = null;
-    function buildIfMoved() {
-      const kDoc = kWatch?.handle?.doc();
-      if (!kDoc || !auto() || !sourcesMoved(kDoc, headsNow, { pinned: pinnedNow() })) return;
-      const sources = knitoutOf(kDoc).sources.join(" ");
-      if (sources === builtFor) return;
-      builtFor = sources;
-      edited();
-    }
-
-    function recompute() {
-      if (closed) return;
-      const want = watchedSources(handle.doc(), kWatch?.handle?.doc(), {
-        self: handle.url,
-        target: target(),
-        pinned: pinnedNow(),
-      });
-      for (const [url, entry] of watching) {
-        if (want.includes(url)) continue;
-        entry.handle?.off("change", edited);
-        watching.delete(url);
-      }
-      for (const url of want) {
-        if (watching.has(url)) continue;
-        const entry = {};
-        watching.set(url, entry);
-        repo.find(url).then((found) => {
-          // it may have left the set (or this closed) while it was found
-          if (closed || watching.get(url) !== entry) return;
-          entry.handle = found;
-          found.on("change", edited);
-          // a module found says what it pins, which may need no watching
-          recompute();
-        }, (error) => warnOnce(url, error));
-      }
-      buildIfMoved();
-    }
-
-    // the target .k's own doc says what it was built from; a build writes it
-    function watchTarget() {
-      const url = target();
-      if (kWatch?.url === url) return recompute();
-      kWatch?.handle?.off("change", recompute);
-      const entry = (kWatch = url ? { url } : null);
-      recompute();
-      if (!entry) return;
-      repo.find(url).then((found) => {
-        if (closed || kWatch !== entry) return;
-        entry.handle = found;
-        found.on("change", recompute);
-        recompute();
-      }, (error) => warnOnce(url, error));
-    }
-
-    const onChange = () => {
-      setTarget(knitoutOf(handle.doc()).target);
-      watchTarget();
-      // an error is about the code as it was; once that changes, it's gone
-      if (status().state === "error" && status().line != null) {
-        setStatus({ state: "idle" });
-      }
-    };
-
-    function edited() {
-      if (!auto()) return;
-      clearTimeout(timer);
-      timer = setTimeout(() => now(), AUTO_RUN_DELAY);
-    }
-    handle.on("change", onChange);
-    watchTarget();
-    const builder = { now: () => now({ create: true }), goToLine: (line) => goToLine(line) };
-    setBuild(handle.url, { state: "idle", auto: auto(), builder });
-    onCleanup(() => {
-      clearTimeout(timer);
-      current?.abort();
-      handle.off("change", onChange);
-      closed = true;
-      kWatch?.handle?.off("change", recompute);
-      for (const entry of watching.values()) entry.handle?.off("change", edited);
-      watching.clear();
-      // another editor showing this .js may have taken over since
-      if (builderOf(handle.url) === builder) {
-        setBuild(handle.url, { state: "idle", line: undefined, message: undefined, builder: undefined });
-      }
-    });
-
-    // a new run takes over from one still going. a generated .k is read
-    // only; a .k with editable text in it (someone's copy, or one typed by
-    // hand) isn't written over without asking
-    // `create`: an explicit build (the button, ⌘↵, wm's rebuild) makes a .k
-    // if there's none yet; autobuild never does
-    async function now({ overwrite = false, create = false } = {}) {
-      let url = target();
-      if (!url && create) url = await newTarget();
-      if (!url) {
-        setStatus({ state: "error", message: "pick a .k file to write to" });
-        return;
-      }
-      const kHandle = await repo.find(url);
-      const content = kHandle.doc()?.content;
-      if (typeof content === "string" && content.trim() && !overwrite) {
-        setStatus({
-          state: "ask",
-          message: `${kHandle.doc()?.name ?? "the .k"} has editable text in it`,
-        });
-        return;
-      }
-      // a .k with nothing in it yet is new: once there's knitout in it, it
-      // opens beside this, if it isn't open already
-      const fresh = !docText(kHandle.doc()).trim();
-      current?.abort();
-      const run = (current = new AbortController());
-      setStatus({ state: "running" });
-      const result = await runInto(handle, kHandle, repo, {
-        signal: run.signal,
-      });
-      if (current !== run) return;
-      current = null;
-      if (result.error?.stopped) {
-        setStatus({ state: "idle", message: "stopped" });
-      } else if (result.error) {
-        const error = {
-          line: result.error.line ?? null,
-          message: String(result.error.message ?? result.error),
-        };
-        setStatus({ state: "error", ...error });
-        if (view && error.line != null) showError(view, error);
-      } else {
-        if (view) showError(view, null);
-        if (fresh) openIfClosed(url, element, "right");
-        const lines = result.knitout.split("\n").length;
-        setStatus({
-          state: "ok",
-          message: `built in ${
-            Math.round(result.ms)
-          }ms · ${lines.toLocaleString()} lines`,
-        });
-      }
-    }
-
-    function pickTarget(url) {
-      handle.change((doc) => {
-        doc.knitoutTarget = url;
-      });
-    }
-
-    // one .k per ask: a second ask while the first is being made shares it
-    let making = null;
-    function newTarget() {
-      return (making ??= makeTarget().finally(() => (making = null)));
-    }
-
-    async function makeTarget() {
-      const base = (handle.doc()?.name ?? "pattern").replace(
-        /\.knitout\.js$|\.js$/,
-        "",
-      );
-      const url = await project.createFile(base + ".k");
-      pickTarget(url);
-      return url;
-    }
-
-    function stop() {
-      current?.abort();
-    }
-
-    // says whether it could (there's no editor to go to the line in until
-    // the file tool's made it)
-    function goToLine(lineNumber) {
-      if (!view) return false;
-      goToLineIn(view, lineNumber);
-      return true;
-    }
-
-    function keep() {
-      setStatus({ state: "idle", message: "kept it as it is" });
-    }
-
-    return {
-      target,
-      auto,
-      setAuto,
-      status,
-      running,
-      now,
-      edited,
-      stop,
-      keep,
-      goToLine,
-      pickTarget,
-      newTarget,
-    };
+  // says whether it could (there's no editor to go to the line in until
+  // the file tool's made it)
+  function goToLine(lineNumber) {
+    if (!view) return false;
+    goToLineIn(view, lineNumber);
+    return true;
   }
+  const unjump = run?.lineJump(goToLine);
 
-  function BuildBar() {
-    const kFiles = createMemo(() =>
-      project.files().filter((file) => file.extension === "k")
-    );
-    const targetColour = () => docColour(run.target());
-
-    function onPick(event) {
-      const value = event.currentTarget.value;
-      if (value === "+new") {
-        event.currentTarget.value = run.target() ?? "";
-        run.newTarget();
-      } else if (value) {
-        run.pickTarget(value);
-      }
-    }
-
-    return html`<div class="knitoutjs-runbar">
-      <button
-        class="knitoutjs-button knitoutjs-run"
-        data-running=${() => (run.running() ? "" : undefined)}
-        title=${() =>
-      run.running()
-        ? "stop this build"
-        : "build the pattern: it writes its knitout into the .k file chosen on the right (⌘↵)"}
-        onClick=${() => (run.running() ? run.stop() : run.now({ create: true }))}
-      >
-        ${() => (run.running() ? "stop" : "build")}
-      </button>
-      <label
-        class="knitoutjs-auto"
-        title="build again by itself whenever you stop typing for a moment. this browser remembers it for this file"
-      >
-        <input
-          type="checkbox"
-          checked=${run.auto}
-          onChange=${(event) => run.setAuto(event.currentTarget.checked)}
-        />
-        autobuild
-      </label>
-      <span class="knitoutjs-status" data-state=${() => run.status().state}>
-        <${Show} when=${() => run.status().line != null}>
-          <button
-            class="knitoutjs-error-line"
-            title="go to this line"
-            onClick=${() => run.goToLine(run.status().line)}
-          >
-            ${icon("warning")} line ${() => run.status().line}:
-          </button>
-        <//>
-        ${() =>
-      run.status().state === "running"
-        ? "building…"
-        : (run.status().message ?? "")}
-      </span>
-      <${Show} when=${() => run.status().state === "ask"}>
-        <span class="knitoutjs-ask">
-          <button
-            class="knitoutjs-button"
-            onClick=${() => run.now({ overwrite: true })}
-          >
-            overwrite it
-          </button>
-          <button class="knitoutjs-button" onClick=${() => run.keep()}>
-            keep it
-          </button>
-        </span>
-      <//>
-      <label
-        class="knitoutjs-target"
-        title="the .k file this pattern writes its knitout (the machine's instructions) into"
-        style=${() => ({ "--knitoutjs-target-colour": targetColour() })}
-        onPointerEnter=${() => hover(run.target())}
-        onPointerLeave=${() => hover(null)}
-      >
-        <span class="knitoutjs-target-label">writes to ${icon("arrow-right")}</span>
-        <span class="knitoutjs-swatch"></span>
-        <select onChange=${onPick}>
-          <option value="" disabled selected=${() => !run.target()}>
-            choose a .k file
-          </option>
-          <${For} each=${kFiles}>
-            ${(file) =>
-      html`
-        <option
-          value=${file.url}
-          selected=${() => file.url === run.target()}
-        >
-                        ${file.name}
-                      </option>
-      `}
-          <//>
-          <option value="+new">new .k file…</option>
-        </select>
-      </label>
-      <button
-        class="knitoutjs-open"
-        title="show that .k file's text beside this one"
-        disabled=${() => !run.target()}
-        onClick=${() => open(run.target(), element, "right", "editor")}
-      >
-        ${icon("beside")} open
-      </button>
-    </div>`;
-  }
+  // where a build failed, in the code; gone once one works
+  const unheard = run?.subscribe((status) => {
+    if (!view) return;
+    if (status.state === "error" && status.line != null) showError(view, { line: status.line, message: status.message });
+    else if (status.state === "ok") showError(view, null);
+  });
 
   // a generated .k is read only (it's stored whole, which keeps big ones
   // fast); this makes a plain-text copy beside it to edit by hand
@@ -583,12 +246,18 @@ export default function KnitoutEditorTool(handle, element, context) {
   }
 
   let link;
+  // the bar, where nobody draws it over this
+  const barUi = {
+    files: project.files,
+    open: (url, tool) => open(url, element, "right", tool),
+    hover,
+    docColour,
+  };
   const dispose = render(() => {
-    run = isJs ? createRunner() : null;
     return html`
       <div class="knitoutjs-editor" ref=${(el) => element.prepend((link = stylesheet(STYLESHEET, el)))}>
-        <${Show} when=${isJs}>
-          <${BuildBar} />
+        <${Show} when=${() => run && !context.bars}>
+          <${BuildBar} builder=${run} ui=${barUi} />
           <//>
           <${ReadOnlyNote} />
           <patchwork-view attr:doc-url=${handle
@@ -639,6 +308,9 @@ export default function KnitoutEditorTool(handle, element, context) {
     element.removeEventListener(DEFINITION_EVENT, onDefinition);
     handle.off("change", giveServerDocs);
     serverDocs?.close();
+    unjump?.();
+    unheard?.();
+    taken?.drop();
     dispose();
     link?.remove();
   };
