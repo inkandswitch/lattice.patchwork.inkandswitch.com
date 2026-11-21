@@ -73,3 +73,81 @@ test("loops still count", () => {
 test("calls note their line", () => {
   assert.ok(instrument("\nk.knit()").code.includes("__at(2, k).knit()"));
 });
+
+// original [line, column] of each generated segment start, per generated line
+function decode(mappings) {
+  const B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let line = 0;
+  let column = 0;
+  return mappings.split(";").map((segments) => {
+    let generated = 0;
+    return segments === ""
+      ? []
+      : segments.split(",").map((segment) => {
+          const numbers = [];
+          let value = 0;
+          let shift = 0;
+          for (const char of segment) {
+            const digit = B64.indexOf(char);
+            value |= (digit & 31) << shift;
+            if (digit & 32) shift += 5;
+            else {
+              numbers.push(value & 1 ? -(value >> 1) : value >> 1);
+              value = shift = 0;
+            }
+          }
+          generated += numbers[0];
+          line += numbers[2];
+          column += numbers[3];
+          return { generated, line, column };
+        });
+  });
+}
+
+// where `token` landed in the output, and the original column it maps to
+function originalColumn(result, token) {
+  const rows = result.code.split("\n");
+  const row = rows.findIndex((text) => text.includes(token));
+  const generated = rows[row].lastIndexOf(token);
+  const segment = decode(result.mappings)[row].find((s) => s.generated === generated);
+  return segment && { line: segment.line, column: segment.column };
+}
+
+test("tokens after a replaced string keep their columns", () => {
+  const code = 'const w = doc("automerge:abc").width + 1';
+  const result = instrument(code, { pins });
+  assert.deepEqual(originalColumn(result, "width"), { line: 0, column: code.indexOf("width") });
+});
+
+test("tokens after a replaced import keep their columns", () => {
+  const code = 'x; import a from "knitout"; y(1)';
+  const result = instrument(code);
+  assert.deepEqual(originalColumn(result, "y"), { line: 0, column: code.indexOf("y(") });
+});
+
+test("tokens after a multi-line import keep their columns", () => {
+  const code = 'import {\n a,\n b\n} from "knitout"; foo(1)';
+  const result = instrument(code);
+  assert.deepEqual(originalColumn(result, "foo"), { line: 3, column: code.split("\n")[3].indexOf("foo") });
+});
+
+test("a default and a group are both bound", () => {
+  const doc = instrument('import x, {a, b as c} from "automerge:abc"', { pins }).code;
+  assert.ok(doc.includes('__m1 = await __import(1, "automerge:abc#h1")'));
+  assert.ok(doc.includes("x = __m1.default"));
+  assert.ok(doc.includes("{a, b: c} = __m1"));
+  const k = instrument('import x, {a} from "knitout"').code;
+  assert.ok(k.includes('__m1 = require("knitout")') && k.includes("x = __m1") && k.includes("{a} = __m1"));
+});
+
+test("a default and a namespace are both bound", () => {
+  const doc = instrument('import x, * as y from "automerge:abc"', { pins }).code;
+  assert.ok(doc.includes("x = __m1.default") && doc.includes("y = __m1"));
+  const k = instrument('import x, * as y from "knitout"').code;
+  assert.ok(k.includes('__m1 = require("knitout")') && k.includes("x = __m1") && k.includes("y = __m1"));
+});
+
+test("two combined imports get their own temporaries", () => {
+  const code = instrument('import x, {a} from "knitout"; import y, {b} from "knitout"').code;
+  assert.ok(code.includes("__m1") && code.includes("__m2"));
+});

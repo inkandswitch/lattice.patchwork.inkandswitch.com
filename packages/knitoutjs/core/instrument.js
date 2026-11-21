@@ -15,27 +15,33 @@ function stringValue(code, node) {
   return text.slice(1, -1);
 }
 
-// `import … from "x"`: how it binds, and where its string is
+// `import … from "x"`: what it binds (`def` the default, `ns` the whole
+// module, `group` the `{a, b: c}`), and where its string is
 function importParts(code, decl) {
-  let binding = null;
-  let string = null;
-  let namespace = false;
-  for (let child = decl.firstChild; child; child = child.nextSibling) {
-    if (child.name === "VariableDefinition") binding ??= code.slice(child.from, child.to);
-    else if (child.name === "Star") namespace = true;
-    else if (child.name === "ImportGroup") {
+  const text = (n) => code.slice(n.from, n.to);
+  const parts = { def: null, ns: null, group: null, string: null };
+  // the parser doesn't make sense of `x, * as y` (it calls `as` the name), so
+  // that one is read from the text
+  const both = /^import\s+([\w$]+)\s*,\s*\*\s*as\s+([\w$]+)\s+from\b/.exec(text(decl));
+  if (both) [, parts.def, parts.ns] = both;
+  for (let child = decl.firstChild; child && !both; child = child.nextSibling) {
+    if (child.name === "VariableDefinition") parts.def = text(child);
+    else if (child.name === "Star") {
+      parts.ns = text(child.nextSibling.nextSibling);
+      child = child.nextSibling.nextSibling;
+    } else if (child.name === "ImportGroup") {
       const names = [];
       for (let n = child.firstChild; n; n = n.nextSibling) {
         if (n.name === "VariableName" && n.nextSibling?.name === "as") {
-          names.push(`${code.slice(n.from, n.to)}: ${code.slice(n.nextSibling.nextSibling.from, n.nextSibling.nextSibling.to)}`);
-        } else if (n.name === "VariableDefinition" && n.prevSibling?.name !== "as") {
-          names.push(code.slice(n.from, n.to));
-        }
+          names.push(`${text(n)}: ${text(n.nextSibling.nextSibling)}`);
+          n = n.nextSibling.nextSibling;
+        } else if (n.name === "VariableDefinition") names.push(text(n));
       }
-      binding = `{${names.join(", ")}}`;
-    } else if (child.name === "String") string = child;
+      parts.group = `{${names.join(", ")}}`;
+    } else if (child.name === "String") parts.string = child;
   }
-  return string && { binding, namespace, string };
+  if (both) parts.string = decl.getChild("String");
+  return parts.string && parts;
 }
 
 // `doc("x")`'s string, if that's all the call has
@@ -130,19 +136,32 @@ export function instrument(code, { pins = {} } = {}) {
   const tree = parser.parse(code);
   const lineAt = (pos) => code.slice(0, pos).split("\n").length;
   const inserts = [];
+  let temps = 0;
   const pinned = (url) => JSON.stringify(pins[url] ?? url);
   for (const use of scan(code)) {
     if (use.kind === "import") {
-      const { binding, namespace } = use.decl;
+      const { def, ns, group } = use.decl;
+      const source =
+        use.text === "knitout"
+          ? 'require("knitout")'
+          : use.url && `await __import(${use.line}, ${pinned(use.url)})`;
+      if (!source) continue;
+      // knitout's default is the library itself; a doc's is its `default`
+      const dflt = use.text === "knitout" ? "" : ".default";
+      const names = [def, ns, group].filter(Boolean).length;
       let text;
-      if (use.text === "knitout") {
-        text = binding ? `const ${binding} = require("knitout");` : `require("knitout");`;
-      } else if (use.url) {
-        const call = `await __import(${use.line}, ${pinned(use.url)})`;
-        if (!binding) text = `${call};`;
-        else if (binding.startsWith("{") || namespace) text = `const ${binding} = ${call};`;
-        else text = `const ${binding} = (${call}).default;`;
-      } else continue;
+      if (names === 0) text = `${source};`;
+      else if (names === 1) {
+        text = `const ${def ?? ns ?? group} = ${def ? (dflt ? `(${source})${dflt}` : source) : source};`;
+      } else {
+        // several names, one module: load it once
+        const temp = `__m${++temps}`;
+        const binds = [`${temp} = ${source}`];
+        if (def) binds.push(`${def} = ${temp}${dflt}`);
+        if (ns) binds.push(`${ns} = ${temp}`);
+        if (group) binds.push(`${group} = ${temp}`);
+        text = `const ${binds.join(", ")};`;
+      }
       inserts.push({ at: use.from, to: use.to, text, depth: Infinity, open: true });
     } else if (use.url) {
       inserts.push({ at: use.string.from, to: use.string.to, text: pinned(use.url), depth: Infinity, open: true });
@@ -236,7 +255,7 @@ export function instrument(code, { pins = {} } = {}) {
       line++;
       generated = 0;
     }
-    lineStart = at - covered[covered.length - 1].length;
+    if (covered.length > 1) lineStart = at - covered[covered.length - 1].length;
   }
   original(at, code.length);
 
