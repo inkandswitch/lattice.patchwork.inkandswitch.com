@@ -71,6 +71,20 @@ export function takeBuilder(kind, url, env, { source } = {}) {
   };
 }
 
+// build a source now with its builder, as its build button does (making a
+// target if it has none), holding it till that's done: whoever shows the
+// source meanwhile shares it, so their bar shows the build. for a source
+// that's only just been made
+export async function buildNow(kind, url, env, { source } = {}) {
+  const { builder, drop } = takeBuilder(kind, url, env, { source });
+  try {
+    await builder.ready;
+    await builder.now({ create: true });
+  } finally {
+    drop({ keep: true });
+  }
+}
+
 // build a source into its target once, with no bar or editor holding a
 // builder for it (wm's rebuild, from a target's pane), saying how it went
 // in the frame as a builder would

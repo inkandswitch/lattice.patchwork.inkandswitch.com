@@ -93,8 +93,10 @@ export const kcode = {
 			return {state: "error", stuck: true, text: firstLine(error), action: again(`${error}\nbuild it again from its .k`)}
 		}
 		if (behind(url, api)) {
-			// with autobuild on, it's about to build anyway
-			if (build.auto && build.builder) return {state: "running", text: "building…"}
+			// with autobuild waiting out a pause, it's about to build anyway.
+			// (not just because autobuild's on: its last build may have been
+			// stopped, or kept, or be asking first)
+			if (build.due && build.builder) return {state: "running", text: "building…"}
 			return {state: "stale", stuck: true, text: "out of date —", action: again("build it again from its .k")}
 		}
 		const {kcodeBuiltAt} = linksOf(url, api)

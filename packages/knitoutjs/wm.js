@@ -6,6 +6,7 @@
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { builds } from "./core/builds.js";
 import { buildOnce } from "./core/builder.js";
+import { kindFor } from "./core/builder-logic.js";
 import { wmBuildBar } from "./core/build-bar.js";
 import { jsBuild } from "./core/js-build.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
@@ -20,17 +21,23 @@ const linksOf = linksOfIn;
 const buildOf = (jsUrl, api) => buildOfIn(jsUrl, api, builds);
 const buildState = (kUrl, api) => buildStateIn(kUrl, api, { builds, headsNow: (url) => headsNow(url, api.repo) });
 
-// build a .js into its .k again: by its builder, if it has one (it's shown
-// somewhere), so its build bar shows it too
+// build a .k again from what writes it (a .js, or a patternstoat): by its
+// builder, if it has one (it's shown somewhere), so its build bar shows it
+// too, else once, with the kind of builder for what it is (the status only
+// says so once wm knows what it is: see buildState)
 async function rebuild(jsUrl, kUrl, api) {
   const builder = builds[jsUrl]?.builder;
   if (builder) return builder.now();
-  return buildOnce(jsBuild, jsUrl, kUrl, api.repo);
+  const kind = kindFor(api.docInfo(jsUrl).extension);
+  if (!kind) return console.warn(`knitoutjs: nothing here knows how to build ${jsUrl}`);
+  return buildOnce(kind, jsUrl, kUrl, api.repo);
 }
 
-// a build that failed: show the .js, at the line it failed on
+// a build that failed: show what wrote it (a .js in its code editor, at the
+// line it failed on; anything else in its own tool)
 async function showError(jsUrl, from, api) {
-  await api.reveal(jsUrl, from, "left", "editor");
+  const js = api.docInfo(jsUrl).extension === "js";
+  await api.reveal(jsUrl, from, "left", js ? "editor" : undefined);
   const line = buildOf(jsUrl, api).line;
   if (line != null) builds[jsUrl]?.builder?.goToLine(line);
 }

@@ -1,7 +1,7 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
 import {buildInto, sourceHash} from "../build-into.js"
-import {stoatBuild} from "../build-kind.js"
+import {charmMoved, stoatBuild} from "../build-kind.js"
 import {newCharm} from "../charm.js"
 import {CharmDatatype, PatternstoatDatatype} from "../datatypes.js"
 import {newPatternstoat, paintWristwarmer} from "../patternstoat.js"
@@ -185,4 +185,15 @@ test("a patternstoat's build says where it went wrong, and keeps the row and nee
 	const result = await stoatBuild.build(stoat, k, {repo: repoOf({})})
 	assert.equal(typeof result.error.message, "string")
 	assert.ok("row" in result.error && "needle" in result.error)
+})
+
+test("a .k is behind its patternstoat's charm once the charm's heads have moved on", () => {
+	const k = {knitoutSource: "automerge:stoat", knitoutSources: ["automerge:stoat#s", "automerge:charm#a"]}
+	assert.equal(charmMoved(k, "automerge:stoat", "automerge:charm#a"), false)
+	assert.equal(charmMoved(k, "automerge:stoat", "automerge:charm#b"), true)
+	// another stoat's .k, a .k never built from a charm, or no charm now: not this one's to say
+	assert.equal(charmMoved(k, "automerge:other", "automerge:charm#b"), false)
+	assert.equal(charmMoved({...k, knitoutSources: ["automerge:stoat#s"]}, "automerge:stoat", "automerge:charm#b"), false)
+	assert.equal(charmMoved(k, "automerge:stoat", null), false)
+	assert.equal(charmMoved(undefined, "automerge:stoat", "automerge:charm#b"), false)
 })

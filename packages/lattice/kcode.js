@@ -1,6 +1,6 @@
 import {docText, knitoutOf, moduleWorker, textHash} from "./files.js"
 import {buildKcode} from "../knitoutjs/core/kcode.js"
-import {builtMessage} from "../knitoutjs/core/builder-logic.js"
+import {builtMessage, sourceKind} from "../knitoutjs/core/builder-logic.js"
 
 // a .k as kcode, the format a Kniterate machine reads: the converter (in a
 // worker where the browser allows it), a build of a .k into the .kc it goes
@@ -106,7 +106,7 @@ function watchText(builder) {
 	}
 }
 
-export const kcodeBuild = {
+export const kcodeBuild = sourceKind("k", {
 	name: "kcode",
 	targetField: "kcodeTarget",
 	targetExtension: "kc",
@@ -128,7 +128,7 @@ export const kcodeBuild = {
 		return {message: builtMessage(performance.now() - started, docText(kcHandle.doc()))}
 	},
 	watch: watchText,
-}
+})
 
 // the .kc's kcode to save for a .k, if it's there to save: built, and from
 // the .k's text as it is now (it goes to a machine, so not one that's

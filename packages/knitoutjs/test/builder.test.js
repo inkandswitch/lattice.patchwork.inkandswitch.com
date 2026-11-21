@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ImmutableString } from "@automerge/automerge";
-import { asksFirst, createBuilder, readAutobuild, writeAutobuild } from "../core/builder-logic.js";
+import { asksFirst, createBuilder, kindFor, readAutobuild, writeAutobuild } from "../core/builder-logic.js";
 import { jsBuild } from "../core/js-build.js";
 import { kcodeBuild } from "../../lattice/kcode.js";
 import { stoatBuild } from "../../patternstoat/build-kind.js";
@@ -311,5 +311,33 @@ test("disposed, it stops listening and says it's idle, or keeps what it said", a
 
   const other = setUp({ source: { knitoutTarget: K }, docs: { [K]: {} } });
   other.builder.dispose();
-  assert.deepEqual(other.reported.at(-1), { state: "idle", line: undefined, message: undefined, builder: undefined });
+  assert.deepEqual(other.reported.at(-1), { state: "idle", line: undefined, message: undefined, builder: undefined, due: false });
+});
+
+test("an edit says a build's due until it starts, and says so to the frame", async () => {
+  const timers = [];
+  const fakeTimers = {
+    setTimeout: (fn) => timers.push(fn) - 1,
+    clearTimeout: (id) => id != null && (timers[id] = null),
+  };
+  const { builder, reported } = setUp({ timers: fakeTimers, source: { knitoutTarget: K }, docs: { [K]: {} } });
+  assert.equal(builder.due(), false);
+  builder.edited();
+  assert.equal(builder.due(), true);
+  assert.equal(reported.at(-1).due, true);
+  const going = timers.at(-1)();
+  assert.equal(builder.due(), false);
+  assert.ok(reported.some((said) => said.due === false));
+  await going;
+  // stopped, kept or asked: nothing's due, so it isn't "about to build"
+  builder.edited();
+  builder.dispose();
+  assert.equal(builder.due(), false);
+});
+
+test("each kind is found by the sort of doc it builds from", () => {
+  assert.equal(kindFor("js"), jsBuild);
+  assert.equal(kindFor("k"), kcodeBuild);
+  assert.equal(kindFor("patternstoat"), stoatBuild);
+  assert.equal(kindFor("charm"), null);
 });

@@ -585,6 +585,8 @@ export default function StoatTool(handle, element, context = {}) {
 		openIfClosed: context.openIfClosed && ((url, tool) => context.openIfClosed(url, element, "right", tool)),
 	}, {source: handle})
 	const builder = taken.builder
+	// a build that went wrong before this was open (from its bar, over this)
+	if (builder.status().state === "error") problem = builder.status().error ?? null
 	const unheard = builder.subscribe(status => {
 		if (status.state === "error") {
 			problem = status.error ?? null

@@ -5,8 +5,9 @@ import { createStore, unwrap } from "solid-js/store";
 // (by hand, or by itself with autobuild on) and says so here, so the panes
 // showing what it writes can say so too. keyed by the source's url:
 // { state: "idle" | "running" | "ok" | "error" | "ask", line?, message?, at,
-//   auto, failed, builder?: { now(), goToLine(line) → whether it could } }
+//   auto, due, failed, builder?: { now(), goToLine(line) → whether it could } }
 // there's only a builder while the source is shown somewhere (or edited).
+// due is whether its autobuild's waiting out a pause, about to build.
 // failed is how its last build that finished went, kept while it's edited
 // and built again. at is when its state was last said
 const [builds, setBuilds] = createStore({});

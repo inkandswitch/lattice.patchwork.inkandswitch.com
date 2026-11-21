@@ -5,7 +5,7 @@
 // that can make the .k stale moves, while the .js is shown anywhere. the
 // build itself is ./run.js's runInto, loaded when it's first wanted: nothing
 // up here needs automerge-repo, so this is tested in node
-import { builtMessage } from "./builder-logic.js";
+import { builtMessage, sourceKind } from "./builder-logic.js";
 import { knitoutOf } from "./files.js";
 import { pinsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
 import { headsOf } from "./sources.js";
@@ -110,7 +110,7 @@ function watchSources(builder) {
   };
 }
 
-export const jsBuild = {
+export const jsBuild = sourceKind("js", {
   name: "knitout.js",
   targetField: "knitoutTarget",
   targetExtension: "k",
@@ -130,4 +130,4 @@ export const jsBuild = {
     return { message: builtMessage(result.ms, result.knitout) };
   },
   watch: watchSources,
-};
+});

@@ -72,6 +72,19 @@ export function builtMessage(ms, text) {
   return `built in ${Math.round(ms)}ms · ${lines.toLocaleString()} lines`;
 }
 
+// each kind, by the sort of doc it builds from (its extension, as wm says
+// it: "js", "k", "patternstoat"), so whoever has only a source's url (a
+// target's pane, rebuilding it while the source isn't shown) can build it
+// with the right one. a kind says what it is as it's made: sourceKind
+const kinds = new Map();
+
+export function sourceKind(extension, kind) {
+  kinds.set(extension, kind);
+  return kind;
+}
+
+export const kindFor = (extension) => kinds.get(extension) ?? null;
+
 // a signal with no solid in it, for node
 export function plainSignal(value) {
   return [() => value, (next) => (value = next)];
@@ -93,13 +106,15 @@ const link = (value) => (typeof value === "string" && value ? value : null);
  *   timers   {setTimeout, clearTimeout}
  *
  * status is {state: "idle" | "running" | "ok" | "error" | "ask", message?,
- * line?, error?}: error is the kind's own, for a tool to show more of
+ * line?, error?}: error is the kind's own, for a tool to show more of. due()
+ * is whether autobuild's waiting out a pause to build (so it's about to)
  */
 export function createBuilder(kind, url, { source, env, signal = plainSignal, storage, report = () => {}, timers = globalThis }) {
   const ext = kind.targetExtension;
   const [target, setTarget] = signal(null);
   const [auto, setAutoSignal] = signal(readAutobuild(kind.autobuild, url, storage));
   const [status, setStatusSignal] = signal({ state: "idle" });
+  const [due, setDueSignal] = signal(false);
   const running = () => status().state === "running";
   const listeners = new Set();
   const lineJumps = [];
@@ -225,11 +240,21 @@ export function createBuilder(kind, url, { source, env, signal = plainSignal, st
     return made;
   }
 
+  function setDue(on) {
+    if (due() === on) return;
+    setDueSignal(on);
+    report({ due: on });
+  }
+
   // after a pause in the edits, if autobuild's on
   function edited() {
     if (!auto() || closed) return;
     timers.clearTimeout(timer);
-    timer = timers.setTimeout(() => now(), BUILD_DELAY);
+    setDue(true);
+    timer = timers.setTimeout(() => {
+      setDue(false);
+      return now();
+    }, BUILD_DELAY);
   }
 
   function setAuto(on) {
@@ -264,12 +289,13 @@ export function createBuilder(kind, url, { source, env, signal = plainSignal, st
   function dispose({ keep: keeping = false } = {}) {
     if (closed) return;
     timers.clearTimeout(timer);
+    setDue(false);
     current?.abort();
     handle?.off("change", onChange);
     (typeof watching === "function" ? watching : watching?.stop)?.();
     closed = true;
     listeners.clear();
-    report(keeping ? { builder: undefined } : { state: "idle", line: undefined, message: undefined, builder: undefined });
+    report(keeping ? { builder: undefined } : { state: "idle", line: undefined, message: undefined, builder: undefined, due: false });
   }
 
   const builder = {
@@ -279,6 +305,7 @@ export function createBuilder(kind, url, { source, env, signal = plainSignal, st
     auto,
     status,
     running,
+    due,
     setAuto,
     now,
     edited,

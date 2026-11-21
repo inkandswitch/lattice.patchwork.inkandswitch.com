@@ -7,6 +7,7 @@ import { datatypeItem } from "../wm/patchwork/docs.js";
 import { knitout } from "../knitoutjs/wm.js";
 import { kcode } from "./kcode-wm.js";
 import { wmBuildBar } from "../knitoutjs/core/build-bar.js";
+import { buildNow } from "../knitoutjs/core/builder.js";
 import { stoatBuild } from "../patternstoat/build-kind.js";
 import { wearLook } from "../knitoutjs/look.js";
 import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../knitoutjs/app/migrate.js";
@@ -30,11 +31,9 @@ const PROFILES = [
 // with and the .k it writes, side by side, built once so there's something
 // to see: as knitoutjs's newPattern makes a .js and its .k
 async function newPatternstoat(api) {
-  const [{ newCharm }, stoats, { buildInto }, { setBuild }] = await Promise.all([
+  const [{ newCharm }, stoats] = await Promise.all([
     import("../patternstoat/charm.js"),
     import("../patternstoat/patternstoat.js"),
-    import("../patternstoat/build-into.js"),
-    import("../knitoutjs/core/builds.js"),
   ]);
   const charm = await api.repo.create2({ ...newCharm(), title: "wristwarmer" });
   const k = await api.createFile("wristwarmer.k");
@@ -48,9 +47,12 @@ async function newPatternstoat(api) {
     ],
     [{ url: k, tool: "visualizer" }],
   ]);
-  setBuild(stoat.url, { state: "running" });
-  const { error } = await buildInto(stoat, await api.repo.find(k), api.repo);
-  setBuild(stoat.url, error ? { state: "error", message: error.message } : { state: "ok" });
+  // by its builder, which its bar (just opened) shares, so the bar shows it
+  await buildNow(stoatBuild, stoat.url, {
+    repo: api.repo,
+    createFile: api.createFile,
+    openIfClosed: (url, tool) => api.showing(url) || api.reveal(url, null, "right", tool),
+  }, { source: stoat });
 }
 
 // what lattice adds to the panes: a patternstoat's build bar (it writes its
