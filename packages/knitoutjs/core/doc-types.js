@@ -5,6 +5,7 @@
 // the server as itself. nothing
 // here touches a handle, so it can be tested in node
 import { docIdOf } from "./sources.js";
+import { KNITOUT_TYPES } from "./knitout-types.js";
 
 // a doc's value (made plain, as graph.js's plainValue does) as a typescript
 // type. a list is the type of its first element; a map's keys are always
