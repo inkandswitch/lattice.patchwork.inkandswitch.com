@@ -75,6 +75,7 @@
 
 .trays .tray-button[aria-pressed="true"] {
 	background: var(--trays-fill);
+	color: var(--trays-line);
 	box-shadow:
 		0 0 0 1px var(--trays-line),
 		1px 1px 0 1px var(--trays-line);

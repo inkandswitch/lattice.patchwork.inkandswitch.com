@@ -47,6 +47,12 @@ export function undoOf(doc, {before, after}) {
 	return cells.length ? {kind: before.kind, cells} : null
 }
 
+// the yarn the strip at the left paints in: the last yarn picked, kept while
+// a colour or a stitch is picked
+export function yarnAfterPick(yarn, picked) {
+	return picked.kind === "yarn" ? picked.value : yarn
+}
+
 // write a record into the doc, a call a value
 export function applyRecord(doc, record) {
 	if (!record) return

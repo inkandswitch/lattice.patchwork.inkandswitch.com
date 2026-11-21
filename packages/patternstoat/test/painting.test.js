@@ -1,6 +1,6 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
-import {applyRecord, floodCells, recordOf, undoOf} from "../painting.js"
+import {applyRecord, floodCells, recordOf, undoOf, yarnAfterPick} from "../painting.js"
 import {newPatternstoat, paintColours, paintStitches} from "../patternstoat.js"
 
 const sorted = cells => [...cells].sort((a, b) => a[1] - b[1] || a[0] - b[0])
@@ -67,4 +67,12 @@ test("undo and redo a row's yarn", () => {
 	assert.deepEqual(doc.yarns, ["3", "3", "3"])
 	applyRecord(doc, undoOf(doc, {before: done.after, after: done.before}))
 	assert.deepEqual(doc.yarns, ["3", "5", "3"])
+})
+
+test("the yarn strip keeps the last yarn picked, after a colour's picked", () => {
+	let yarn = "3"
+	yarn = yarnAfterPick(yarn, {kind: "yarn", value: "5"})
+	yarn = yarnAfterPick(yarn, {kind: "colour", value: 2})
+	assert.equal(yarn, "5")
+	assert.equal(yarnAfterPick("5", {kind: "yarn", value: "1"}), "1")
 })

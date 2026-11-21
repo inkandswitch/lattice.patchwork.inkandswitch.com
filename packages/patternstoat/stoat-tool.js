@@ -9,7 +9,7 @@ import {YARNS_CHANGED, yarnColours} from "../knitoutjs/core/yarns.js"
 import {setBuild} from "../knitoutjs/core/builds.js"
 import {buildInto} from "./build-into.js"
 import {resize as resizeStoat} from "./patternstoat.js"
-import {applyRecord, floodCells, recordOf, undoOf} from "./painting.js"
+import {applyRecord, floodCells, recordOf, undoOf, yarnAfterPick} from "./painting.js"
 import {columnsOf} from "./charm.js"
 import {followView} from "./follow-view.js"
 import {STITCHES, drawCode, readColours, stitchSwatch} from "./glyphs.js"
@@ -161,6 +161,8 @@ export default function StoatTool(handle, element, context = {}) {
 	// what's painted: {kind: "colour", value: 1} | {kind: "stitch", value:
 	// one of STITCHES} | {kind: "yarn", value: "3"}
 	let picked = {kind: "colour", value: 1}
+	// what the yarn strip paints in: the last yarn picked
+	let stripYarn = "3"
 	const view = {cell: 12, x: 0, y: 0}
 	let size = {width: 0, height: 0}
 	let colours = null
@@ -197,6 +199,7 @@ export default function StoatTool(handle, element, context = {}) {
 
 	function pick(next) {
 		picked = next
+		stripYarn = yarnAfterPick(stripYarn, next)
 		showPalette()
 	}
 
@@ -469,9 +472,9 @@ export default function StoatTool(handle, element, context = {}) {
 		}
 		if (event.button !== 0) return
 		if (px < GUTTER) {
-			// the yarn strip: rows in the yarn picked (or yarn 3, with none)
+			// the yarn strip: rows in the last yarn picked
 			const {row} = cellAt(GUTTER, py)
-			const yarn = picked.kind === "yarn" ? picked.value : "3"
+			const yarn = stripYarn
 			pending = new Map()
 			pendingKind = "yarns"
 			if (row >= 0 && row < doc().height) pending.set(key(0, row), yarn)
