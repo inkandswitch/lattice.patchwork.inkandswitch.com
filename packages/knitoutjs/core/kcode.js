@@ -11,9 +11,10 @@ import { kcodeSourcesComment } from "./sources.js";
 // the .k was), and the .kc remembers the .k, its text's hash, when, and the
 // same sources. the .k remembers where it goes. kcode goes in stored whole,
 // as a built .k's knitout does. a conversion that fails leaves both as they
-// were. `convert(text, name, options)` gives {kcode?, error?, warnings}; this
-// gives {error?, warnings}
-export async function buildKcode(kHandle, kcHandle, convert) {
+// were, and so does one that's stopped (`signal` aborted) while it's going.
+// `convert(text, name, options)` gives {kcode?, error?, warnings}; this
+// gives {error?, stopped?, warnings}
+export async function buildKcode(kHandle, kcHandle, convert, { signal } = {}) {
   // the text and its pin, both from one version of the .k
   const pinned = kHandle.view(kHandle.heads());
   const k = pinned.doc();
@@ -22,6 +23,7 @@ export async function buildKcode(kHandle, kcHandle, convert) {
   const name = String(kcHandle.doc()?.name ?? k?.name ?? "pattern").replace(/\.kc?$/, "");
   const result = await convert(text, name, {});
   const warnings = result?.warnings ?? [];
+  if (signal?.aborted) return { error: "stopped", stopped: true, warnings };
   if (result?.error != null || typeof result?.kcode !== "string") {
     return { error: String(result?.error ?? "no kcode came back"), warnings };
   }

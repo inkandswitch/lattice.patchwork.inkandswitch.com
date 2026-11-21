@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { ImmutableString } from "@automerge/automerge";
 import { asksFirst, createBuilder, readAutobuild, writeAutobuild } from "../core/builder-logic.js";
 import { jsBuild } from "../core/js-build.js";
+import { kcodeBuild } from "../../lattice/kcode.js";
 
 const JS = "automerge:js";
 const K = "automerge:k";
 
-// a kind that's off to start with, as a .k's kcode is
-const offToStart = { key: (url) => `lattice:kcode-autobuild:${url}`, default: false };
+// a kind that's off to start with: a .k's kcode
+const offToStart = kcodeBuild.autobuild;
 
 // a handle that's only a doc, changed in place, telling whoever listens
 function fakeHandle(url, doc) {

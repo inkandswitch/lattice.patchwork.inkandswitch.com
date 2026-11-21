@@ -1,6 +1,6 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
-import {autobuildStep, buildKcode, builtKcode} from "../kcode.js"
+import {buildKcode, builtKcode, kcodeBehind, kcodeBuild} from "../kcode.js"
 import {docText, textHash} from "../files.js"
 import {knitoutToKcode} from "../../knitoutjs/core/vendor/knitout-to-kcode.js"
 
@@ -95,14 +95,35 @@ test("the converter skips the sources line quietly", () => {
 	)
 })
 
-test("autobuild builds a .kc behind its .k only while it's on and open here", () => {
-	assert.equal(autobuildStep({auto: true, showing: true, behind: true}), "build")
-	assert.equal(autobuildStep({auto: true, showing: true, behind: false}), "wait")
-	// closed: it stops listening, behind or not, until it's shown again
-	assert.equal(autobuildStep({auto: true, showing: false, behind: true}), "stop")
-	assert.equal(autobuildStep({auto: true, showing: false, behind: false}), "stop")
-	assert.equal(autobuildStep({auto: false, showing: true, behind: true}), "stop")
-	assert.equal(autobuildStep({auto: false, showing: false, behind: false}), "stop")
+test("a .kc is behind its .k once the .k's text has moved on from what it was built from", () => {
+	const k = {content: KNITOUT}
+	assert.equal(kcodeBehind(k, {kcodeSourceHash: textHash(KNITOUT)}), false)
+	assert.equal(kcodeBehind({content: KNITOUT + "\nknit + f3 3"}, {kcodeSourceHash: textHash(KNITOUT)}), true)
+	// one never built isn't behind: there's nothing to be behind
+	assert.equal(kcodeBehind(k, {}), false)
+	assert.equal(kcodeBehind(k, undefined), false)
+})
+
+test("a .k's builder writes its .kc, made beside it, and only builds by itself once it's turned on", () => {
+	assert.equal(kcodeBuild.targetField, "kcodeTarget")
+	assert.equal(kcodeBuild.targetExtension, "kc")
+	assert.equal(kcodeBuild.targetName({name: "cable.k"}), "cable.kc")
+	assert.deepEqual(kcodeBuild.targetFields("automerge:k"), {kcodeSource: "automerge:k"})
+	assert.equal(kcodeBuild.autobuild.key("automerge:k"), "lattice:kcode-autobuild:automerge:k")
+	assert.equal(kcodeBuild.autobuild.default, false)
+})
+
+test("a kcode build stopped while it's converting leaves the .kc as it was", async () => {
+	const k = fakeHandle("automerge:k", {name: "pattern.k", content: KNITOUT})
+	const kc = fakeHandle("automerge:kc", {name: "pattern.kc", content: "what it was"})
+	const stop = new AbortController()
+	const result = await buildKcode(k, kc, async () => {
+		stop.abort()
+		return {kcode: "kcode body", warnings: []}
+	}, {signal: stop.signal})
+	assert.equal(result.stopped, true)
+	assert.equal(kc.changes.length, 0)
+	assert.equal(k.changes.length, 0)
 })
 
 test("export kcode saves the .kc only when it's built from the .k as it is", () => {
