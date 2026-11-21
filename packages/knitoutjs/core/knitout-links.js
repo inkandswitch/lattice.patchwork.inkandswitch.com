@@ -6,29 +6,40 @@
 // core/sources.js's headsOf gives them for a pin, or undefined if not known yet)
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { collectSources } from "./instrument.js";
-import { recordedSources, staleSources, unpinned } from "./sources.js";
+import { exceptPinned, headsOf, recordedSources, staleSources, unpinned } from "./sources.js";
 
-// what a .js imports or reads with doc(), unpinned, each once, in order;
-// nothing for any other file
+// every doc a .js names; nothing for any other file
+const usesOf = (doc) => (fileExtension(doc) === "js" ? collectSources(docText(doc)) : []);
+
+// what a .js imports or reads with doc(), unpinned, each once, in order
 export function importsOf(doc) {
-  if (fileExtension(doc) !== "js") return [];
-  return [...new Set(collectSources(docText(doc)).map((use) => unpinned(use.url)))];
+  return [...new Set(usesOf(doc).map((use) => unpinned(use.url)))];
+}
+
+// the docs a .js names at fixed heads (`automerge:<id>#<heads>`), as written,
+// each once: it's read at those heads however the doc moves on
+export function pinsOf(doc) {
+  return [...new Set(usesOf(doc).map((use) => use.url).filter(headsOf))];
 }
 
 // every doc whose moving makes the .k a .js writes stale, unpinned, each once:
 // the .js's literal imports, then the .k's sources after the first (which
 // include docs only reached at runtime). never the .js (`self`) or the .k
-// (`target`): a build writes the .k, so watching it would rebuild forever
-export function watchedSources(jsDoc, kDoc, { self, target }) {
-  const known = (kDoc?.knitoutSources ?? []).slice(1).map((url) => unpinned(String(url)));
+// (`target`): a build writes the .k, so watching it would rebuild forever.
+// nor one only read at heads the code pins (`pinned`: the .js's own, and
+// any the modules it uses pin), which can't move
+export function watchedSources(jsDoc, kDoc, { self, target, pinned = pinsOf(jsDoc) }) {
+  const imports = usesOf(jsDoc).filter((use) => !headsOf(use.url)).map((use) => unpinned(use.url));
+  const known = exceptPinned((kDoc?.knitoutSources ?? []).slice(1).map(String), pinned).map(unpinned);
   const skip = new Set([self && unpinned(self), target && unpinned(target)]);
-  return [...new Set([...importsOf(jsDoc), ...known])].filter((url) => !skip.has(url));
+  return [...new Set([...imports, ...known])].filter((url) => !skip.has(url));
 }
 
 // whether a doc the .k was built from has moved on since (the .js itself
-// aside, and one whose heads aren't known yet), so it's due a build
-export function sourcesMoved(kDoc, headsNow) {
-  return staleSources(knitoutOf(kDoc).sources, headsNow).length > 0;
+// aside, one whose heads aren't known yet, and one the code pins), so it's
+// due a build
+export function sourcesMoved(kDoc, headsNow, { pinned = [] } = {}) {
+  return staleSources(knitoutOf(kDoc).sources, headsNow, { pinned }).length > 0;
 }
 
 // which docs to go and find: each once, but one whose find failed is let
@@ -80,7 +91,10 @@ export function buildState(kUrl, api, { builds, headsNow }) {
   // (a .k built before builds left out the .k itself, and the .js again,
   // can still list them: they'd be stale by its own write)
   const sources = recordedSources(k.sources ?? [], { self: k.source, target: kUrl });
-  const moved = sources.length > 1 && staleSources(sources, headsNow).length > 0;
+  // what the .js pins can't move, nor what a module it uses pins (as that
+  // module is now: if it's moved, that's stale of itself)
+  const pinned = [js, ...sources.slice(1).map((url) => linksOf(unpinned(url), api))].flatMap((doc) => doc.pins ?? []);
+  const moved = sources.length > 1 && staleSources(sources, headsNow, { pinned }).length > 0;
   // with autobuild on, it's about to build anyway
   if (edited || moved) return build.auto && build.builder ? "running" : "stale";
   return "built";

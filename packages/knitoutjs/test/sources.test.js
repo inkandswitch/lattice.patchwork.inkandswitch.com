@@ -9,6 +9,7 @@ import {
   headsOf,
   staleSources,
   recordedSources,
+  exceptPinned,
 } from "../core/sources.js";
 
 const knitout = ";!knitout-2\n;;Carriers: 1 2 3 4 5 6\nin 3\n";
@@ -69,4 +70,24 @@ test("a build never records the .k it writes, or the .js again after the first",
     "automerge:js#1",
     "automerge:k#3",
   ]);
+});
+
+test("a source the code pins itself is never stale, however its doc moves", () => {
+  const sources = ["automerge:js#1", "automerge:x#h", "automerge:y#2"];
+  const now = { "automerge:x": "moved", "automerge:y": "9" };
+  assert.deepEqual(staleSources(sources, (url) => now[url], { pinned: ["automerge:x#h"] }), ["automerge:y#2"]);
+  // one pinned at other heads than the code says is a source like any other
+  assert.deepEqual(staleSources(sources, (url) => now[url], { pinned: ["automerge:x#g"] }), [
+    "automerge:x#h",
+    "automerge:y#2",
+  ]);
+  // the heads can be written in any order
+  assert.deepEqual(staleSources(["automerge:js#1", "automerge:x#a|b"], () => "c", { pinned: ["automerge:x#b|a"] }), []);
+});
+
+test("a doc read both pinned and as it is now is listed twice, and only the pinned one is let off", () => {
+  // `doc("automerge:x#h")` and `doc("automerge:x")`, built while x was at h
+  const sources = ["automerge:js#1", "automerge:x#h", "automerge:x#h"];
+  assert.deepEqual(staleSources(sources, () => "moved", { pinned: ["automerge:x#h"] }), ["automerge:x#h"]);
+  assert.deepEqual(exceptPinned(sources.slice(1), ["automerge:x#h", "automerge:x#h"]), ["automerge:x#h"]);
 });

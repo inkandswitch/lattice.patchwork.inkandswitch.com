@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildState, findOnce, importsOf, links, sourcesMoved, watchedSources } from "../core/knitout-links.js";
+import { buildState, findOnce, importsOf, links, pinsOf, sourcesMoved, watchedSources } from "../core/knitout-links.js";
 
 const JS = "automerge:jsAAA";
 const K = "automerge:kAAA";
@@ -143,4 +143,63 @@ test("a .k that lists itself or its .js again among its sources isn't stale by i
   });
   const headsNow = (url) => ({ [K]: "new", [JS]: "new", [LIB]: "b" })[url];
   assert.equal(buildState(K, api, { builds: {}, headsNow }), "built");
+});
+
+const PIN = "automerge:pinAAA";
+
+test("a .js pins the docs it names with #heads, as written", () => {
+  const doc = {
+    name: "p.knitout.js",
+    content: `import a from "/${PIN}#x|y"\nconst b = doc("${PIN}#x|y")\nconst c = doc("${LIB}")\nimport("${DYN}#z")\n`,
+  };
+  assert.deepEqual(pinsOf(doc), [`${PIN}#x|y`, `${DYN}#z`]);
+  assert.deepEqual(pinsOf({ name: "p.k", content: `import a from "${PIN}#x"` }), []);
+});
+
+test("a .k whose only moved source is one its .js pins itself isn't stale", () => {
+  const api = fake({
+    [K]: { source: JS, sourceHash: "h", sources: [`${JS}#a`, `${PIN}#old`, `${LIB}#b`] },
+    [JS]: { target: K, textHash: "h", pins: [`${PIN}#old`] },
+  });
+  let lib = "b";
+  const headsNow = (url) => ({ [PIN]: "new", [LIB]: lib })[url];
+  assert.equal(buildState(K, api, { builds: {}, headsNow }), "built");
+  // nor building forever, with autobuild on
+  assert.equal(buildState(K, api, { builds: { [JS]: { auto: true, builder: {} } }, headsNow }), "built");
+  // but one it reads as it is now that's moved still is
+  lib = "c";
+  assert.equal(buildState(K, api, { builds: {}, headsNow }), "stale");
+});
+
+test("a doc pinned by a .js the pattern imports isn't stale either", () => {
+  const api = fake({
+    [K]: { source: JS, sources: [`${JS}#a`, `${LIB}#b`, `${PIN}#old`] },
+    [JS]: { target: K, imports: [LIB] },
+    [LIB]: { pins: [`${PIN}#old`] },
+  });
+  const headsNow = (url) => ({ [PIN]: "new", [LIB]: "b" })[url];
+  assert.equal(buildState(K, api, { builds: {}, headsNow }), "built");
+});
+
+test("sourcesMoved: a source the code pins never has", () => {
+  const k = { knitoutSources: [`${JS}#a`, `${PIN}#old`, `${LIB}#b`] };
+  const headsNow = (url) => ({ [PIN]: "new", [LIB]: "b" })[url];
+  assert.equal(sourcesMoved(k, headsNow, { pinned: [`${PIN}#old`] }), false);
+  assert.equal(sourcesMoved(k, headsNow), true);
+  assert.equal(sourcesMoved(k, (url) => ({ [PIN]: "new", [LIB]: "c" })[url], { pinned: [`${PIN}#old`] }), true);
+});
+
+test("watchedSources: a doc only ever read at the heads the code pins isn't watched", () => {
+  const js = { name: "a.js", content: `import a from "${PIN}#old"\nimport "${IMP}"` };
+  const k = { knitoutSources: [`${JS}#h1`, `${PIN}#old`, `${IMP}#h2`, `${DYN}#h3`] };
+  assert.deepEqual(watchedSources(js, k, { self: JS, target: K }), [IMP, DYN]);
+  // one also read as it is now is
+  const both = { name: "a.js", content: `import a from "${PIN}#old"\nconst b = doc("${PIN}")` };
+  const built = { knitoutSources: [`${JS}#h1`, `${PIN}#old`, `${PIN}#h4`] };
+  assert.deepEqual(watchedSources(both, built, { self: JS, target: K }), [PIN]);
+  // and so is one a module the pattern imports pins, unless it's said
+  const lib = { knitoutSources: [`${JS}#h1`, `${LIB}#h5`, `${PIN}#old`] };
+  const usesLib = { name: "a.js", content: `import "${LIB}"` };
+  assert.deepEqual(watchedSources(usesLib, lib, { self: JS, target: K }), [LIB, PIN]);
+  assert.deepEqual(watchedSources(usesLib, lib, { self: JS, target: K, pinned: [`${PIN}#old`] }), [LIB]);
 });

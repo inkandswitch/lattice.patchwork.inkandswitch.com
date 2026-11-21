@@ -9,7 +9,7 @@ import { docRefs } from "./doc-refs-cm.js";
 import { definitionDoc, dropImport, toolFor } from "./doc-refs.js";
 import { languageServerDocs } from "./language-server.js";
 import { runInto } from "./run.js";
-import { importsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
+import { importsOf, pinsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
 import { headsOf } from "./sources.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
@@ -218,12 +218,25 @@ export default function KnitoutEditorTool(handle, element, context) {
       return found ? headsOf(found.view(found.heads()).url) : undefined;
     }
 
+    // the docs the code reads at fixed heads (`#heads` written in it), which
+    // never move: the .js's own, and those of the modules it uses, as found
+    function pinnedNow() {
+      return [handle.doc(), ...[...watching.values()].map((entry) => entry.handle?.doc())].flatMap(pinsOf);
+    }
+
     // a doc the .k was built from may have moved before this was open (or
     // while it was being found), with no change to come to say so: if one
-    // has, that's an edit too (so with autobuild off, still nothing)
+    // has, that's an edit too (so with autobuild off, still nothing). only
+    // once for each set of sources the .k has: a build that comes out the
+    // same (or fails) isn't tried again and again
+    let builtFor = null;
     function buildIfMoved() {
       const kDoc = kWatch?.handle?.doc();
-      if (kDoc && sourcesMoved(kDoc, headsNow)) edited();
+      if (!kDoc || !auto() || !sourcesMoved(kDoc, headsNow, { pinned: pinnedNow() })) return;
+      const sources = knitoutOf(kDoc).sources.join(" ");
+      if (sources === builtFor) return;
+      builtFor = sources;
+      edited();
     }
 
     function recompute() {
@@ -231,6 +244,7 @@ export default function KnitoutEditorTool(handle, element, context) {
       const want = watchedSources(handle.doc(), kWatch?.handle?.doc(), {
         self: handle.url,
         target: target(),
+        pinned: pinnedNow(),
       });
       for (const [url, entry] of watching) {
         if (want.includes(url)) continue;
@@ -246,7 +260,8 @@ export default function KnitoutEditorTool(handle, element, context) {
           if (closed || watching.get(url) !== entry) return;
           entry.handle = found;
           found.on("change", edited);
-          buildIfMoved();
+          // a module found says what it pins, which may need no watching
+          recompute();
         }, (error) => warnOnce(url, error));
       }
       buildIfMoved();

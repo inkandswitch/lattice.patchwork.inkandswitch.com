@@ -7,7 +7,7 @@ import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { builds, setBuild } from "./core/builds.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
 import { headsNow } from "./core/heads.js";
-import { buildOf as buildOfIn, buildState as buildStateIn, importsOf, links, linksOf as linksOfIn } from "./core/knitout-links.js";
+import { buildOf as buildOfIn, buildState as buildStateIn, importsOf, links, linksOf as linksOfIn, pinsOf } from "./core/knitout-links.js";
 import defaultSource from "./core/default-source.js";
 
 const string = (value) => (value == null ? "" : String(value));
@@ -89,6 +89,8 @@ export const knitout = {
       ...knitoutOf(doc),
       textHash: js ? textHash(docText(doc)) : null,
       imports: importsOf(doc),
+      // what it reads at fixed heads, which can't make what it writes stale
+      pins: pinsOf(doc),
     };
   },
 

@@ -22,10 +22,29 @@ export function headsOf(url) {
   return at < 0 ? "" : bare(url).slice(at + 1);
 }
 
+// a pin's heads as a set, so `#a|b` and `#b|a` are the same version
+const headSet = (url) => headsOf(url).split("|").filter(Boolean).sort().join("|");
+const samePin = (a, b) => docIdOf(a) === docIdOf(b) && headSet(a) === headSet(b);
+
+// `sources` without the ones the code pins itself: a url written with its
+// #heads (`pinned`) is read at those heads whatever its doc does since, so
+// it can't move. each pin written lets off one source, as a doc read both
+// pinned and as it is now is listed once for each (twice, if it hadn't moved)
+export function exceptPinned(sources, pinned = []) {
+  const left = [...new Set(pinned.map(bare))].filter(headSet);
+  return sources.filter((url) => {
+    const at = left.findIndex((pin) => samePin(pin, url));
+    if (at < 0) return true;
+    left.splice(at, 1);
+    return false;
+  });
+}
+
 // the sources whose heads now differ from the ones pinned. the first is the
-// builder itself, so it's skipped; one whose heads aren't known yet isn't stale
-export function staleSources(sources, headsNow) {
-  return sources.slice(1).filter((url) => {
+// builder itself, so it's skipped; one whose heads aren't known yet isn't
+// stale, and nor is one the code pins itself (`pinned`, see exceptPinned)
+export function staleSources(sources, headsNow, { pinned = [] } = {}) {
+  return exceptPinned(sources.slice(1), pinned).filter((url) => {
     const now = headsNow(unpinned(url));
     return now !== undefined && now !== headsOf(url);
   });
