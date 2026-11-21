@@ -604,18 +604,16 @@ export default function StoatTool(handle, element, context = {}) {
 			}
 		}
 	})
-	let unmountBar = null
-	if (!context.bars) {
-		const holder = document.createElement("div")
-		holder.style.display = "contents"
-		root.prepend(holder)
-		unmountBar = mountBuildBar(holder, builder, {
-			files: () => context.project?.files?.() ?? [],
-			open: (url, tool) => context.open?.(url, element, "right", tool),
-			hover: url => context.hover?.(url),
-			docColour: url => context.docColour?.(url) ?? "transparent",
-		})
-	}
+	// the bar, unless whoever's showing this draws it over it
+	const holder = document.createElement("div")
+	holder.style.display = "contents"
+	root.prepend(holder)
+	const unmountBar = mountBuildBar(holder, builder, {
+		files: () => context.project?.files?.() ?? [],
+		open: (url, tool) => context.open?.(url, element, "right", tool),
+		hover: url => context.hover?.(url),
+		docColour: url => context.docColour?.(url) ?? "transparent",
+	}, {when: () => !context.bars?.(handle.url)})
 
 	// ── keeping up: the doc, its charm, the project's charms
 
@@ -725,7 +723,7 @@ export default function StoatTool(handle, element, context = {}) {
 		follow.stop()
 		cancelAnimationFrame(frame)
 		unheard()
-		unmountBar?.()
+		unmountBar()
 		taken.drop()
 		resizeObserver.disconnect()
 		scheme.removeEventListener("change", onTheme)

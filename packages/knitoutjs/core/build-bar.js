@@ -134,10 +134,11 @@ export function BuildBar(props) {
   </div>`;
 }
 
-// the bar for a source, drawn into an element of a tool's own (one that
-// isn't in a wm pane, so has no bar over it): gives a way to take it away
-export function mountBuildBar(element, builder, ui) {
-  return render(() => BuildBar({ builder, ui }), element);
+// the bar for a source, drawn into an element of a tool's own, while
+// `when()` says (it's read in an effect: whether nothing else draws one
+// over the tool, as wm's context.bars(url) says): gives a way to take it away
+export function mountBuildBar(element, builder, ui, { when = () => true } = {}) {
+  return render(() => html`<${Show} when=${when}><${BuildBar} builder=${builder} ui=${ui} /><//>`, element);
 }
 
 // for a wm extension's bar(url, api) (see packages/wm/workspace.js): the bar

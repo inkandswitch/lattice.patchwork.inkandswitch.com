@@ -282,9 +282,10 @@ function cellStyle(node, direction) {
  *                        first extension's that isn't null is drawn.
  *                        asked again as what it reads changes, as status
  *                        is: give back the same component for the same
- *                        bar, as a new one is drawn afresh. tools are told
- *                        it's drawn for them (context.bars), so a tool that
- *                        draws such a bar itself elsewhere needn't here
+ *                        bar, as a new one is drawn afresh. a tool can ask
+ *                        whether one's drawn over it (context.bars(url),
+ *                        reactively), so a tool that draws such a bar
+ *                        itself elsewhere needn't here
  *   touched(url, api)    when it was last done something to, if not edited:
  *                        {verb, at, flash?}: "built 3 min ago" in the files.
  *                        flash tints its panes when at changes
@@ -970,8 +971,9 @@ export function mountWorkspace(
     hover: setHovered,
     // the colour a doc wears here, as a css colour, for a tool to draw in
     docColour: (url) => `var(--lattice-wm-${docColour(url)})`,
-    // an extension's bar for a doc is drawn over its tool (EXTENSIONS: bar)
-    bars: true,
+    // whether an extension's bar is drawn over a doc's tool (EXTENSIONS:
+    // bar): read in an effect, it changes as what wm knows of the doc does
+    bars: (url) => !!barOf(url),
   };
 
   const hosts = new Map();

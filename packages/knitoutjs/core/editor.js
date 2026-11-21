@@ -44,8 +44,9 @@ const DEFINITION_WAIT = 2000;
  *   showing somewhere already
  * - docColour(url): the colour a doc wears in every pane showing it (a css
  *   colour)
- * - bars: whether whoever's showing this draws its build bar over it (wm
- *   does, for a .js: its extensions' `bar`). if not, it's drawn here
+ * - bars(url): whether whoever's showing a doc draws a bar over it (wm
+ *   does, for a .js: its extensions' `bar`), reactively. if not, the build
+ *   bar's drawn here
  *
  * a .js file builds into a .k file (its builder, ./builder.js: ⌘↵ builds,
  * and your own edits autobuild). docs dropped onto its code become imports
@@ -256,7 +257,7 @@ export default function KnitoutEditorTool(handle, element, context) {
   const dispose = render(() => {
     return html`
       <div class="knitoutjs-editor" ref=${(el) => element.prepend((link = stylesheet(STYLESHEET, el)))}>
-        <${Show} when=${() => run && !context.bars}>
+        <${Show} when=${() => run && !context.bars?.(handle.url)}>
           <${BuildBar} builder=${run} ui=${barUi} />
           <//>
           <${ReadOnlyNote} />
