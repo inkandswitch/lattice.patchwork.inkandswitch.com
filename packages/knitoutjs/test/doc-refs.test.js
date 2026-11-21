@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completionAt, docRefAt, keysOf } from "../core/doc-refs.js";
+import { completionAt, docRefAt, keysOf, toolFor } from "../core/doc-refs.js";
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
@@ -99,4 +99,12 @@ test("keys at a path, and none where there's nothing to complete", () => {
   assert.deepEqual(keysOf(value, ["list"]), []);
   assert.deepEqual(keysOf(value, ["n"]), []);
   assert.deepEqual(keysOf(value, ["missing", "x"]), []);
+});
+
+test("a .js opens in the code editor, anything else in its own tool", () => {
+  assert.equal(toolFor({ name: "a.knitout.js" }), "editor");
+  assert.equal(toolFor({ name: "a.k" }), undefined);
+  assert.equal(toolFor({ name: "x", extension: "js" }), "editor");
+  assert.equal(toolFor({ width: 1 }), undefined);
+  assert.equal(toolFor(undefined), undefined);
 });

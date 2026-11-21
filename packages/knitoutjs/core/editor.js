@@ -6,6 +6,7 @@ import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
+import { toolFor } from "./doc-refs.js";
 import { runInto } from "./run.js";
 import { watchedSources } from "./knitout-links.js";
 import { builderOf, setBuild } from "./builds.js";
@@ -95,7 +96,13 @@ export default function KnitoutEditorTool(handle, element, context) {
       keepCaretInPlace,
       docRefs({
         repo,
-        open: (url) => open(url, element, "right", isJs ? "editor" : undefined),
+        // which tool depends on the doc being opened, so look at it first
+        // (a find that fails opens it with its own tool)
+        open: (url) =>
+          Promise.resolve()
+            .then(() => repo.find(url))
+            .then((found) => toolFor(found.doc()), () => undefined)
+            .then((tool) => open(url, element, "right", tool)),
       }).extension,
       knitoutEditorIntegration({
         events,

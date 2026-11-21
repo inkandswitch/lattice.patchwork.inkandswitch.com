@@ -1,5 +1,6 @@
 import { parser } from "./vendor/lezer-javascript.js";
 import { scan } from "./instrument.js";
+import { fileExtension } from "./files.js";
 import { unpinned } from "./sources.js";
 
 // what each import of a doc binds: name → {url, path}. a default or `* as`
@@ -86,3 +87,6 @@ export function keysOf(value, path) {
     .filter(([, field]) => field !== undefined)
     .map(([label, field]) => ({ label, detail: kindOf(field) }));
 }
+
+// the tool to open a doc with: a .js in the code editor, else its own
+export const toolFor = (doc) => (fileExtension(doc) === "js" ? "editor" : undefined);
