@@ -85,9 +85,24 @@ test("a doc with a field called what the default is called still has both", () =
   assert.match(text, /export declare const _default: number;/);
 });
 
-test("the globals have doc(), repo and knitout", () => {
+test("the globals have doc() and repo", () => {
   assert.match(GLOBALS, /declare function doc\(url: string\): any;/);
   assert.match(GLOBALS, /declare const repo: any;/);
-  assert.match(GLOBALS, /declare function require\(name: "knitout"\): any;/);
-  assert.match(GLOBALS, /declare module "knitout" \{[^}]*export default knitout;[^}]*export const Writer: any;/);
+});
+
+test("the knitout module declares a Writer class with typed members", () => {
+  assert.match(GLOBALS, /declare module "knitout" \{/);
+  assert.match(GLOBALS, /class Writer\b/);
+  for (const member of ["knit(", "tuck(", "split(", "miss(", "drop(", "amiss(", "xfer(", "rack(", "inhook(", "releasehook(", "outhook(", "stitch(", "write("]) {
+    assert.ok(GLOBALS.includes(member), `${member} is declared`);
+  }
+  assert.match(GLOBALS, /carriers:/);
+  assert.match(GLOBALS, /racking: number/);
+  assert.match(GLOBALS, /export default knitout;/);
+  assert.match(GLOBALS, /declare function require\(name: "knitout"\): typeof import\("knitout"\);/);
+});
+
+test("the knitout module's types aren't any any", () => {
+  assert.doesNotMatch(GLOBALS, /Writer: any/);
+  assert.doesNotMatch(GLOBALS, /const knitout: any/);
 });

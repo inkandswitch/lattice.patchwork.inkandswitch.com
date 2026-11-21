@@ -69,10 +69,5 @@ export function docDeclarations(url, value) {
 // knows of yet, `repo`, and the knitout library (by import or require)
 export const GLOBALS = `declare function doc(url: string): any;
 declare const repo: any;
-declare function require(name: "knitout"): any;
-declare module "knitout" {
-  const knitout: any;
-  export default knitout;
-  export const Writer: any;
-}
-`;
+declare function require(name: "knitout"): typeof import("knitout");
+${KNITOUT_TYPES}`;
