@@ -1,4 +1,4 @@
-import {moduleWorker} from "./files.js"
+import {docText, knitoutOf, moduleWorker, textHash} from "./files.js"
 
 // a .k as kcode, the format a Kniterate machine reads: the converter (in a
 // worker where the browser allows it), and a build of a .k into the .kc it
@@ -57,4 +57,13 @@ export function converter() {
 export function autobuildStep({auto, showing, behind}) {
 	if (!auto || !showing) return "stop"
 	return behind ? "build" : "wait"
+}
+
+// the .kc's kcode to save for a .k, if it's there to save: built, and from
+// the .k's text as it is now (it goes to a machine, so not one that's
+// behind). null when it has to be converted now instead
+export function builtKcode(kText, kcDoc) {
+	const text = docText(kcDoc)
+	if (!text.trim()) return null
+	return knitoutOf(kcDoc).kcodeSourceHash === textHash(kText) ? text : null
 }

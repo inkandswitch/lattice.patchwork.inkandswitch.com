@@ -1,7 +1,7 @@
 import {splice, updateText} from "@automerge/automerge"
 import {checkPanel, located} from "./checks.js"
 import {docText, knitoutOf, saveFile} from "./files.js"
-import {converter} from "./kcode.js"
+import {builtKcode, converter} from "./kcode.js"
 import {
 	backAt,
 	backColumn,
@@ -1891,22 +1891,27 @@ export default function KniterateTool(handle, element, context = {}) {
 		}, REDRAW_DELAY)
 	}
 
-	// a .k built into a .kc saves that (as it was last built: its pane says
-	// if it's out of date); any other is converted as it is
+	// a .k built into a .kc saves that, if it's built from the .k as it is
+	// (it's going to a machine); any other, or one whose .kc is empty or
+	// behind, is converted as it is
 	async function exportKcode() {
 		const name = docName()
+		const text = docText(handle.doc())
 		const target = knitoutOf(handle.doc()).kcodeTarget
 		const repo = context.repo ?? element.repo
 		if (target && repo) {
 			try {
 				const kc = (await repo.find(target)).doc()
-				saveFile(docText(kc), kc?.name ?? name + ".kc")
-				return
+				const built = builtKcode(text, kc)
+				if (built != null) {
+					saveFile(built, kc?.name ?? name + ".kc")
+					return
+				}
 			} catch (error) {
 				console.warn("kniterate: couldn't find its .kc, converting this instead:", error)
 			}
 		}
-		const result = await kcode.convert(docText(handle.doc()), name, {})
+		const result = await kcode.convert(text, name, {})
 		if (result.error) {
 			errorBar.textContent = result.error
 			errorBar.hidden = false

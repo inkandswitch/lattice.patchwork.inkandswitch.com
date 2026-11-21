@@ -1,6 +1,6 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
-import {autobuildStep, buildKcode} from "../kcode.js"
+import {autobuildStep, buildKcode, builtKcode} from "../kcode.js"
 import {docText, textHash} from "../files.js"
 import {knitoutToKcode} from "../../knitoutjs/core/vendor/knitout-to-kcode.js"
 
@@ -103,4 +103,15 @@ test("autobuild builds a .kc behind its .k only while it's on and open here", ()
 	assert.equal(autobuildStep({auto: true, showing: false, behind: false}), "stop")
 	assert.equal(autobuildStep({auto: false, showing: true, behind: true}), "stop")
 	assert.equal(autobuildStep({auto: false, showing: false, behind: false}), "stop")
+})
+
+test("export kcode saves the .kc only when it's built from the .k as it is", () => {
+	const kc = {content: "// x-patchwork-sources automerge:k#h\nkcode", kcodeSourceHash: textHash(KNITOUT)}
+	assert.equal(builtKcode(KNITOUT, kc), kc.content)
+	// behind its .k, empty, never built, or not there: converted now instead
+	assert.equal(builtKcode(KNITOUT + "\nknit + f3 3", kc), null)
+	assert.equal(builtKcode(KNITOUT, {...kc, content: ""}), null)
+	assert.equal(builtKcode(KNITOUT, {...kc, content: "  \n"}), null)
+	assert.equal(builtKcode(KNITOUT, {content: kc.content}), null)
+	assert.equal(builtKcode(KNITOUT, undefined), null)
 })
