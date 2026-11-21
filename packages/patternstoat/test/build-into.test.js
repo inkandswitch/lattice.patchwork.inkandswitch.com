@@ -1,6 +1,7 @@
 import {test} from "node:test"
 import assert from "node:assert/strict"
 import {buildInto, sourceHash} from "../build-into.js"
+import {stoatBuild} from "../build-kind.js"
 import {newCharm} from "../charm.js"
 import {CharmDatatype, PatternstoatDatatype} from "../datatypes.js"
 import {newPatternstoat, paintWristwarmer} from "../patternstoat.js"
@@ -146,4 +147,42 @@ test("building what's already built leaves the .k alone", async () => {
 	stoat.doc().colours[0][0] = 7
 	await buildInto(stoat, k, repoOf({charm}), {immutable})
 	assert.equal(changes, 2)
+})
+
+test("a build stopped while its charm's found leaves the .k as it was", async () => {
+	const charm = handle("charm", newCharm())
+	const doc = newPatternstoat({charm: "charm"})
+	paintWristwarmer(doc)
+	const stoat = handle("stoat", doc)
+	const k = handle("k", {content: "before"})
+	const stop = new AbortController()
+	const repo = {
+		async find(url) {
+			stop.abort()
+			return {charm}[url]
+		},
+	}
+	const target = stoat.doc().knitoutTarget
+	const result = await buildInto(stoat, k, repo, {immutable, signal: stop.signal})
+	assert.equal(result.error.stopped, true)
+	assert.equal(k.doc().content, "before")
+	assert.equal(stoat.doc().knitoutTarget, target)
+})
+
+test("a patternstoat's builder writes a .k named for it, and builds by itself to start with", () => {
+	assert.equal(stoatBuild.targetField, "knitoutTarget")
+	assert.equal(stoatBuild.targetExtension, "k")
+	assert.equal(stoatBuild.targetName({title: "mitten"}), "mitten.k")
+	assert.equal(stoatBuild.targetName({}), "patternstoat.k")
+	assert.equal(stoatBuild.autobuild.key("automerge:s"), "patternstoat:autobuild:automerge:s")
+	assert.equal(stoatBuild.autobuild.default, true)
+	assert.equal(stoatBuild.openWith, "visualizer")
+})
+
+test("a patternstoat's build says where it went wrong, and keeps the row and needle", async () => {
+	const stoat = handle("stoat", newPatternstoat({}))
+	const k = handle("k", {content: "before"})
+	const result = await stoatBuild.build(stoat, k, {repo: repoOf({})})
+	assert.equal(typeof result.error.message, "string")
+	assert.ok("row" in result.error && "needle" in result.error)
 })

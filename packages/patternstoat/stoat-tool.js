@@ -2,12 +2,15 @@
 // wm/ui/trays.js) with the tools, one palette (the charm's colours, then
 // stitches, then yarns: what's picked is what's painted), undo, and the
 // setup out of the way under ⚙. a stitch painted anywhere is what that bed
-// knits (build.js). built into its .k (by hand with ✓, or as you go)
+// knits (build.js). built into its .k by its builder (build-kind.js), with
+// the build bar a .js and a .k have: wm draws it over this, and where
+// nothing does, this draws it itself
 import {stylesheet} from "../wm/ui/stylesheet.js"
 import {TRAYS_STYLESHEET, popover, press, swatch, tray, trayBar, trayButton} from "../wm/ui/trays.js"
 import {YARNS_CHANGED, yarnColours} from "../knitoutjs/core/yarns.js"
-import {setBuild} from "../knitoutjs/core/builds.js"
-import {buildInto} from "./build-into.js"
+import {takeBuilder} from "../knitoutjs/core/builder.js"
+import {mountBuildBar} from "../knitoutjs/core/build-bar.js"
+import {stoatBuild} from "./build-kind.js"
 import {resize as resizeStoat} from "./patternstoat.js"
 import {applyRecord, floodCells, recordOf, undoOf, yarnAfterPick} from "./painting.js"
 import {columnsOf} from "./charm.js"
@@ -26,7 +29,6 @@ const TOOLS = [
 ]
 const GUTTER = 48
 const YARN_STRIP = 10
-const BUILD_DELAY = 500
 const HISTORY = 200
 // what each kind of thing picked paints, in painting.js's records
 const KIND = {colour: "colours", stitch: "stitches", yarn: "yarns"}
@@ -85,7 +87,7 @@ export default function StoatTool(handle, element, context = {}) {
 	element.append(link, traysLink, root)
 
 	// ── the setup, under ⚙: which charm, how big, where on the bed, the
-	// gauge, building as you go
+	// gauge
 
 	const charmSelect = document.createElement("select")
 	charmSelect.title = "the charm this is knitted with: what each colour does"
@@ -111,14 +113,8 @@ export default function StoatTool(handle, element, context = {}) {
 	}))
 	const gaugeLabel = document.createElement("label")
 	gaugeLabel.append("gauge", gaugeSelect)
-	const autoBox = document.createElement("input")
-	autoBox.type = "checkbox"
-	autoBox.checked = true
-	const auto = document.createElement("label")
-	auto.title = "build the .k again whenever this or its charm changes"
-	auto.append("build as you go", autoBox)
 
-	// ── the bar: tools, the palette, yarns, undo, setup, building
+	// ── the bar: tools, the palette, yarns, undo, setup
 
 	const bar = trayBar("stoat-trays")
 	const toolButtons = new Map()
@@ -133,18 +129,16 @@ export default function StoatTool(handle, element, context = {}) {
 	const yarns = tray()
 	const undoButton = trayButton({icon: "undo", label: "undo", title: "undo what you painted", key: "⌘z", onClick: () => undo()})
 	const redoButton = trayButton({icon: "redo", label: "redo", title: "redo it", key: "⇧⌘z", onClick: () => redo()})
-	const setupButton = trayButton({icon: "gear", label: "setup", title: "the charm, the size, where it's knitted, building as you go"})
-	const buildButton = trayButton({icon: "check", label: "build", title: "build the .k this writes", onClick: () => build()})
-	buildButton.classList.add("stoat-build")
+	const setupButton = trayButton({icon: "gear", label: "setup", title: "the charm, the size, where it's knitted"})
 	const fitButton = trayButton({icon: "fit", text: "fit", label: "fit", title: "fit the design in view", onClick: () => {
 		fit()
 		draw()
 		setup.close()
 	}})
-	const setup = popover(setupButton, charmLabel, width.wrap, height.wrap, left.wrap, gaugeLabel, auto, fitButton)
+	const setup = popover(setupButton, charmLabel, width.wrap, height.wrap, left.wrap, gaugeLabel, fitButton)
 	const spacer = document.createElement("div")
 	spacer.className = "tray-spacer"
-	bar.append(tools, palette, yarns, tray(undoButton, redoButton), spacer, tray(setupButton, buildButton), setup.element)
+	bar.append(tools, palette, yarns, tray(undoButton, redoButton), spacer, tray(setupButton), setup.element)
 	root.append(bar)
 
 	const stage = document.createElement("div")
@@ -579,75 +573,46 @@ export default function StoatTool(handle, element, context = {}) {
 	root.addEventListener("keydown", onKey)
 	root.addEventListener("keyup", onKey)
 
-	// ── building
+	// ── building: its builder, shared with its bar (over this in wm, or
+	// drawn here where there's none) and whatever else shows it. a change
+	// made here is an edit, so autobuild builds it; the builder watches its
+	// charm itself. how a build went is drawn here too: the row (and
+	// needle) it went wrong at, and the .k's yarns once it's built
 
-	let building = null
-	let again = false
-	let buildTimer = 0
-
-	async function target() {
-		const d = doc()
-		if (d.knitoutTarget) return repo.find(d.knitoutTarget)
-		if (!context.project?.createFile) return null
-		const url = await context.project.createFile(`${d.title || "patternstoat"}.k`)
-		handle.change(doc => {
-			doc.knitoutTarget = url
-		})
-		context.openIfClosed?.(url, element, "right", "visualizer")
-		return repo.find(url)
-	}
-
-	async function build() {
-		if (building) {
-			again = true
-			return building
-		}
-		building = (async () => {
-			const started = performance.now()
-			setBuild(handle.url, {state: "running", message: undefined})
-			showStatus("building…", "running")
-			let result
-			try {
-				const kHandle = await target()
-				if (!kHandle) result = {error: {row: null, needle: null, message: "no .k to build into: open it in a lattice project"}}
-				else {
-					result = await buildInto(handle, kHandle, repo)
-					kDoc = kHandle.doc()
-				}
-			} catch (error) {
-				result = {error: {row: null, needle: null, message: String(error?.message ?? error)}}
-			}
-			problem = result.error ?? null
-			if (result.error) {
-				const {row, needle, message} = result.error
-				const where = [row != null && `row ${row}`, needle != null && `needle ${needle}`].filter(Boolean).join(", ")
-				setBuild(handle.url, {state: "error", message})
-				showStatus(where ? `${where}: ${message}` : message, "error")
-			} else {
-				setBuild(handle.url, {state: "ok", message: undefined})
-				const lines = result.knitout.split("\n").length
-				showStatus(`built in ${Math.round(performance.now() - started)}ms · ${lines.toLocaleString()} lines`, "ok")
-			}
+	const taken = takeBuilder(stoatBuild, handle.url, {
+		repo,
+		createFile: context.project?.createFile,
+		openIfClosed: context.openIfClosed && ((url, tool) => context.openIfClosed(url, element, "right", tool)),
+	}, {source: handle})
+	const builder = taken.builder
+	const unheard = builder.subscribe(status => {
+		if (status.state === "error") {
+			problem = status.error ?? null
 			draw()
-		})()
-		await building
-		building = null
-		if (again) {
-			again = false
-			build()
+		} else if (status.state === "ok") {
+			problem = null
+			draw()
+			const url = builder.target()
+			if (url) {
+				repo.find(url).then(k => {
+					if (disposed) return
+					kDoc = k.doc()
+					draw()
+				}, () => {})
+			}
 		}
-	}
-
-	function scheduleBuild() {
-		if (!autoBox.checked || disposed) return
-		clearTimeout(buildTimer)
-		buildTimer = setTimeout(build, BUILD_DELAY)
-	}
-
-	function showStatus(text, state) {
-		// on ✓: what happened, when it's pointed at; red when it went wrong
-		buildButton.title = text
-		buildButton.dataset.state = state
+	})
+	let unmountBar = null
+	if (!context.bars) {
+		const holder = document.createElement("div")
+		holder.style.display = "contents"
+		root.prepend(holder)
+		unmountBar = mountBuildBar(holder, builder, {
+			files: () => context.project?.files?.() ?? [],
+			open: (url, tool) => context.open?.(url, element, "right", tool),
+			hover: url => context.hover?.(url),
+			docColour: url => context.docColour?.(url) ?? "transparent",
+		})
 	}
 
 	// ── keeping up: the doc, its charm, the project's charms
@@ -667,12 +632,10 @@ export default function StoatTool(handle, element, context = {}) {
 		draw()
 	}
 
-	// the charm changed (here, in its arrangement, or someone's): built again,
-	// and the .k's only written if what it's built from is new, or is the
-	// same at newer heads (so the .k says which heads it was built from)
+	// the charm changed (here, in its arrangement, or someone's): its
+	// builder builds it again (build-kind.js)
 	function onCharmChange() {
 		onCharm()
-		scheduleBuild()
 	}
 
 	async function watchCharm() {
@@ -688,7 +651,7 @@ export default function StoatTool(handle, element, context = {}) {
 				charmHandle = found
 				charmHandle.on("change", onCharmChange)
 			} catch (error) {
-				showStatus(`couldn't load the charm: ${error?.message ?? error}`, "error")
+				console.warn(`patternstoat: couldn't load the charm ${url}`, error)
 			}
 		}
 		onCharm()
@@ -710,11 +673,11 @@ export default function StoatTool(handle, element, context = {}) {
 		draw()
 	}
 
-	// a change made here: build as you go builds it (other people's edits
-	// are built by them, as knitoutjs's editor only autobuilds your own)
+	// a change made here: autobuild builds it (other people's edits are
+	// built by them, as knitoutjs's editor only autobuilds your own)
 	function changeHere(fn) {
 		handle.change(fn)
-		scheduleBuild()
+		builder.edited()
 	}
 
 	function resize() {
@@ -759,7 +722,9 @@ export default function StoatTool(handle, element, context = {}) {
 		disposed = true
 		follow.stop()
 		cancelAnimationFrame(frame)
-		clearTimeout(buildTimer)
+		unheard()
+		unmountBar?.()
+		taken.drop()
 		resizeObserver.disconnect()
 		scheme.removeEventListener("change", onTheme)
 		removeEventListener(YARNS_CHANGED, onTheme)

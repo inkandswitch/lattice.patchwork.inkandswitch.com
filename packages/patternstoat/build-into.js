@@ -6,7 +6,7 @@
 // versions of the two (knitoutSources, and the knitout's x-patchwork-sources
 // line: each pinned at its heads). a build that fails leaves the .k as it
 // was. whoever calls this says how it went in the builds store
-// (knitoutjs/core/builds.js), as knitoutjs's wm.js does
+// (knitoutjs/core/builds.js): its builder does (build-kind.js)
 import {buildKnitout} from "./build.js"
 import {knitoutOf, textHash} from "../knitoutjs/core/files.js"
 import {withSourcesLine} from "../knitoutjs/core/sources.js"
@@ -23,9 +23,10 @@ export function sourceHash(stoat, charm) {
 	return textHash(JSON.stringify([colours, stitches, yarns, left, gauge, rows, columns, cells]))
 }
 
-// {knitout, rows, unchanged?} or {error: {row, needle, message}}. `immutable` wraps the
-// knitout for the doc (automerge's ImmutableString, unless it's given)
-export async function buildInto(stoatHandle, kHandle, repo, {immutable = null} = {}) {
+// {knitout, rows, unchanged?} or {error: {row, needle, message, stopped?}}. `immutable` wraps the
+// knitout for the doc (automerge's ImmutableString, unless it's given). one
+// stopped (`signal` aborted) before it's written leaves the .k as it was
+export async function buildInto(stoatHandle, kHandle, repo, {immutable = null, signal} = {}) {
 	// each read at the heads it's pinned at, so the sources say what was built
 	const stoatView = stoatHandle.view(stoatHandle.heads())
 	const stoat = stoatView.doc()
@@ -41,6 +42,7 @@ export async function buildInto(stoatHandle, kHandle, repo, {immutable = null} =
 			return {error: {row: null, needle: null, message: `couldn't load the charm: ${error?.message ?? error}`}}
 		}
 	}
+	if (signal?.aborted) return {error: {row: null, needle: null, message: "stopped", stopped: true}}
 	const built = buildKnitout(stoat, charm)
 	if (built.error) return built
 	const result = {...built, knitout: withSourcesLine(built.knitout, sources)}
@@ -55,6 +57,7 @@ export async function buildInto(stoatHandle, kHandle, repo, {immutable = null} =
 		knitoutOf(k).sources.join(" ") === sources.join(" ")
 	if (same) return {...result, unchanged: true}
 	const wrap = immutable ?? (await automergeImmutable())
+	if (signal?.aborted) return {error: {row: null, needle: null, message: "stopped", stopped: true}}
 	kHandle.change(doc => {
 		doc.content = wrap(result.knitout)
 		doc.knitoutSource = stoatHandle.url

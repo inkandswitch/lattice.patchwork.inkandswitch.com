@@ -4,6 +4,7 @@ import { ImmutableString } from "@automerge/automerge";
 import { asksFirst, createBuilder, readAutobuild, writeAutobuild } from "../core/builder-logic.js";
 import { jsBuild } from "../core/js-build.js";
 import { kcodeBuild } from "../../lattice/kcode.js";
+import { stoatBuild } from "../../patternstoat/build-kind.js";
 
 const JS = "automerge:js";
 const K = "automerge:k";
@@ -95,6 +96,11 @@ test("each kind says where its autobuild is remembered, and whether it's on to s
   assert.equal(jsBuild.targetField, "knitoutTarget");
   assert.equal(jsBuild.targetName({ name: "cable.knitout.js" }), "cable.k");
   assert.equal(jsBuild.targetName({ name: "cable.js" }), "cable.k");
+  assert.equal(kcodeBuild.autobuild.default, false);
+  assert.equal(stoatBuild.autobuild.default, true);
+  const kinds = [jsBuild, kcodeBuild, stoatBuild];
+  assert.equal(kinds.map((kind) => kind.targetExtension).join(" "), "k kc k");
+  assert.equal(kinds.map((kind) => kind.targetField).join(" "), "knitoutTarget kcodeTarget knitoutTarget");
 });
 
 test("autobuild is stored only when it isn't the default: a .js's as off, a .k's as on", () => {

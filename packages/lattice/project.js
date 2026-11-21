@@ -6,6 +6,8 @@ import { mountProject } from "../wm/project-view.js";
 import { datatypeItem } from "../wm/patchwork/docs.js";
 import { knitout } from "../knitoutjs/wm.js";
 import { kcode } from "./kcode-wm.js";
+import { wmBuildBar } from "../knitoutjs/core/build-bar.js";
+import { stoatBuild } from "../patternstoat/build-kind.js";
 import { wearLook } from "../knitoutjs/look.js";
 import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../knitoutjs/app/migrate.js";
 import { tools } from "./files.js";
@@ -51,11 +53,12 @@ async function newPatternstoat(api) {
   setBuild(stoat.url, error ? { state: "error", message: error.message } : { state: "ok" });
 }
 
-// what lattice adds to the + menu, after knitoutjs's: markdown, a
-// patternwitch, a skitch, and while alt is held, a patternstoat, a charm, a
-// machine, a yarn, a swatch and a terminal. `baseRepo` is the
-// repo under any draft overlay: latticex shares on the doc itself, never on
-// a draft's copy of it
+// what lattice adds to the panes: a patternstoat's build bar (it writes its
+// .k), as a .js's and a .k's have theirs, and its charm, linked. and to the
+// + menu, after knitoutjs's: markdown, a patternwitch, a skitch, and while
+// alt is held, a patternstoat, a charm, a machine, a yarn, a swatch and a
+// terminal. `baseRepo` is the repo under any draft overlay: latticex shares
+// on the doc itself, never on a draft's copy of it
 function lattice(baseRepo, hive) {
   return {
     name: "lattice",
@@ -69,6 +72,9 @@ function lattice(baseRepo, hive) {
     links(url, api) {
       const charm = api.docInfo(url).ext?.lattice?.charm;
       return charm ? [{ url: charm, live: true }] : [];
+    },
+    bar(url, api) {
+      return api.docInfo(url).extension === "patternstoat" ? wmBuildBar(stoatBuild, url, api) : null;
     },
     menu: () => [
       datatypeItem({ type: "markdown", icon: "text", label: "markdown" }, hive),
