@@ -3,10 +3,14 @@
 
 const link = (value) => (value == null || value === "" ? null : String(value));
 
+// a list of links as plain strings; anything that isn't a list is none
+const links = (value) => (Array.isArray(value) ? value.map(link).filter((entry) => entry !== null) : []);
+
 // a doc's knitout links, as plain strings: the .k a .js writes into
 // (target), the .js that last wrote a .k (source) and the code it wrote it
 // from (sourceHash), when it did (builtAt), and the .k a .k is an editable
-// copy of (copyOf). read them here, not off the doc, so they compare with
+// copy of (copyOf), the pinned urls a .k was built from (sources), and the same sorts
+// of thing for a .kc (kcode*). read them here, not off the doc, so they compare with
 // === however they're stored (text now, ImmutableString later)
 export function knitoutOf(doc) {
   return {
@@ -15,6 +19,12 @@ export function knitoutOf(doc) {
     sourceHash: link(doc?.knitoutSourceHash),
     copyOf: link(doc?.knitoutCopyOf),
     builtAt: typeof doc?.knitoutBuiltAt === "number" ? doc.knitoutBuiltAt : null,
+    sources: links(doc?.knitoutSources),
+    kcodeTarget: link(doc?.kcodeTarget),
+    kcodeSource: link(doc?.kcodeSource),
+    kcodeSourceHash: link(doc?.kcodeSourceHash),
+    kcodeBuiltAt: typeof doc?.kcodeBuiltAt === "number" ? doc.kcodeBuiltAt : null,
+    kcodeSources: links(doc?.kcodeSources),
   };
 }
 
