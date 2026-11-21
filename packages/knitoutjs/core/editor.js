@@ -104,7 +104,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     if (run) {
       extensions.push(
         Prec.high(
-          keymap.of([{ key: "Mod-Enter", run: () => (run.now(), true) }]),
+          keymap.of([{ key: "Mod-Enter", run: () => (run.now({ create: true }), true) }]),
         ),
         // only your own edits autobuild: other people's arrive as
         // transactions with no user event, and their own editor builds them
@@ -224,11 +224,11 @@ export default function KnitoutEditorTool(handle, element, context) {
     function edited() {
       if (!auto()) return;
       clearTimeout(timer);
-      timer = setTimeout(now, AUTO_RUN_DELAY);
+      timer = setTimeout(() => now(), AUTO_RUN_DELAY);
     }
     handle.on("change", onChange);
     watchTarget();
-    const builder = { now: () => now(), goToLine: (line) => goToLine(line) };
+    const builder = { now: () => now({ create: true }), goToLine: (line) => goToLine(line) };
     setBuild(handle.url, { state: "idle", auto: auto(), builder });
     onCleanup(() => {
       clearTimeout(timer);
@@ -247,9 +247,15 @@ export default function KnitoutEditorTool(handle, element, context) {
     // a new run takes over from one still going. a generated .k is read
     // only; a .k with editable text in it (someone's copy, or one typed by
     // hand) isn't written over without asking
-    async function now({ overwrite = false } = {}) {
-      // no target yet: make its .k, and build into that
-      const url = target() ?? await newTarget();
+    // `create`: an explicit build (the button, ⌘↵, wm's rebuild) makes a .k
+    // if there's none yet; autobuild never does
+    async function now({ overwrite = false, create = false } = {}) {
+      let url = target();
+      if (!url && create) url = await newTarget();
+      if (!url) {
+        setStatus({ state: "error", message: "pick a .k file to write to" });
+        return;
+      }
       const kHandle = await repo.find(url);
       const content = kHandle.doc()?.content;
       if (typeof content === "string" && content.trim() && !overwrite) {
@@ -298,7 +304,13 @@ export default function KnitoutEditorTool(handle, element, context) {
       });
     }
 
-    async function newTarget() {
+    // one .k per ask: a second ask while the first is being made shares it
+    let making = null;
+    function newTarget() {
+      return (making ??= makeTarget().finally(() => (making = null)));
+    }
+
+    async function makeTarget() {
       const base = (handle.doc()?.name ?? "pattern").replace(
         /\.knitout\.js$|\.js$/,
         "",
@@ -360,7 +372,7 @@ export default function KnitoutEditorTool(handle, element, context) {
       run.running()
         ? "stop this build"
         : "build the pattern: it writes its knitout into the .k file chosen on the right (⌘↵)"}
-        onClick=${() => (run.running() ? run.stop() : run.now())}
+        onClick=${() => (run.running() ? run.stop() : run.now({ create: true }))}
       >
         ${() => (run.running() ? "stop" : "build")}
       </button>
