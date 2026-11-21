@@ -6,43 +6,18 @@
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { builds, setBuild } from "./core/builds.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
+import { collectSources } from "./core/instrument.js";
+import { unpinned } from "./core/sources.js";
+import { headsNow } from "./core/heads.js";
+import { buildOf as buildOfIn, buildState as buildStateIn, links, linksOf as linksOfIn } from "./core/knitout-links.js";
 import defaultSource from "./core/default-source.js";
 
 const string = (value) => (value == null ? "" : String(value));
 const isObject = (value) => !!value && typeof value === "object" && !Array.isArray(value);
 
-// what wm keeps of a doc for us: its knitout links, and a .js's code now,
-// to tell when the .k it writes is out of date
-const linksOf = (url, api) => api.docInfo(url).ext?.knitout ?? {};
-
-// how a .js's build is going: yours, or someone else's in the room if
-// theirs is newer. what's only yours (its builder, autobuild, whether it
-// failed last) stays yours
-function buildOf(jsUrl, api) {
-  const mine = builds[jsUrl] ?? {};
-  let latest = mine.state ? mine : null;
-  for (const person of api.people()) {
-    const build = person.ext?.knitout?.builds?.[jsUrl];
-    if (build && !(latest?.at >= build.at)) latest = build;
-  }
-  if (!latest || latest === mine) return mine;
-  return { ...mine, state: latest.state, line: latest.line, message: latest.message };
-}
-
-// how a generated .k is doing: built, building, out of date, or its .js
-// failed. null once its .js writes somewhere else
-function buildState(kUrl, api) {
-  const k = linksOf(kUrl, api);
-  const js = k.source ? linksOf(k.source, api) : null;
-  if (js?.target !== kUrl) return null;
-  const build = buildOf(k.source, api);
-  if (build.state === "running") return "running";
-  if (build.state === "error") return "error";
-  const outOfDate = !!k.sourceHash && !!js.textHash && k.sourceHash !== js.textHash;
-  // with autobuild on, it's about to build anyway
-  if (outOfDate) return build.auto && build.builder ? "running" : "stale";
-  return "built";
-}
+const linksOf = linksOfIn;
+const buildOf = (jsUrl, api) => buildOfIn(jsUrl, api, builds);
+const buildState = (kUrl, api) => buildStateIn(kUrl, api, { builds, headsNow: (url) => headsNow(url, api.repo) });
 
 // build a .js into its .k again: by its editor, if it's open in one, so its
 // build bar shows it too
@@ -111,33 +86,17 @@ export const knitout = {
   name: "knitout",
 
   watch(doc) {
+    const js = fileExtension(doc) === "js";
     return {
       ...knitoutOf(doc),
-      textHash: fileExtension(doc) === "js" ? textHash(docText(doc)) : null,
+      textHash: js ? textHash(docText(doc)) : null,
+      // what a .js imports or reads with doc(), unpinned, each once
+      imports: js ? [...new Set(collectSources(docText(doc)).map((use) => unpinned(use.url)))] : [],
     };
   },
 
-  // a .js lights up with the .k it writes into now, and a .k with its
-  // editable copy. a .k also remembers which .js wrote it last, but once
-  // that writes somewhere else it's history: a chip, but no light
-  links(url, api) {
-    const doc = linksOf(url, api);
-    const links = [];
-    if (doc.target) links.push({ url: doc.target, live: true });
-    if (doc.copyOf) {
-      links.push({ url: doc.copyOf, label: "copy of", title: "open the .k this is a copy of", live: true });
-    }
-    if (doc.source) {
-      const live = linksOf(doc.source, api).target === url;
-      links.push({
-        url: doc.source,
-        label: live ? "written by" : "last written by",
-        title: "open the .js that wrote this",
-        live,
-      });
-    }
-    return links;
-  },
+  // see core/knitout-links.js
+  links,
 
   // a generated .k's line: built just now, out of date, or its .js failed,
   // only while its .js still writes into it. a .js has none: its editor
