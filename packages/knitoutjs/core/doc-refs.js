@@ -100,3 +100,19 @@ export function definitionDoc(uri) {
   const id = /^file:\/\/\/([1-9A-HJ-NP-Za-km-z]+)\/index\.[\w.]+$/.exec(uri ?? "")?.[1];
   return id ? `automerge:${id}` : null;
 }
+
+// "2x2 rib.knitout.js" → _2x2Rib
+export function identifierFor(name) {
+  const words = String(name)
+    .replace(/\..*$/, "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  const id = words
+    .map((word, index) => (index ? word[0].toUpperCase() + word.slice(1) : word[0].toLowerCase() + word.slice(1)))
+    .join("") || "doc";
+  return /^[0-9]/.test(id) ? "_" + id : id;
+}
+
+// the line a doc dropped onto a pattern writes: an import, a .js or any
+// other doc alike, so it's a source of the build, a link, and typed
+export const dropImport = (name, url) => `import ${identifierFor(name)} from "${url}"\n`;

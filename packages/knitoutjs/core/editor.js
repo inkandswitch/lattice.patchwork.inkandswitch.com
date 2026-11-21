@@ -6,7 +6,7 @@ import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
-import { definitionDoc, toolFor } from "./doc-refs.js";
+import { definitionDoc, dropImport, toolFor } from "./doc-refs.js";
 import { languageServerDocs } from "./language-server.js";
 import { runInto } from "./run.js";
 import { importsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
@@ -29,22 +29,6 @@ const DEFINITION_EVENT = "file:open-definition";
 
 // how long a .js opened for its definition has to show its editor
 const DEFINITION_WAIT = 2000;
-
-// "2x2 rib.knitout.js" → _2x2Rib
-function identifierFor(name) {
-  const words = name
-    .replace(/\..*$/, "")
-    .split(/[^A-Za-z0-9]+/)
-    .filter(Boolean);
-  const id = words
-    .map((word, index) =>
-      index
-        ? word[0].toUpperCase() + word.slice(1)
-        : word[0].toLowerCase() + word.slice(1)
-    )
-    .join("") || "doc";
-  return /^[0-9]/.test(id) ? "_" + id : id;
-}
 
 /**
  * the .js and .k files of a knitout project, in patchwork's own file editor
@@ -599,7 +583,7 @@ export default function KnitoutEditorTool(handle, element, context) {
   }, element);
 
   // dropping docs onto the code writes a line above the one under the pointer:
-  // a .js comes in with `await import`, anything else with `await repo.find`
+  // an import of each, a .js or any other doc, so it's a source of the build
   function lineAt(x, y) {
     if (!view) return null;
     const line = view.state.doc.lineAt(view.posAtCoords({ x, y }, false));
@@ -615,11 +599,8 @@ export default function KnitoutEditorTool(handle, element, context) {
     const at = view.state.doc.line(under.line).from;
     const lines = await Promise.all(
       docs.map(async ({ url, name }) => {
-        const doc = (await repo.find(url)).doc();
-        const id = identifierFor(name ?? doc?.name ?? doc?.title ?? "doc");
-        return fileExtension(doc) === "js"
-          ? `const ${id} = await import("/${url}")\n`
-          : `const ${id} = await repo.find("${url}")\n`;
+        const doc = name == null ? (await repo.find(url)).doc() : null;
+        return dropImport(name ?? doc?.name ?? doc?.title ?? "doc", url);
       }),
     );
     view.dispatch({

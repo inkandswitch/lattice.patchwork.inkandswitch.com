@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completionAt, definitionDoc, docRefAt, keysOf, toolFor } from "../core/doc-refs.js";
+import { completionAt, definitionDoc, docRefAt, dropImport, keysOf, toolFor } from "../core/doc-refs.js";
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
@@ -134,4 +134,13 @@ test("with names left to a language server, a doc ref is only a url's string", (
   assert.equal(docRefAt(code, code.indexOf("automerge") + 3, { names: false }), A);
   assert.equal(docRefAt(code, code.length, { names: false }), null);
   assert.equal(docRefAt(code, code.length), A);
+});
+
+test("a doc dropped onto a pattern is an import of it, named after it", () => {
+  assert.equal(dropImport("2x2 rib.knitout.js", A), `import _2x2Rib from "${A}"\n`);
+  assert.equal(dropImport("Swatch Sizes", A), `import swatchSizes from "${A}"\n`);
+  assert.equal(dropImport("...", A), `import doc from "${A}"\n`);
+  // what it writes is a source like any other import
+  const code = dropImport("lib.js", A);
+  assert.equal(docRefAt(code, code.indexOf("automerge") + 3), A);
 });
