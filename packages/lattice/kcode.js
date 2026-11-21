@@ -50,3 +50,11 @@ export function converter() {
 		destroy: () => worker?.terminate(),
 	}
 }
+
+// what a .kc's autobuild does now, in this browser: "build" it (it's behind
+// its .k), "wait" for the .k to move, or "stop" listening: autobuild's off,
+// or the .kc isn't open here (shown again, it starts again)
+export function autobuildStep({auto, showing, behind}) {
+	if (!auto || !showing) return "stop"
+	return behind ? "build" : "wait"
+}

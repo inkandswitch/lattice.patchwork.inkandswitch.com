@@ -6,7 +6,7 @@
 // knitoutjs's wm.js, it imports nothing of wm's and gets `api` instead (see
 // packages/wm/workspace.js)
 import {createEffect, createRoot, createSignal, on, onCleanup} from "solid-js"
-import {buildKcode, converter} from "./kcode.js"
+import {autobuildStep, buildKcode, converter} from "./kcode.js"
 import {docText, fileExtension, knitoutOf, textHash} from "./files.js"
 
 const AUTOBUILD_DELAY = 600
@@ -117,13 +117,20 @@ const behind = (kcUrl, api) => {
 	return k.kcodeTarget === kcUrl && !!k.textHash && !!kc.kcodeSourceHash && k.textHash !== kc.kcodeSourceHash
 }
 
-// while autobuild's on: once the .k's text moves, wait for it to settle and
-// build it again. started the first time the .kc's status is asked for (so
-// only while it's open here), and stopped when autobuild goes off. a
-// workspace of its own each (another project's is another api)
+// is the .kc open in a pane here (any tab of one). a workspace without
+// showing() never autobuilds
+const showing = (kcUrl, api) => api.showing?.(kcUrl) ?? false
+
+// while autobuild's on and the .kc's open here: once the .k's text moves,
+// wait for it to settle and build it again. started when the .kc's status is
+// asked for (its pane's bar), stopped when autobuild goes off or the .kc's
+// last pane closes (a closed .kc's status isn't asked for, so it starts
+// again, once, when it's shown again). a workspace of its own each (another
+// project's is another api)
 function startAutobuild(kcUrl, api) {
 	const mine = localOf(kcUrl)
-	if (!mine.auto() || mine.watchingIn === api) return
+	if (mine.watchingIn === api) return
+	if (autobuildStep({auto: mine.auto(), showing: showing(kcUrl, api), behind: false}) === "stop") return
 	stopAutobuild(kcUrl)
 	mine.watchingIn = api
 	mine.watching = createRoot(dispose => {
@@ -131,13 +138,20 @@ function startAutobuild(kcUrl, api) {
 		createEffect(
 			on(
 				() => {
-					if (!behind(kcUrl, api)) return null
+					const step = autobuildStep({auto: mine.auto(), showing: showing(kcUrl, api), behind: behind(kcUrl, api)})
+					if (step !== "build") return {step}
 					const kUrl = linksOf(kcUrl, api).kcodeSource
-					return {kUrl, hash: linksOf(kUrl, api).textHash}
+					return {step, kUrl, hash: linksOf(kUrl, api).textHash}
 				},
-				moved => {
+				next => {
 					clearTimeout(timer)
-					if (moved) timer = setTimeout(() => build(moved.kUrl, kcUrl, api), AUTOBUILD_DELAY)
+					if (next.step === "build") timer = setTimeout(() => build(next.kUrl, kcUrl, api), AUTOBUILD_DELAY)
+					// (not from inside its own effect)
+					else if (next.step === "stop") {
+						queueMicrotask(() => {
+							if (mine.watching === dispose) stopAutobuild(kcUrl)
+						})
+					}
 				},
 			),
 		)
@@ -240,7 +254,7 @@ export const kcode = {
 		const kUrl = kOf(url, api)
 		if (!kUrl) return null
 		const mine = localOf(url)
-		if (mine.auto() && mine.watchingIn !== api) queueMicrotask(() => startAutobuild(url, api))
+		if (mine.auto() && mine.watchingIn !== api && showing(url, api)) queueMicrotask(() => startAutobuild(url, api))
 		const rebuild = title => ({icon: "rebuild", label: "rebuild", title, run: () => build(kUrl, url, api)})
 		if (mine.running()) return {state: "running", text: "building…"}
 		const error = mine.error()
