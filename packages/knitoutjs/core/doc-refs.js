@@ -118,6 +118,25 @@ export function identifierFor(name) {
 // other doc alike, so it's a source of the build, a link, and typed
 export const dropImport = (name, url) => `import ${identifierFor(name)} from "${url}"\n`;
 
+// the last code parsed, as a drag asks again and again while it moves
+let parsed = { code: null, tree: null };
+
+// the line (from 1) a doc dropped onto `line` of a pattern has its import
+// written above: that line, at the top level, but an import can't go in a
+// function or a block (or the middle of an object), so inside a statement
+// it's the line that statement starts on. past the end, the last line
+export function importLineAt(code, line) {
+  const lines = code.split("\n");
+  const at = Math.min(Math.max(line, 1), lines.length);
+  let pos = 0;
+  for (let i = 0; i < at - 1; i++) pos += lines[i].length + 1;
+  if (parsed.code !== code) parsed = { code, tree: parser.parse(code) };
+  for (let node = parsed.tree.topNode.firstChild; node; node = node.nextSibling) {
+    if (node.from <= pos && pos < node.to) return code.slice(0, node.from).split("\n").length;
+  }
+  return at;
+}
+
 // `find(url)`, each url's answer kept, but one that's taken longer than `ms`
 // or failed isn't: it's tried again on the next ask. a find that never comes
 // back would otherwise hold back every completion after it

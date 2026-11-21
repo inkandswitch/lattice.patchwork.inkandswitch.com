@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completionAt, definitionDoc, docRefAt, dropImport, findWithin, keysOf, toolFor } from "../core/doc-refs.js";
+import { completionAt, definitionDoc, docRefAt, dropImport, findWithin, importLineAt, keysOf, toolFor } from "../core/doc-refs.js";
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
@@ -169,4 +169,36 @@ test("a find that throws straight away is a rejection, not a throw", async () =>
     throw new Error("thrown");
   }, 1000);
   await assert.rejects(find(A), /thrown/);
+});
+
+test("a dropped import goes on the line it's dropped on, at the top level", () => {
+  const code = `import knitout from "knitout"\n\nconst k = new knitout.Writer({ carriers: ["1"] })\nk.in("1")\n`;
+  for (const line of [1, 2, 3, 4, 5]) assert.equal(importLineAt(code, line), line);
+});
+
+test("a dropped import goes above the statement it's dropped inside", () => {
+  const code = [
+    `const k = 1`, // 1
+    `function rib(n) {`, // 2
+    `  for (let i = 0; i < n; i++) {`, // 3
+    `    k.knit("+", "f" + i, "1")`, // 4
+    `  }`, // 5
+    `}`, // 6
+    `for (let i = 0; i < 3; i++)`, // 7
+    `  rib(i)`, // 8
+    `const sizes = {`, // 9
+    `  small: 10,`, // 10
+    `  large: 20,`, // 11
+    `}`, // 12
+    `k.write("out.k")`, // 13
+  ].join("\n");
+  assert.equal(importLineAt(code, 2), 2);
+  for (const line of [3, 4, 5, 6]) assert.equal(importLineAt(code, line), 2);
+  assert.equal(importLineAt(code, 8), 7);
+  for (const line of [10, 11, 12]) assert.equal(importLineAt(code, line), 9);
+  assert.equal(importLineAt(code, 13), 13);
+  // past the end, the last line
+  assert.equal(importLineAt(code, 40), 13);
+  // a statement that starts partway along a line: the line it starts on
+  assert.equal(importLineAt(`a(); function f() {\n  b()\n}\n`, 2), 1);
 });

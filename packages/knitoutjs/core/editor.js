@@ -6,7 +6,7 @@ import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
-import { definitionDoc, dropImport, toolFor } from "./doc-refs.js";
+import { definitionDoc, dropImport, importLineAt, toolFor } from "./doc-refs.js";
 import { languageServerDocs } from "./language-server.js";
 import { runInto } from "./run.js";
 import { importsOf, pinsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
@@ -597,11 +597,16 @@ export default function KnitoutEditorTool(handle, element, context) {
     `;
   }, element);
 
-  // dropping docs onto the code writes a line above the one under the pointer:
-  // an import of each, a .js or any other doc, so it's a source of the build
+  // dropping docs onto the code writes a line above the one under the pointer
+  // (or, inside a function or a block, above the statement it's in, where an
+  // import can go): an import of each, a .js or any other doc, so it's a
+  // source of the build. the line said is the one it goes above, which the
+  // frame shows
   function lineAt(x, y) {
     if (!view) return null;
-    const line = view.state.doc.lineAt(view.posAtCoords({ x, y }, false));
+    const { doc } = view.state;
+    const under = doc.lineAt(view.posAtCoords({ x, y }, false)).number;
+    const line = doc.line(importLineAt(doc.toString(), under));
     return {
       line: line.number,
       top: view.documentTop + view.lineBlockAt(line.from).top,
