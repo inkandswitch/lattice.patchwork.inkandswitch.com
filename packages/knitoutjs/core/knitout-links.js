@@ -15,6 +15,16 @@ export function importsOf(doc) {
   return [...new Set(collectSources(docText(doc)).map((use) => unpinned(use.url)))];
 }
 
+// every doc whose moving makes the .k a .js writes stale, unpinned, each once:
+// the .js's literal imports, then the .k's sources after the first (which
+// include docs only reached at runtime). never the .js (`self`) or the .k
+// (`target`): a build writes the .k, so watching it would rebuild forever
+export function watchedSources(jsDoc, kDoc, { self, target }) {
+  const known = (kDoc?.knitoutSources ?? []).slice(1).map((url) => unpinned(String(url)));
+  const skip = new Set([self && unpinned(self), target && unpinned(target)]);
+  return [...new Set([...importsOf(jsDoc), ...known])].filter((url) => !skip.has(url));
+}
+
 // what wm keeps of a doc for us: its knitout links, and a .js's code now,
 // to tell when the .k it writes is out of date
 export const linksOf = (url, api) => api.docInfo(url).ext?.knitout ?? {};

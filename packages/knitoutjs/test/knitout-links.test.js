@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildState, importsOf, links } from "../core/knitout-links.js";
+import { buildState, importsOf, links, watchedSources } from "../core/knitout-links.js";
 
-const JS = "automerge:js";
-const K = "automerge:k";
+const JS = "automerge:jsAAA";
+const K = "automerge:kAAA";
 const LIB = "automerge:lib";
 const OUT = "automerge:elsewhere";
 
@@ -84,4 +84,24 @@ test("a .js imports each url once, in order, unpinned", () => {
 
 test("a .k imports nothing", () => {
   assert.deepEqual(importsOf({ name: "p.k", content: `import a from "automerge:aaa"` }), []);
+});
+
+const IMP = "automerge:impAAA";
+const DYN = "automerge:dynBBB";
+
+test("watchedSources: imports, then the .k's other sources, each once, unpinned", () => {
+  const js = { name: "a.js", content: `import "/${IMP}"\nconst d = await doc("${DYN}#abc")` };
+  const k = { knitoutSources: [`${JS}#h1`, `${DYN}#h2`, `automerge:Mre#h3`] };
+  assert.deepEqual(watchedSources(js, k, { self: JS, target: K }), [IMP, DYN, "automerge:Mre"]);
+});
+
+test("watchedSources: never the .js or its target, even if listed", () => {
+  const js = { name: "a.js", content: `import "${K}"\nimport "${JS}"\nimport "${IMP}"` };
+  const k = { knitoutSources: [`${JS}#h1`, `${K}#h2`, `${JS}#h3`, `${IMP}#h4`] };
+  assert.deepEqual(watchedSources(js, k, { self: JS, target: K }), [IMP]);
+});
+
+test("watchedSources: no .k, imports only", () => {
+  const js = { name: "a.js", content: `import "${IMP}"` };
+  assert.deepEqual(watchedSources(js, undefined, { self: JS, target: undefined }), [IMP]);
 });

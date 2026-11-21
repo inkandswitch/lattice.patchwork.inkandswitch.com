@@ -6,6 +6,7 @@ import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { runInto } from "./run.js";
+import { watchedSources } from "./knitout-links.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
@@ -156,8 +157,64 @@ export default function KnitoutEditorTool(handle, element, context) {
     let timer;
     let current;
 
+    // every doc that can make the target .k stale (the .js's imports, and
+    // what the .k was last built from) is watched, so a change to one
+    // rebuilds, if autobuild is on. never the .js or the .k themselves: a
+    // build writes the .k. wm says a .k is "building…" on the promise of this
+    const watching = new Map(); // unpinned url → { handle? }
+    const warned = new Set();
+    let kWatch = null; // { url, handle? }: the target .k, for its sources
+    let closed = false;
+
+    function warnOnce(url, error) {
+      if (warned.has(url)) return;
+      warned.add(url);
+      console.warn(`knitoutjs: can't watch ${url}`, error);
+    }
+
+    function recompute() {
+      if (closed) return;
+      const want = watchedSources(handle.doc(), kWatch?.handle?.doc(), {
+        self: handle.url,
+        target: target(),
+      });
+      for (const [url, entry] of watching) {
+        if (want.includes(url)) continue;
+        entry.handle?.off("change", edited);
+        watching.delete(url);
+      }
+      for (const url of want) {
+        if (watching.has(url)) continue;
+        const entry = {};
+        watching.set(url, entry);
+        repo.find(url).then((found) => {
+          // it may have left the set (or this closed) while it was found
+          if (closed || watching.get(url) !== entry) return;
+          entry.handle = found;
+          found.on("change", edited);
+        }, (error) => warnOnce(url, error));
+      }
+    }
+
+    // the target .k's own doc says what it was built from; a build writes it
+    function watchTarget() {
+      const url = target();
+      if (kWatch?.url === url) return recompute();
+      kWatch?.handle?.off("change", recompute);
+      const entry = (kWatch = url ? { url } : null);
+      recompute();
+      if (!entry) return;
+      repo.find(url).then((found) => {
+        if (closed || kWatch !== entry) return;
+        entry.handle = found;
+        found.on("change", recompute);
+        recompute();
+      }, (error) => warnOnce(url, error));
+    }
+
     const onChange = () => {
       setTarget(knitoutOf(handle.doc()).target);
+      watchTarget();
       // an error is about the code as it was; once that changes, it's gone
       if (status().state === "error" && status().line != null) {
         setStatus({ state: "idle" });
@@ -170,12 +227,17 @@ export default function KnitoutEditorTool(handle, element, context) {
       timer = setTimeout(now, AUTO_RUN_DELAY);
     }
     handle.on("change", onChange);
+    watchTarget();
     const builder = { now: () => now(), goToLine: (line) => goToLine(line) };
     setBuild(handle.url, { state: "idle", auto: auto(), builder });
     onCleanup(() => {
       clearTimeout(timer);
       current?.abort();
       handle.off("change", onChange);
+      closed = true;
+      kWatch?.handle?.off("change", recompute);
+      for (const entry of watching.values()) entry.handle?.off("change", edited);
+      watching.clear();
       // another editor showing this .js may have taken over since
       if (builderOf(handle.url) === builder) {
         setBuild(handle.url, { state: "idle", line: undefined, message: undefined, builder: undefined });
@@ -186,11 +248,8 @@ export default function KnitoutEditorTool(handle, element, context) {
     // only; a .k with editable text in it (someone's copy, or one typed by
     // hand) isn't written over without asking
     async function now({ overwrite = false } = {}) {
-      const url = target();
-      if (!url) {
-        setStatus({ state: "error", message: "pick a .k file to write to" });
-        return;
-      }
+      // no target yet: make its .k, and build into that
+      const url = target() ?? await newTarget();
       const kHandle = await repo.find(url);
       const content = kHandle.doc()?.content;
       if (typeof content === "string" && content.trim() && !overwrite) {
@@ -244,7 +303,9 @@ export default function KnitoutEditorTool(handle, element, context) {
         /\.knitout\.js$|\.js$/,
         "",
       );
-      pickTarget(await project.createFile(base + ".k"));
+      const url = await project.createFile(base + ".k");
+      pickTarget(url);
+      return url;
     }
 
     function stop() {
