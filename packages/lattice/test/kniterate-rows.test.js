@@ -177,3 +177,24 @@ test("what's on the needles after each row", () => {
 	assert.equal(after[1].back.get(2), 1)
 	assert.equal(after[2].front.get(3), undefined)
 })
+
+test("the sources line isn't a row", () => {
+	const body = ["in 3", ...row("+", 1, 4), "x-speed-number 200", ...row("-", 1, 4), "xfer f2 b2"]
+	const plain = k(body)
+	const pinned = [";!knitout-2", ";;Carriers: 1 2 3 4 5 6", "x-patchwork-sources automerge:js#1 automerge:lib#2|3", ...body].join("\n")
+	// the same rows, but for which lines they're on
+	const shape = text =>
+		rowsOf(text).rows.map(r => ({
+			kind: r.kind,
+			dir: r.dir,
+			carriers: r.carriers,
+			rack: r.rack,
+			speed: r.speed,
+			stitch: r.stitch,
+			roller: r.roller,
+			front: [...r.front].map(([n, {op}]) => [n, op]),
+			back: [...r.back].map(([n, {op}]) => [n, op]),
+		}))
+	assert.equal(rowsOf(pinned).rows.length, 3)
+	assert.deepEqual(shape(pinned), shape(plain))
+})

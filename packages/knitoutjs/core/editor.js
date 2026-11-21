@@ -465,31 +465,43 @@ export default function KnitoutEditorTool(handle, element, context) {
     open(copy, element, "right", "editor");
   }
 
-  // a .k that a .js wrote is stored whole, so it's read only here
+  // a .k that a .js wrote is stored whole, so it's read only here. so is a
+  // .kc a .k was built into, which says which .k (and has no copy to make:
+  // kcode isn't for editing by hand)
   function ReadOnlyNote() {
     const [doc, setDoc] = createSignal(handle.doc());
     const onChange = () => setDoc(handle.doc());
     handle.on("change", onChange);
     onCleanup(() => handle.off("change", onChange));
-    const writer = () =>
-      project.files().find((file) => file.url === knitoutOf(doc()).source)?.name;
+    const isKc = () => fileExtension(doc()) === "kc";
+    const nameOf = (url) => project.files().find((file) => file.url === url)?.name;
+    const writer = () => nameOf(knitoutOf(doc()).source);
+    const kName = () => nameOf(knitoutOf(doc()).kcodeSource);
     return html`
       <${Show}
         when=${() => !isJs && doc() && typeof doc().content !== "string"}
       >
         <div class="knitoutjs-readonly">
-          <span>
+          <${Show}
+            when=${isKc}
+            fallback=${html`<span>
                 ${icon("lock")} read only: ${() =>
                   writer() ?? "a pattern"} writes this file each
                 time it's built
               </span>
-          <button
-            class="knitoutjs-button"
-            title="make a copy of this .k as text you can change by hand"
-            onClick=${editableCopy}
-          >
+              <button
+                class="knitoutjs-button"
+                title="make a copy of this .k as text you can change by hand"
+                onClick=${editableCopy}
+              >
                 ${icon("pencil")} make an editable copy
-              </button>
+              </button>`}
+          >
+            <span>
+              ${icon("lock")} read only: kcode built from ${() =>
+                kName() ?? "a .k"}, each time it's built
+            </span>
+          <//>
         </div>
         <//>
     `;

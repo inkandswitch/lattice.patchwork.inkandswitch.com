@@ -1,6 +1,7 @@
 import {splice, updateText} from "@automerge/automerge"
 import {checkPanel, located} from "./checks.js"
-import {docText, knitoutOf, moduleWorker, saveFile} from "./files.js"
+import {docText, knitoutOf, saveFile} from "./files.js"
+import {converter} from "./kcode.js"
 import {
 	backAt,
 	backColumn,
@@ -20,7 +21,6 @@ import {withIcon} from "../wm/ui/icons.js"
 import {stylesheet} from "../wm/ui/stylesheet.js"
 
 const STYLESHEET = new URL("./kniterate.css", import.meta.url).href
-const WORKER_URL = new URL("./kniterate-worker.js", import.meta.url)
 const REDRAW_DELAY = 250
 
 // the kniterate's beds: needles 0–252 (more are drawn if a .k goes past)
@@ -92,48 +92,6 @@ function jsLinesOf(text) {
 		const match = line.match(/;!source:(-?\d+)/)
 		return match ? Number(match[1]) : null
 	})
-}
-
-// kcode from knitout, in a worker where the browser allows it
-function converter() {
-	let worker = null
-	try {
-		worker = moduleWorker(WORKER_URL)
-	} catch {}
-	const waiting = new Map()
-	let requests = 0
-	if (worker) {
-		worker.onmessage = ({data}) => {
-			const {resolve} = waiting.get(data.id) ?? {}
-			waiting.delete(data.id)
-			resolve?.(data)
-		}
-		worker.onerror = event => {
-			event.preventDefault()
-			console.warn("kniterate: converting on the page instead of a worker:", event.message)
-			worker.terminate()
-			worker = null
-			for (const [, {resolve, request}] of waiting) inPage(request).then(resolve)
-			waiting.clear()
-		}
-	}
-	async function inPage({text, name, options}) {
-		const {knitoutToKcode} = await import("../knitoutjs/core/vendor/knitout-to-kcode.js")
-		try {
-			return {kcode: knitoutToKcode(text, name, options), warnings: []}
-		} catch (error) {
-			return {error: String(error?.message ?? error), warnings: []}
-		}
-	}
-	return {
-		convert(text, name, options) {
-			const request = {id: ++requests, text, name, options}
-			if (!worker) return inPage(request)
-			worker.postMessage(request)
-			return new Promise(resolve => waiting.set(request.id, {resolve, request}))
-		},
-		destroy: () => worker?.terminate(),
-	}
 }
 
 function button(text, title, onClick) {
@@ -1933,8 +1891,21 @@ export default function KniterateTool(handle, element, context = {}) {
 		}, REDRAW_DELAY)
 	}
 
+	// a .k built into a .kc saves that (as it was last built: its pane says
+	// if it's out of date); any other is converted as it is
 	async function exportKcode() {
 		const name = docName()
+		const target = knitoutOf(handle.doc()).kcodeTarget
+		const repo = context.repo ?? element.repo
+		if (target && repo) {
+			try {
+				const kc = (await repo.find(target)).doc()
+				saveFile(docText(kc), kc?.name ?? name + ".kc")
+				return
+			} catch (error) {
+				console.warn("kniterate: couldn't find its .kc, converting this instead:", error)
+			}
+		}
 		const result = await kcode.convert(docText(handle.doc()), name, {})
 		if (result.error) {
 			errorBar.textContent = result.error

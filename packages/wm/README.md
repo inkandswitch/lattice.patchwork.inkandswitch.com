@@ -36,7 +36,11 @@ built on, and Knitout JS too.
   too.
 
 what an app adds to the panes it adds as an extension: see the top of
-`workspace.js`. knitoutjs's is `../knitoutjs/wm.js`.
+`workspace.js`. knitoutjs's is `../knitoutjs/wm.js`. an extension can say
+how a doc is doing (`status`: a line at the end of its pane's bar, one
+extension's), and give it buttons (`actions`: every extension's, just before
+the status, looking like its action): lattice's `kcode-wm.js` has a .k's
+"build kcode" there.
 
 it started as the panes in [knitoutjs](../knitoutjs), and is
 [AGPL-3.0-or-later](LICENSE), as it was there.

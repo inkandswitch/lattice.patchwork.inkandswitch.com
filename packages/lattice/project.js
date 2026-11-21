@@ -5,6 +5,7 @@ import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { mountProject } from "../wm/project-view.js";
 import { datatypeItem } from "../wm/patchwork/docs.js";
 import { knitout } from "../knitoutjs/wm.js";
+import { kcode } from "./kcode-wm.js";
 import { wearLook } from "../knitoutjs/look.js";
 import { isOldKnitoutjs, updateKnitoutjs, OLD_KNITOUTJS_TYPES } from "../knitoutjs/app/migrate.js";
 import { tools } from "./files.js";
@@ -113,12 +114,13 @@ function lattice(baseRepo, hive) {
   };
 }
 
-// what lattice's workspace has: its tools, knitoutjs's extension and its
-// own, and knitoutjs's projects from before, which it updates
+// what lattice's workspace has: its tools, knitoutjs's extension, .kc files
+// built from a .k, and its own, and knitoutjs's projects from before, which
+// it updates
 export function latticeOptions(baseRepo, hive) {
   return {
     tools,
-    extensions: [knitout, lattice(baseRepo, hive)],
+    extensions: [knitout, kcode, lattice(baseRepo, hive)],
     self: PROJECT_TOOLS,
     old: { is: isOldKnitoutjs, update: updateKnitoutjs, auto: true },
   };

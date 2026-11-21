@@ -236,8 +236,8 @@ function cellStyle(node, direction) {
  *              file, if not what its name says. a doc none of them shows
  *              shows with patchwork's own tool for it
  *   extensions what the app adds to the panes: [{name, watch, links,
- *              status, touched, menu, presence}], each part optional. see
- *              EXTENSIONS below
+ *              status, actions, touched, menu, presence}], each part
+ *              optional. see EXTENSIONS below
  *   self       tool ids never offered in a pane (the app's own project and
  *              frame tools: not inside a pane of themselves)
  *   sidebar    the files sidebar's state (sidebars.js), when something else
@@ -265,6 +265,10 @@ function cellStyle(node, direction) {
  *   status(url, api)     a line at the end of its pane's bar, or null:
  *                        {state, text?, stuck?, action?: {label, icon,
  *                        title, run(from)}}. stuck marks the pane out
+ *   actions(url, api)    buttons for its pane's bar, just before the status
+ *                        (and looking like its action): [{icon?, label,
+ *                        title?, run(from)}]. every extension's are drawn,
+ *                        in order
  *   touched(url, api)    when it was last done something to, if not edited:
  *                        {verb, at, flash?}: "built 3 min ago" in the files.
  *                        flash tints its panes when at changes
@@ -901,6 +905,8 @@ export function mountWorkspace(
     return null;
   };
   const statusOf = (url) => firstOf("status", url);
+  // unlike a status, every extension's actions are drawn
+  const actionsOf = (url) => extensions.flatMap((extension) => extension.actions?.(url, api) ?? []);
   const touchedOf = (url) => firstOf("touched", url);
 
   // ── tools: each panel's tool lives in its own element, which moves with
@@ -2223,7 +2229,7 @@ export function mountWorkspace(
     });
 
     // nothing to say, no bar: the tab runs straight into the tool
-    return html`<${Show} when=${() => chips().length || statusOf(panel.url)}>
+    return html`<${Show} when=${() => chips().length || actionsOf(panel.url).length || statusOf(panel.url)}>
       <div class="lattice-wm-bar">
         <${For} each=${chips}>
           ${(link) => html`<button
@@ -2241,8 +2247,29 @@ export function mountWorkspace(
           </button>`}
         <//>
         <span class="lattice-wm-spacer"></span>
+        <${Actions} panel=${panel} />
         <${Status} panel=${panel} />
       </div>
+    <//>`;
+  }
+
+  // what the extensions have to do with the doc, looking like a status's
+  // action (and sitting just before it)
+  function Actions(props) {
+    const panel = props.panel;
+    const actions = () => actionsOf(panel.url);
+    return html`<${Show} when=${() => actions().length}>
+      <span class="lattice-wm-status">
+        <${For} each=${actions}>
+          ${(action) => html`<button
+            class="lattice-wm-status-action"
+            title=${action.title ?? ""}
+            onClick=${() => action.run(panel.id)}
+          >
+            ${action.icon ? icon(action.icon) : ""} ${action.label}
+          </button>`}
+        <//>
+      </span>
     <//>`;
   }
 

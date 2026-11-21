@@ -81,7 +81,7 @@ export const TOOLS = {
     name: "text",
     title: "see the file's text (and change it, if it isn't generated)",
     position: 1,
-    extensions: ["js", "k"],
+    extensions: ["js", "k", "kc"],
     load: () => import("../knitoutjs/core/editor.js"),
   },
   terminal: {
