@@ -1,8 +1,11 @@
 import { EditorState, Prec } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { completionAt, docRefAt, keysOf } from "./doc-refs.js";
+import { completionAt, docRefAt, findWithin, keysOf } from "./doc-refs.js";
 import { fileExtension } from "./files.js";
 import { plainValue } from "./graph.js";
+
+// how long a completion waits on a doc being found
+const FIND_WAIT = 2000;
 
 const isMac = () => typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");
 
@@ -20,12 +23,8 @@ const isMac = () => typeof navigator !== "undefined" && /Mac/.test(navigator.pla
 // each field twice)
 export function docRefs({ repo, open, names = true }) {
   // a doc's handle, found once for as long as the editor lives. a find that
-  // rejects is no completions
-  const found = new Map();
-  const find = (url) => {
-    if (!found.has(url)) found.set(url, Promise.resolve().then(() => repo.find(url)));
-    return found.get(url);
-  };
+  // rejects, or takes longer than FIND_WAIT, is no completions this time
+  const find = findWithin((url) => repo.find(url), FIND_WAIT);
   // isJs needs the doc to be loaded, so it's what's learnt of each so far
   const extensions = new Map();
   const isJs = (url) => extensions.get(url) === "js";

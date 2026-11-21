@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completionAt, definitionDoc, docRefAt, dropImport, keysOf, toolFor } from "../core/doc-refs.js";
+import { completionAt, definitionDoc, docRefAt, dropImport, findWithin, keysOf, toolFor } from "../core/doc-refs.js";
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
@@ -143,4 +143,30 @@ test("a doc dropped onto a pattern is an import of it, named after it", () => {
   // what it writes is a source like any other import
   const code = dropImport("lib.js", A);
   assert.equal(docRefAt(code, code.indexOf("automerge") + 3), A);
+});
+
+test("a find that takes too long is given up on, and tried again next time", async () => {
+  let calls = 0;
+  let answer = () => new Promise(() => {});
+  const find = findWithin(() => (calls++, answer()), 20);
+  await assert.rejects(find(A), /took too long/);
+  answer = () => Promise.resolve("handle");
+  assert.equal(await find(A), "handle");
+  assert.equal(await find(A), "handle");
+  assert.equal(calls, 2);
+});
+
+test("a find that fails is tried again next time", async () => {
+  let calls = 0;
+  const find = findWithin(() => (++calls === 1 ? Promise.reject(new Error("no")) : Promise.resolve("handle")), 1000);
+  await assert.rejects(find(A), /no/);
+  assert.equal(await find(A), "handle");
+  assert.equal(calls, 2);
+});
+
+test("a find that throws straight away is a rejection, not a throw", async () => {
+  const find = findWithin(() => {
+    throw new Error("thrown");
+  }, 1000);
+  await assert.rejects(find(A), /thrown/);
 });

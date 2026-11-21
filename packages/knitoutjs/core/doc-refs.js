@@ -94,8 +94,9 @@ export function keysOf(value, path) {
 export const toolFor = (doc) => (fileExtension(doc) === "js" ? "editor" : undefined);
 
 // the doc a language server's definition is in, when it's in one: an editor's
-// file, or one we gave the server, is /<documentId>/index.<ext>. anything else
-// (typescript's own lib files, ours under /lattice/) is null
+// file, or one we gave the server (a .js's text, or the .d.ts of a doc's
+// types), is /<documentId>/index.<ext>. anything else (typescript's own lib
+// files, our globals under /lattice/) is null
 export function definitionDoc(uri) {
   const id = /^file:\/\/\/([1-9A-HJ-NP-Za-km-z]+)\/index\.[\w.]+$/.exec(uri ?? "")?.[1];
   return id ? `automerge:${id}` : null;
@@ -116,3 +117,25 @@ export function identifierFor(name) {
 // the line a doc dropped onto a pattern writes: an import, a .js or any
 // other doc alike, so it's a source of the build, a link, and typed
 export const dropImport = (name, url) => `import ${identifierFor(name)} from "${url}"\n`;
+
+// `find(url)`, each url's answer kept, but one that's taken longer than `ms`
+// or failed isn't: it's tried again on the next ask. a find that never comes
+// back would otherwise hold back every completion after it
+export function findWithin(find, ms) {
+  const found = new Map();
+  return (url) => {
+    if (found.has(url)) return found.get(url);
+    let timer;
+    const answer = Promise.race([
+      Promise.resolve().then(() => find(url)),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`finding ${url} took too long`)), ms);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    found.set(url, answer);
+    answer.catch(() => {
+      if (found.get(url) === answer) found.delete(url);
+    });
+    return answer;
+  };
+}
