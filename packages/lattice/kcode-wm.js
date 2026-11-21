@@ -146,10 +146,12 @@ function startAutobuild(kcUrl, api) {
 				next => {
 					clearTimeout(timer)
 					if (next.step === "build") timer = setTimeout(() => build(next.kUrl, kcUrl, api), AUTOBUILD_DELAY)
-					// (not from inside its own effect)
+					// not from inside its own effect, and not if it's been shown
+					// again since (a pane moved, say)
 					else if (next.step === "stop") {
 						queueMicrotask(() => {
-							if (mine.watching === dispose) stopAutobuild(kcUrl)
+							const still = autobuildStep({auto: mine.auto(), showing: showing(kcUrl, api), behind: false}) === "stop"
+							if (still && mine.watching === dispose) stopAutobuild(kcUrl)
 						})
 					}
 				},

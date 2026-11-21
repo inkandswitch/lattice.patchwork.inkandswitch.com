@@ -40,7 +40,8 @@ what an app adds to the panes it adds as an extension: see the top of
 how a doc is doing (`status`: a line at the end of its pane's bar, one
 extension's), and give it buttons (`actions`: every extension's, just before
 the status, looking like its action): lattice's `kcode-wm.js` has a .k's
-"build kcode" there.
+"build kcode" there. `api.showing(url)` says whether a doc's open in a pane
+(reactively), for what should only go on while it is: a .kc's autobuild.
 
 it started as the panes in [knitoutjs](../knitoutjs), and is
 [AGPL-3.0-or-later](LICENSE), as it was there.

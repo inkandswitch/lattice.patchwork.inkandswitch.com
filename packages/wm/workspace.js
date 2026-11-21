@@ -282,8 +282,9 @@ function cellStyle(node, direction) {
  *                        person.ext[name][key]
  *
  * api: {repo, createFile(name, fields), reveal(url, from, edge, tool),
- * openRow([[{url, tool}]]), files(), people(), docInfo(url), ago(time)}.
- * `from` is what an action's run is handed: the pane it's in
+ * openRow([[{url, tool}]]), files(), people(), docInfo(url), ago(time),
+ * showing(url)}. `from` is what an action's run is handed: the pane it's in.
+ * showing is whether a doc's open in a pane here (in any tab), reactively
  */
 export function mountWorkspace(
   element,
@@ -1171,6 +1172,9 @@ export function mountWorkspace(
     people: () => people,
     docInfo,
     ago: (time) => ago(time, clock()),
+    // is it open in a pane here (in any of its tabs): read in an effect, it
+    // changes as panes open and close
+    showing: (url) => (paneCounts().get(url) ?? 0) > 0,
   };
 
   // what the extensions add to the + menu
