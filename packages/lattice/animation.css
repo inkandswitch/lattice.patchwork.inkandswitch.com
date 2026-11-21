@@ -35,16 +35,29 @@
 		font: 12px var(--knitout-animation-sans);
 	}
 
-	& .knitout-animation-bar {
-		display: flex;
-		flex: none;
-		flex-wrap: wrap;
-		align-items: center;
+	/* the bar's trays (wm/ui/trays.css): the play button filled, the
+	   scrubber taking the room there is */
+	& .knitout-animation-bar .knitout-animation-play {
+		--knitout-animation-button-fill: var(--knitout-animation-accent);
+		min-width: 5.5em;
+		background: var(--knitout-animation-button-fill);
+		color: var(--knitout-animation-button-ink, var(--knitout-animation-accent-ink));
+	}
+
+	/* the checks button and the yarns, at home in a tray */
+	& .knitout-animation-bar .tray .knitout-button {
+		height: 32px;
+		border: 0;
+		border-radius: 9px;
+		box-shadow: none;
+		background: none;
+	}
+
+	& .knitout-animation-bar .knitout-animation-looks {
 		gap: 6px;
-		padding: 5px 6px;
-		border-bottom: 1px solid var(--knitout-animation-line-soft);
-		background: var(--knitout-animation-chrome);
-		color: var(--knitout-animation-chrome-ink);
+		padding: 3px 8px;
+		min-height: 38px;
+		box-sizing: border-box;
 	}
 
 	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
@@ -72,28 +85,6 @@
 	/* the one button that does something (its text by contrast with its
 	   fill: latticework.css's --knitout-animation-button-ink. doubled up to outrank a shell's
 	   `button { color: inherit }`) */
-	& .knitout-button.knitout-animation-play {
-		--knitout-animation-button-fill: var(--knitout-animation-accent);
-		min-width: 5em;
-		background: var(--knitout-animation-button-fill);
-		color: var(--knitout-animation-button-ink, var(--knitout-animation-accent-ink));
-	}
-
-	/* seen from behind */
-	& .knitout-animation-flip[aria-pressed="true"] {
-		--knitout-animation-button-fill: var(--knitout-animation-accent);
-		background: var(--knitout-animation-button-fill);
-		color: var(--knitout-animation-button-ink, var(--knitout-animation-accent-ink));
-	}
-
-	& .knitout-animation-speed {
-		padding: 2px 4px;
-		border: 1px solid var(--knitout-animation-line);
-		border-radius: 2px;
-		background: var(--knitout-animation-sheet);
-		color: inherit;
-		font: inherit;
-	}
 
 	/* the scrubber, over a strip of little squares of how it looks along the
 	   way (filmstrip.js): its thumb's a playhead, and what's to come is faded */
@@ -164,15 +155,6 @@
 			outline-offset: 2px;
 			border-radius: 4px;
 		}
-	}
-
-	& .knitout-animation-toggle {
-		display: flex;
-		align-items: center;
-		gap: 3px;
-		color: var(--knitout-animation-muted);
-		font-size: 11px;
-		cursor: pointer;
 	}
 
 	& .knitout-animation-counter {

@@ -9,7 +9,8 @@ import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
 import {YARNS_CHANGED, yarnPicker, yarnStrands} from "../knitoutjs/core/yarns.js"
-import {icon} from "../wm/ui/icons.js"
+import {boldIcon} from "../wm/ui/bold-icons.js"
+import {TRAYS_STYLESHEET, press, speedTray, tray, trayBar, trayButton} from "../wm/ui/trays.js"
 import {stylesheet} from "../wm/ui/stylesheet.js"
 import {viewStateOf} from "../wm/view-state.js"
 
@@ -61,12 +62,12 @@ const FLIP_TIME = 0.45
 const DURATIONS = {knit: 1, tuck: 1, split: 1, drop: 0.6, miss: 0.35, rack: 0.6}
 // and turning the carriage round at the end of a pass: shunk-shunk
 const TURN = 1.4
+// slowest first, as the speed tray's animals (wm/ui/trays.js)
 const SPEEDS = [
-	{name: "slow", perSecond: 1.5},
-	{name: "walk", perSecond: 5},
-	{name: "run", perSecond: 20},
-	{name: "fly", perSecond: 80},
-	{name: "zoom", perSecond: 400},
+	{name: "snail", perSecond: 1.5},
+	{name: "turtle", perSecond: 5},
+	{name: "rabbit", perSecond: 20},
+	{name: "panicked rabbit", perSecond: 400},
 ]
 
 let instances = 0
@@ -78,24 +79,6 @@ function svg(name, attributes = {}, parent) {
 	const element = document.createElementNS(SVG, name)
 	for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, value)
 	parent?.appendChild(element)
-	return element
-}
-
-function button(text, title, onClick) {
-	const element = document.createElement("button")
-	element.className = "knitout-button"
-	element.textContent = text
-	element.title = title
-	element.addEventListener("click", onClick)
-	return element
-}
-
-// a button that's only a picture: its name's for screen readers, its title
-// for everyone else
-function iconButton(name, label, title, onClick) {
-	const element = button("", title, onClick)
-	element.append(icon(name))
-	element.setAttribute("aria-label", label)
 	return element
 }
 
@@ -118,24 +101,25 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	const root = document.createElement("div")
 	root.className = "knitout-animation"
 	const link = stylesheet(STYLESHEET, root)
-	element.append(link, root)
+	const traysLink = stylesheet(TRAYS_STYLESHEET, root)
+	element.append(link, traysLink, root)
 
 	// ── the controls
 
-	const bar = document.createElement("div")
-	bar.className = "knitout-animation-bar"
+	const bar = trayBar("knitout-animation-bar")
 	root.appendChild(bar)
 
-	const playButton = button("", "play the knitting (space)", () => (playing ? pause() : play()))
-	playButton.append(icon("play"), " play")
+	const playText = document.createElement("span")
+	playText.className = "tray-text"
+	const playButton = trayButton({icon: "play", text: "play", label: "play", title: "play the knitting", key: "space", onClick: () => (playing ? pause() : play())})
 	playButton.classList.add("knitout-animation-play")
-	const speedSelect = document.createElement("select")
-	speedSelect.className = "knitout-animation-speed"
-	speedSelect.title = "how fast the needles go"
-	for (const [index, speed] of SPEEDS.entries()) {
-		speedSelect.append(new Option(speed.name, String(index)))
-	}
-	speedSelect.value = "1"
+	const showPlaying = on => playButton.replaceChildren(boldIcon(on ? "pause" : "play"), Object.assign(playText, {textContent: on ? "pause" : "play"}))
+	const speeds = speedTray(SPEEDS, index => {
+		speed = SPEEDS[index] ?? SPEEDS[1]
+		speeds.set(SPEEDS.indexOf(speed))
+		share()
+	})
+	speeds.set(1)
 	const scrubber = document.createElement("input")
 	scrubber.type = "range"
 	scrubber.min = "0"
@@ -143,14 +127,19 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	scrubber.title = "wind the knitting backwards and forwards"
 	const counter = document.createElement("span")
 	counter.className = "knitout-animation-counter"
-	const strainLabel = document.createElement("label")
-	strainLabel.className = "knitout-animation-toggle"
-	strainLabel.title = "colour each stitch by how hard it's pulled: red is as long as its yarn reaches"
-	const strainBox = document.createElement("input")
-	strainBox.type = "checkbox"
-	strainLabel.append(strainBox, "strain")
-	const flipButton = button("", "", () => flip())
-	flipButton.append(icon("flip"), " flip")
+	let strainOn = false
+	const strainButton = trayButton({
+		icon: "strain",
+		label: "strain",
+		title: "colour each stitch by how hard it's pulled: red is as long as its yarn reaches",
+		onClick: () => {
+			strainOn = !strainOn
+			press(strainButton, strainOn)
+			requestFrame()
+		},
+	})
+	press(strainButton, false)
+	const flipButton = trayButton({icon: "flip", label: "flip", title: "turn it round, to see it from behind (f)", onClick: () => flip()})
 	flipButton.classList.add("knitout-animation-flip")
 	const yarns = yarnPicker({handle, strands: true})
 	// the scrubber, on a strip of how the knitting looks along the way
@@ -160,27 +149,30 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		request: () => ({squash: settings.squash, size: loopSize}),
 		yarnOf: name => yarnOf(name),
 	})
+	const looks = tray(yarns.element)
+	looks.classList.add("knitout-animation-looks")
 
 	bar.append(
-		iconButton("restart", "restart", "back to the start, before the first stitch", () => {
-			pause()
-			seek(0)
-		}),
-		iconButton("back", "back", "undo the last op (←)", () => {
-			pause()
-			stepBack()
-		}),
-		playButton,
-		iconButton("step", "step", "do the next op (→)", () => {
-			pause()
-			stepOnce()
-		}),
-		speedSelect,
+		tray(
+			trayButton({icon: "restart", label: "restart", title: "back to the start, before the first stitch", onClick: () => {
+				pause()
+				seek(0)
+			}}),
+			trayButton({icon: "back", label: "back", title: "undo the last op", key: "←", onClick: () => {
+				pause()
+				stepBack()
+			}}),
+			playButton,
+			trayButton({icon: "step", label: "step", title: "do the next op", key: "→", onClick: () => {
+				pause()
+				stepOnce()
+			}}),
+		),
+		speeds.element,
 		strip.element,
 		counter,
-		flipButton,
-		strainLabel,
-		yarns.element,
+		tray(flipButton, strainButton),
+		looks,
 	)
 
 	// ── the picture
@@ -271,7 +263,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		seek(op + 1)
 		dispatch("knitout:select-source", located(handle, knitout.ops[op]))
 	}, {handle, context, onProfiles: resolved => onProfiles(resolved)})
-	bar.appendChild(panel.button)
+	bar.appendChild(tray(panel.button))
 
 	const errorBar = document.createElement("div")
 	errorBar.className = "knitout-animation-error"
@@ -402,7 +394,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		held.loops.forEach((loop, at) => {
 			const path = group.children[at]
 			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
-			const pulled = strainBox.checked ? Math.round((fabric.strain[loop.id] ?? 0) * 3) : 0
+			const pulled = strainOn ? Math.round((fabric.strain[loop.id] ?? 0) * 3) : 0
 			const className = `loop y${shownYarn(loop)}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
 			if (pathData.get(path) === d + className) return
 			pathData.set(path, d + className)
@@ -493,7 +485,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		const marks = YARNS + DEPTHS * STRANDS * YARNS
 		const paths = Array.from({length: marks + 4}, () => new Path2D())
 		const nearPath = (depth, strand, yarn) => paths[YARNS + (depth * STRANDS + strand) * YARNS + yarn]
-		const showStrain = strainBox.checked
+		const showStrain = strainOn
 		const back = f < 0
 		const first = firstLoop(machine)
 		const nearness = id => (back ? -fabric.zs[id] : fabric.zs[id])
@@ -948,14 +940,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		if (index >= knitout.ops.length) seek(0)
 		playing = true
 		camera.follow = true
-		playButton.replaceChildren(icon("pause"), " pause")
+		showPlaying(true)
 		requestFrame()
 		share()
 	}
 
 	function pause() {
 		playing = false
-		playButton.replaceChildren(icon("play"), " play")
+		showPlaying(false)
 		requestFrame()
 		share()
 	}
@@ -1225,7 +1217,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		picture.addEventListener(type, listener, {passive: false})
 	}
 
-	strainBox.addEventListener("change", requestFrame)
 	// the machine and yarn, as they're set (see settings.js)
 	// (and the machine and yarns the .k's knitted with, as the check finds them)
 	let settings = readSettings()
@@ -1242,10 +1233,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		onSettings()
 	}
 	addEventListener(SETTINGS_CHANGED, onSettings)
-	speedSelect.addEventListener("change", () => {
-		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
-		share()
-	})
 	scrubber.addEventListener("input", () => {
 		pause()
 		seek(Number(scrubber.value))
@@ -1321,7 +1308,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			if (typeof state.back === "boolean" && state.back !== fromBack) flip()
 			if (Number.isInteger(state.speed) && SPEEDS[state.speed] && SPEEDS[state.speed] !== speed) {
 				speed = SPEEDS[state.speed]
-				speedSelect.value = String(state.speed)
+				speeds.set(state.speed)
 			}
 			if (Number.isInteger(state.at)) {
 				const target = Math.max(0, Math.min(knitout.ops.length, state.at))
@@ -1373,5 +1360,6 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		panel.remove()
 		root.remove()
 		link.remove()
+		traysLink.remove()
 	}
 }
