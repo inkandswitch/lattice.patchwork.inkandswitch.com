@@ -1,14 +1,20 @@
 import { evalJS } from "./vendor/evalJS.js";
+import { linkGraph, runState } from "./modules.js";
 
 // runs one knitout.js pattern off the page's thread, so a pattern that never
 // ends can't freeze anything: the page just stops this worker.
 //
-// in:  {type: "run", code, sourceMap, base, loopBudget, timeBudget, automerge}
+// in:  {type: "run", code, sourceMap, base, loopBudget, timeBudget, automerge, graph}
 //      (loops already counted; sourceMap leads back to the code as written;
-//      automerge says where to load the Repo from, see compile in run.js)
+//      automerge says where to load the Repo from, see compile in run.js;
+//      graph is {pins, modules, snapshots}, every doc the pattern can read,
+//      see graph.js)
 // out: {type: "connect", port}   a port for the window's Repo to sync over
 //      {type: "started"}         the Repo is up, the pattern is running
 //      {type: "done", knitout, error: {message, line} | null}
+//      {type: "done", notReady: url, kind, line}
+//                                it asked for a doc it wasn't given: the page
+//                                adds it and runs it again (buildRounds)
 
 // a Repo of our own, with the window's Repo as its only peer: subduction over
 // a MessageChannel. nothing stored here; everything comes from the window,
@@ -102,25 +108,61 @@ onmessage = async ({ data }) => {
   let error = null;
   let line = null;
   const __at = (at, value) => ((line = at), value);
-  // `import(x)` in the pattern, found from the page's address
-  const __import = (at, specifier) => {
+
+  // the graph's docs and modules, each as a blob url, all let go of when the
+  // run's done. a doc it hasn't got suspends the run (see runState)
+  const state = runState();
+  const blobs = [];
+  const makeUrl = (text) => {
+    const url = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
+    blobs.push(url);
+    return url;
+  };
+  let graph;
+  try {
+    graph = linkGraph(data.graph ?? {}, {
+      makeUrl,
+      suspend: (url, kind) => state.suspend(url, { kind, line }),
+    });
+  } catch (e) {
+    for (const url of blobs) URL.revokeObjectURL(url);
+    postMessage({ type: "done", knitout: "", error: { message: String(e?.message ?? e), line: null } });
+    return;
+  }
+  // on the global, for the modules: they read docs the same way
+  self.__docs = graph.docs;
+  self.doc = graph.doc;
+
+  // `import(x)` in the pattern: a doc from the graph, anything else found
+  // from the page's address
+  const __import = async (at, specifier) => {
     line = at;
+    const blob = graph.module(specifier);
+    if (blob) return import(blob);
     let url = specifier;
     try {
       url = new URL(specifier, data.base).href;
     } catch {}
     return import(url);
   };
-  const knitout = await evalJS(data.code, {
-    sourceMap: data.sourceMap,
-    globals: { __loop: loopCounter(data.loopBudget, data.timeBudget), __at, __import, repo },
-    currentLine: () => line,
-    onError: (e, at) =>
-      (error = {
-        message: String(e?.message ?? e),
-        line: e?.line ?? at ?? null,
-        syntax: e?.name === "SyntaxError",
-      }),
-  });
-  postMessage({ type: "done", knitout, error });
+  let knitout;
+  try {
+    knitout = await evalJS(data.code, {
+      sourceMap: data.sourceMap,
+      globals: { __loop: loopCounter(data.loopBudget, data.timeBudget), __at, __import, repo, doc: graph.doc },
+      currentLine: () => line,
+      onError: (e, at) =>
+        (error = {
+          message: String(e?.message ?? e),
+          line: e?.line ?? at ?? null,
+          syntax: e?.name === "SyntaxError",
+        }),
+    });
+  } finally {
+    for (const url of blobs) URL.revokeObjectURL(url);
+  }
+  // whatever it did after asking, it didn't have what it asked for
+  const asked = state.suspension();
+  if (asked) postMessage({ type: "done", notReady: asked.url, kind: asked.kind, line: asked.line });
+  else postMessage({ type: "done", knitout, error });
 };

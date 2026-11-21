@@ -899,6 +899,9 @@ ${codeText}
 			//# sourceURL=${PATTERN_URL}${sourceMapComment(options.sourceMap, sourceLineOffset)}`
 		)
 
+		//patchwork: modules the pattern imports get the knitout library from here
+		//(their `import … from "knitout"` is a shim that reads it)
+		globalThis.__knitout = {Writer: NewWriter}
 		await run(require, captureConsole, ...Object.values(globals))
 	} catch (e) {
 		if (options.onError) options.onError(e, errorLine(e))

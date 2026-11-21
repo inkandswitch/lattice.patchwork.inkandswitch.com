@@ -5,7 +5,16 @@ import {newCharm} from "../charm.js"
 import {CharmDatatype, PatternstoatDatatype} from "../datatypes.js"
 import {newPatternstoat, paintWristwarmer} from "../patternstoat.js"
 
-const handle = (url, doc) => ({url, _doc: doc, doc() { return this._doc }, change(fn) { fn(this._doc) }})
+// heads are ["h"] unless a test moves them (_heads); a view is the doc as it is
+const handle = (url, doc) => ({
+	url,
+	_doc: doc,
+	_heads: ["h"],
+	doc() { return this._doc },
+	change(fn) { fn(this._doc) },
+	heads() { return this._heads },
+	view(heads) { return {url: `${url}#${heads.join("|")}`, doc: () => this._doc} },
+})
 const repoOf = handles => ({
 	async find(url) {
 		if (!handles[url]) throw new Error(`no ${url}`)
@@ -28,6 +37,45 @@ test("a build writes the .k, says where it came from, and links back", async () 
 	assert.equal(typeof k.doc().knitoutBuiltAt, "number")
 	assert.equal(stoat.doc().knitoutTarget, "k")
 	assert.equal(result.rows.length, 80)
+})
+
+// the line after the ;; headers (and the ;!knitout-2 on the first line)
+const afterHeaders = text => {
+	const lines = text.split("\n")
+	return lines.find((line, i) => !(line.startsWith(";;") || (i === 0 && line.startsWith(";!"))))
+}
+
+test("a build records its sources", async () => {
+	const charm = handle("charm", newCharm())
+	const doc = newPatternstoat({charm: "charm"})
+	paintWristwarmer(doc)
+	const stoat = handle("stoat", doc)
+	const k = handle("k", {content: "before"})
+	const result = await buildInto(stoat, k, repoOf({charm}), {immutable})
+	assert.equal(result.error, undefined)
+	assert.deepEqual(k.doc().knitoutSources, ["stoat#h", "charm#h"])
+	assert.equal(afterHeaders(k.doc().content.immutable), "x-patchwork-sources stoat#h charm#h")
+})
+
+test("a rebuild with the same output but moved heads records the new sources", async () => {
+	const charm = handle("charm", newCharm())
+	const doc = newPatternstoat({charm: "charm", width: 4, height: 4})
+	doc.colours = doc.colours.map(row => row.map(() => 1))
+	const stoat = handle("stoat", doc)
+	const k = handle("k", {content: "before"})
+	await buildInto(stoat, k, repoOf({charm}), {immutable})
+	const before = k.doc().content.immutable
+	// an edit that doesn't change what's built (a title, say)
+	stoat._heads = ["h2"]
+	const result = await buildInto(stoat, k, repoOf({charm}), {immutable})
+	assert.equal(result.unchanged, undefined)
+	assert.deepEqual(k.doc().knitoutSources, ["stoat#h2", "charm#h"])
+	assert.equal(afterHeaders(k.doc().content.immutable), "x-patchwork-sources stoat#h2 charm#h")
+	// only the sources line moved
+	assert.equal(
+		k.doc().content.immutable.replace(/^x-patchwork-sources .*$/m, ""),
+		before.replace(/^x-patchwork-sources .*$/m, ""),
+	)
 })
 
 test("the source hash changes when the design or the charm does", () => {

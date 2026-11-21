@@ -128,11 +128,12 @@ function walker(graph, repo, { timeout, self, selfValue }) {
   };
 }
 
-// the graph a pattern (`code`, the text of `self`, a .js handle) runs
-// against. rejects with {message, line} when a doc can't be found or the
-// imports go round in a circle; line is the pattern's, where it leads there
-export async function buildGraph(code, repo, { self, timeout = 10_000 }) {
-  const view = self.view(self.heads());
+// the graph a pattern (`code`, the text of `self`, a .js handle, at `heads`)
+// runs against. rejects with {message, line} when a doc can't be found or
+// the imports go round in a circle; line is the pattern's, where it leads
+// there. pass the heads `code` was read at, so the pin says the same version
+export async function buildGraph(code, repo, { self, heads = self.heads(), timeout = 10_000 }) {
+  const view = self.view(heads);
   const url = isDocUrl(self.url) ?? self.url;
   const pinned = view.url;
   const walk = walker({ pins: { [url]: pinned }, modules: [], snapshots: {}, sources: [pinned] }, repo, {
@@ -147,25 +148,40 @@ export async function buildGraph(code, repo, { self, timeout = 10_000 }) {
 }
 
 // a new graph with `url` (and, for a .js, what it uses) pinned and added
-// after what's there. what's there is kept as it was, pins and all
-export async function extendGraph(graph, url, repo, { timeout = 10_000, kind = "any" } = {}) {
+// after what's there. what's there is kept as it was, pins and all. `line`
+// is the pattern's line it was asked for on, if known, for the errors
+export async function extendGraph(graph, url, repo, { timeout = 10_000, kind = "any", line = null } = {}) {
+  const at = line == null ? "" : ` (line ${line})`;
   const key = isDocUrl(url);
-  if (!key) throw buildError(`couldn't find ${url}`, null);
+  if (!key) throw buildError(`couldn't find ${url}${at}`, line);
   const self = Object.keys(graph.pins).find((u) => graph.pins[u] === graph.sources[0]);
   const walk = walker(graph, repo, { timeout, self });
-  await walk.visit(key, kind, { at: "", top: null });
+  await walk.visit(key, kind, { at, top: line });
   return walk.graph();
 }
 
+// how much a graph holds, to tell whether extending it added anything
+const sizeOf = (graph) =>
+  [graph.sources, graph.modules, Object.keys(graph.snapshots), Object.keys(graph.pins)]
+    .map((list) => list.length)
+    .join(" ");
+
 // runs a pattern until it stops asking for docs it wasn't given: each time it
-// answers {notReady: url}, that doc is added and it runs again from the start
+// answers {notReady: url, kind, line}, that doc is added and it runs again
+// from the start. asking for one it already has would only ask again, so
+// that fails at once
 export async function buildRounds(run, graph, repo, { maxRuns = 20, timeout } = {}) {
   for (let runs = 1; ; runs++) {
     const result = await run(graph);
     if (!result?.notReady) return { result, graph };
+    const line = result.line ?? null;
     if (runs >= maxRuns) {
-      throw buildError(`still asking for new docs after ${runs} runs: ${result.notReady}`, result.line ?? null);
+      throw buildError(`still asking for new docs after ${runs} runs: ${result.notReady}`, line);
     }
-    graph = await extendGraph(graph, result.notReady, repo, { timeout, kind: result.kind });
+    const next = await extendGraph(graph, result.notReady, repo, { timeout, kind: result.kind, line });
+    if (sizeOf(next) === sizeOf(graph)) {
+      throw buildError(`asked for ${result.notReady} again, but the build already has it`, line);
+    }
+    graph = next;
   }
 }

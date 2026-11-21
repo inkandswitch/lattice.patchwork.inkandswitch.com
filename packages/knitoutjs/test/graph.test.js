@@ -241,3 +241,48 @@ test("the run cap names the url", async () => {
   });
   assert.equal(runs, 20);
 });
+
+test("a doc a later run asks for that can't be found points at the run's line", async () => {
+  const { repo, self } = setup("", {});
+  const graph = await buildGraph("", repo, { self });
+  await assert.rejects(extendGraph(graph, "automerge:gone", repo, { line: 4 }), {
+    message: "couldn't find automerge:gone (line 4)",
+    line: 4,
+  });
+  const run = async () => ({ notReady: "automerge:gone", kind: "doc", line: 7 });
+  await assert.rejects(buildRounds(run, graph, repo, {}), {
+    message: "couldn't find automerge:gone (line 7)",
+    line: 7,
+  });
+});
+
+test("a run asking again for a doc it was given fails at once", async () => {
+  const code = 'const c = doc("automerge:c")';
+  const { repo, self } = setup(code, { "automerge:c": { rows: 6 } });
+  const graph = await buildGraph(code, repo, { self });
+  let runs = 0;
+  const run = async () => (runs++, { notReady: "automerge:c", kind: "doc", line: 1 });
+  await assert.rejects(buildRounds(run, graph, repo, {}), {
+    message: "asked for automerge:c again, but the build already has it",
+    line: 1,
+  });
+  assert.equal(runs, 1);
+});
+
+test("a .js read with doc() and then imported is added as a module", async () => {
+  const code = 'const d = doc("automerge:d")';
+  const { repo, self } = setup(code, { "automerge:d": js("d.js", "export default 1") });
+  const graph = await buildGraph(code, repo, { self });
+  assert.deepEqual(graph.modules, []);
+  const run = async (g) => (g.modules.length ? { knitout: "ok" } : { notReady: "automerge:d", kind: "dynamic" });
+  const out = await buildRounds(run, graph, repo, {});
+  assert.deepEqual(out.graph.modules, [{ pinned: "automerge:d#h", code: "export default 1" }]);
+  assert.deepEqual(out.graph.sources, ["automerge:pat#h", "automerge:d#h"]);
+});
+
+test("buildGraph reads the pattern at the heads it's given", async () => {
+  const { repo, self } = setup("", {});
+  const graph = await buildGraph("", repo, { self, heads: ["old"] });
+  assert.deepEqual(graph.sources, ["automerge:pat#old"]);
+  assert.equal(repo.calls.heads.includes(SELF), false);
+});

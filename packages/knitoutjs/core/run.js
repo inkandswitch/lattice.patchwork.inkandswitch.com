@@ -3,6 +3,8 @@ import { MessagePortTransport } from "@automerge/automerge-subduction/slim";
 import { parser } from "./vendor/lezer-javascript.js";
 import { docText, knitoutOf, moduleWorker, textHash } from "./files.js";
 import { instrument } from "./instrument.js";
+import { buildGraph, buildRounds } from "./graph.js";
+import { withSourcesLine } from "./sources.js";
 
 export { instrument };
 
@@ -60,13 +62,15 @@ function automergeForWorker() {
 
 // run a knitout.js pattern: {knitout, error, ms}. the pattern has a Repo of
 // its own, synced with `repo` over subduction, so `repo.find(url)` there finds
-// what this window has. aborting `signal` stops it
-export function compile(code, { repo, signal, name } = {}) {
+// what this window has. aborting `signal` stops it. `graph` (graph.js) is the
+// docs it can `import` and `doc()`, pinned; one it asks for that isn't there
+// stops the run, and it answers {notReady: url, kind, line, ms} instead
+export function compile(code, { repo, signal, name, graph } = {}) {
   const start = performance.now();
   let budgeted;
   let sourceMap = null;
   try {
-    const instrumented = instrument(code);
+    const instrumented = instrument(code, { pins: graph?.pins ?? {} });
     budgeted = instrumented.code;
     // so devtools shows (and steps through) the pattern as it was written
     sourceMap = {
@@ -86,16 +90,16 @@ export function compile(code, { repo, signal, name } = {}) {
     // the worker's Repo, connected to this window's: hung up when it's done
     const links = [];
 
-    function finish(knitout, error) {
+    function finish(result) {
       clearTimeout(timer);
       signal?.removeEventListener("abort", onAbort);
       worker.terminate();
       for (const hangUp of links) hangUp();
-      resolve({ knitout, error, ms: performance.now() - start });
+      resolve({ ...result, ms: performance.now() - start });
     }
 
     function hardStop() {
-      finish("", { message: `stopped after ${HARD_STOP / 1000}s. is something looping forever?` });
+      finish({ knitout: "", error: { message: `stopped after ${HARD_STOP / 1000}s. is something looping forever?` } });
     }
 
     // the worker's Repo asking to connect: this window's Repo is its peer
@@ -116,14 +120,16 @@ export function compile(code, { repo, signal, name } = {}) {
     }
 
     function onAbort() {
-      finish("", { message: "stopped", stopped: true });
+      finish({ knitout: "", error: { message: "stopped", stopped: true } });
     }
 
     worker.onmessage = ({ data }) => {
-      if (data.type === "done") {
+      if (data.type === "done" && data.notReady) {
+        finish({ notReady: data.notReady, kind: data.kind, line: data.line ?? null });
+      } else if (data.type === "done") {
         const error = data.error;
         if (error?.syntax && error.line == null) error.line = firstBrokenLine(code);
-        finish(data.knitout, error);
+        finish({ knitout: data.knitout, error });
       } else if (data.type === "connect") {
         accept(data.port);
       } else if (data.type === "started") {
@@ -133,7 +139,7 @@ export function compile(code, { repo, signal, name } = {}) {
     };
     worker.onerror = (event) => {
       event.preventDefault();
-      finish("", { message: event.message || "the pattern's worker didn't start" });
+      finish({ knitout: "", error: { message: event.message || "the pattern's worker didn't start" } });
     };
 
     timer = setTimeout(hardStop, SETUP_BUDGET + HARD_STOP);
@@ -149,31 +155,49 @@ export function compile(code, { repo, signal, name } = {}) {
       loopBudget: LOOP_BUDGET,
       timeBudget: TIME_BUDGET,
       automerge: automergeForWorker(),
+      graph: graph && { pins: graph.pins, modules: graph.modules, snapshots: graph.snapshots },
     });
   });
 }
 
 // run the .js handle's code and write the knitout into the .k handle,
 // remembering on each side who it's linked to, and on the .k when it was
-// built and from what code (so it can tell when it's out of date). the
+// built and from what code (so it can tell when it's out of date) and every
+// doc it read, pinned (knitoutSources, and a line in the knitout). the
 // knitout goes in as an ImmutableString: writing a big one as editable text
 // is slow, and a generated .k isn't for typing into (make an editable copy
-// for that)
+// for that). {knitout, error, ms, sources}
 export async function runInto(jsHandle, kHandle, repo, { signal } = {}) {
-  const code = docText(jsHandle.doc());
-  const result = await compile(code, { repo, signal, name: jsHandle.doc()?.name });
+  const start = performance.now();
+  // the code and its pin, both from one version of the .js
+  const heads = jsHandle.heads();
+  const js = jsHandle.view(heads).doc();
+  const code = docText(js);
+  const name = js?.name;
+  const done = (result) => ({ ...result, ms: performance.now() - start });
+  let built;
+  try {
+    const graph = await buildGraph(code, repo, { self: jsHandle, heads });
+    built = await buildRounds((graph) => compile(code, { repo, signal, name, graph }), graph, repo);
+  } catch (error) {
+    if (signal?.aborted) return done({ knitout: "", error: { message: "stopped", stopped: true }, sources: [] });
+    return done({ knitout: "", error: { message: String(error?.message ?? error), line: error?.line ?? null }, sources: [] });
+  }
+  const { result, graph } = built;
   // a build that failed leaves the .k as it was
-  if (result.error) return result;
+  if (result.error) return done({ knitout: result.knitout, error: result.error, sources: graph.sources });
+  const knitout = withSourcesLine(result.knitout, graph.sources);
   kHandle.change((doc) => {
-    doc.content = new ImmutableString(result.knitout);
+    doc.content = new ImmutableString(knitout);
     doc.knitoutSource = jsHandle.url;
     doc.knitoutSourceHash = textHash(code);
     doc.knitoutBuiltAt = Date.now();
+    doc.knitoutSources = graph.sources;
   });
   if (knitoutOf(jsHandle.doc()).target !== kHandle.url) {
     jsHandle.change((doc) => {
       doc.knitoutTarget = kHandle.url;
     });
   }
-  return result;
+  return done({ knitout, error: null, sources: graph.sources });
 }

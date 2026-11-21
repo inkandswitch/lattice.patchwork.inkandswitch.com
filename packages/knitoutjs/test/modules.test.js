@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rewriteSpecifiers, snapshotModule, moduleSources, runState, NotReady } from "../core/modules.js";
+import { rewriteSpecifiers, snapshotModule, moduleSources, runState, NotReady, deepFreeze, linkGraph } from "../core/modules.js";
 
 const map = { "automerge:a": "automerge:a#h1|h2", knitout: "blob:knitout" };
 
@@ -86,4 +86,86 @@ test("a caught NotReady still suspends", () => {
   }
   state.suspend("automerge:e");
   assert.equal(state.suspendedUrl(), "automerge:d");
+});
+
+test("snapshotModule doesn't export globalThis or __docs", async () => {
+  const pinned = "automerge:g#h";
+  const value = { globalThis: 1, __docs: 2, width: 3 };
+  globalThis.__docs = { [pinned]: value };
+  const module = await import(`data:text/javascript,${encodeURIComponent(snapshotModule(pinned, value))}`);
+  assert.deepEqual(Object.keys(module).sort(), ["default", "width"]);
+  assert.equal(module.default.globalThis, 1);
+  delete globalThis.__docs;
+});
+
+test("rewriteSpecifiers can leave doc() strings alone", () => {
+  const code = 'import a from "automerge:a"\nconst b = doc("automerge:a")';
+  assert.equal(
+    rewriteSpecifiers(code, { "automerge:a": "blob:a" }, { docs: false }),
+    'import a from "blob:a"\nconst b = doc("automerge:a")',
+  );
+});
+
+test("a suspension keeps how and where the first ask was made", () => {
+  const state = runState();
+  assert.equal(state.suspension(), null);
+  state.suspend("automerge:d", { kind: "doc", line: 3 });
+  state.suspend("automerge:e", { kind: "dynamic", line: 9 });
+  assert.deepEqual(state.suspension(), { url: "automerge:d", kind: "doc", line: 3 });
+  assert.equal(state.suspendedUrl(), "automerge:d");
+});
+
+test("deepFreeze freezes a doc's maps and lists, and leaves bytes be", () => {
+  const value = deepFreeze({ a: { b: [1, { c: 2 }] }, bytes: new Uint8Array([1]) });
+  assert.ok(Object.isFrozen(value.a.b[1]));
+  assert.throws(() => value.a.b.push(3));
+  value.bytes[0] = 2;
+  assert.equal(value.bytes[0], 2);
+});
+
+// node can import data: urls from data: urls, so the graph can be linked and
+// run here the way the worker does with blob urls
+const dataUrl = (text) => `data:text/javascript,${encodeURIComponent(text)}`;
+
+test("linkGraph makes each module and doc importable, children first", async () => {
+  const graph = {
+    pins: { "automerge:a": "automerge:a#h", "automerge:b": "automerge:b#h", "automerge:w": "automerge:w#h" },
+    modules: [
+      { pinned: "automerge:b#h", code: 'import {Writer} from "knitout"\nexport default Writer' },
+      {
+        pinned: "automerge:a#h",
+        code: 'import W from "automerge:b#h"\nimport {width} from "automerge:w#h"\nexport default [W, width, doc("automerge:w#h").width]',
+      },
+    ],
+    snapshots: { "automerge:w#h": { width: 20 }, "automerge:j#h": { extension: "js", content: "x" } },
+  };
+  const asked = [];
+  const run = linkGraph(graph, {
+    makeUrl: dataUrl,
+    suspend: (url, kind) => (asked.push([url, kind]), new NotReady(url)),
+  });
+  class Writer {}
+  globalThis.__knitout = { Writer };
+  globalThis.__docs = run.docs;
+  globalThis.doc = run.doc;
+  try {
+    const a = await import(run.module("/automerge:a"));
+    assert.deepEqual(a.default, [Writer, 20, 20]);
+    assert.equal(run.doc("automerge:w").width, 20);
+    assert.equal(run.doc("automerge:w#h").width, 20);
+    assert.ok(Object.isFrozen(run.doc("automerge:w")));
+    // a .js read as a doc isn't a module yet
+    assert.throws(() => run.module("automerge:j#h"), NotReady);
+    assert.throws(() => run.doc("automerge:zz"), NotReady);
+    assert.deepEqual(asked, [
+      ["automerge:j#h", "dynamic"],
+      ["automerge:zz", "doc"],
+    ]);
+    assert.throws(() => run.doc("not a url"), /doc\(\) takes an automerge url/);
+    assert.equal(run.module("./thing.js"), null);
+  } finally {
+    delete globalThis.__knitout;
+    delete globalThis.__docs;
+    delete globalThis.doc;
+  }
 });
