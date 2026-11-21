@@ -25,10 +25,12 @@ function bindingsOf(code) {
 
 // the url a doc ref at `pos` points to: inside the string of an `import`,
 // `import()` or `doc()` of a doc, or on a name an import of a doc bound
-export function docRefAt(code, pos) {
+// (unless `names` is off: a language server goes to where a name's defined)
+export function docRefAt(code, pos, { names = true } = {}) {
   for (const use of scan(code)) {
     if (use.url && pos >= use.string.from && pos <= use.string.to) return unpinned(use.url);
   }
+  if (!names) return null;
   // a click at the end of a name still counts as on it
   const tree = parser.parse(code);
   for (const side of [1, -1]) {
@@ -90,3 +92,11 @@ export function keysOf(value, path) {
 
 // the tool to open a doc with: a .js in the code editor, else its own
 export const toolFor = (doc) => (fileExtension(doc) === "js" ? "editor" : undefined);
+
+// the doc a language server's definition is in, when it's in one: an editor's
+// file, or one we gave the server, is /<documentId>/index.<ext>. anything else
+// (typescript's own lib files, ours under /lattice/) is null
+export function definitionDoc(uri) {
+  const id = /^file:\/\/\/([1-9A-HJ-NP-Za-km-z]+)\/index\.[\w.]+$/.exec(uri ?? "")?.[1];
+  return id ? `automerge:${id}` : null;
+}

@@ -6,9 +6,10 @@ import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
-import { toolFor } from "./doc-refs.js";
+import { definitionDoc, toolFor } from "./doc-refs.js";
+import { languageServerDocs } from "./language-server.js";
 import { runInto } from "./run.js";
-import { watchedSources } from "./knitout-links.js";
+import { importsOf, watchedSources } from "./knitout-links.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
@@ -20,6 +21,13 @@ const AUTO_RUN_DELAY = 600;
 // patchwork's file tool asks for extra CodeMirror extensions with this event,
 // just before it makes its editor (see base/file's README)
 const EXTENSIONS_EVENT = "file:codemirror-extensions";
+
+// and with its language server, it says so when a definition is in a file
+// that isn't open, for us to open
+const DEFINITION_EVENT = "file:open-definition";
+
+// how long a .js opened for its definition has to show its editor
+const DEFINITION_WAIT = 2000;
 
 // "2x2 rib.knitout.js" → _2x2Rib
 function identifierFor(name) {
@@ -73,9 +81,36 @@ export default function KnitoutEditorTool(handle, element, context) {
     };
   });
 
+  // which tool depends on the doc being opened, so look at it first (a find
+  // that fails opens it with its own tool). says which tool it was
+  function openDoc(url) {
+    return Promise.resolve()
+      .then(() => repo.find(url))
+      .then((found) => toolFor(found.doc()), () => undefined)
+      .then((tool) => (open(url, element, "right", tool), tool));
+  }
+
+  // the docs this pattern uses, given to the file tool's language server
+  // (when it has one, see language-server.js), and again as the code changes
+  let serverDocs = null;
+  const giveServerDocs = () => serverDocs?.use(importsOf(handle.doc()));
+
   function onExtensions(event) {
-    const { handle: fileHandle, extensions } = event.detail;
+    const { handle: fileHandle, extensions, languageServer, completionSources } = event.detail;
     if (fileHandle?.url !== handle.url) return;
+    // with pkg-base's language server hooks, a click on an imported name is
+    // its go to definition's (to the very line, in a .js), and a doc's
+    // fields join the server's completions (which leaves its own of them
+    // out). without them, it's all ours, and the fields are language data
+    // beside the server's
+    const refs = docRefs({ repo, open: openDoc, names: !languageServer });
+    const hooked = Array.isArray(completionSources);
+    if (hooked) completionSources.push(refs.source);
+    if (isJs && languageServer && !serverDocs) {
+      serverDocs = languageServerDocs(languageServer, repo, { self: handle.url });
+      handle.on("change", giveServerDocs);
+      giveServerDocs();
+    }
     const named = String(fileHandle.doc()?.name ?? "").trim();
     extensions.push(
       holdView,
@@ -94,16 +129,7 @@ export default function KnitoutEditorTool(handle, element, context) {
           : null
       ),
       keepCaretInPlace,
-      docRefs({
-        repo,
-        // which tool depends on the doc being opened, so look at it first
-        // (a find that fails opens it with its own tool)
-        open: (url) =>
-          Promise.resolve()
-            .then(() => repo.find(url))
-            .then((found) => toolFor(found.doc()), () => undefined)
-            .then((tool) => open(url, element, "right", tool)),
-      }).extension,
+      hooked ? refs.click : refs.extension,
       knitoutEditorIntegration({
         events,
         url: handle.url,
@@ -133,6 +159,23 @@ export default function KnitoutEditorTool(handle, element, context) {
     }
   }
   element.addEventListener(EXTENSIONS_EVENT, onExtensions);
+
+  // a definition in another doc: open it beside, and a .js at its line, once
+  // its editor's there to go to it (an lsp line counts from 0)
+  let gone = false;
+  async function onDefinition(event) {
+    const url = definitionDoc(event.detail?.uri);
+    if (!url || url === handle.url) return;
+    const line = event.detail.line;
+    const tool = await openDoc(url);
+    if (tool !== "editor" || typeof line !== "number") return;
+    const until = Date.now() + DEFINITION_WAIT;
+    while (!gone && Date.now() < until) {
+      if (builderOf(url)?.goToLine(line + 1)) return;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  element.addEventListener(DEFINITION_EVENT, onDefinition);
 
   // build the pattern into its target .k: by hand, or after every pause in
   // your typing when autobuild is on (the default). turning it off is
@@ -336,8 +379,12 @@ export default function KnitoutEditorTool(handle, element, context) {
       current?.abort();
     }
 
+    // says whether it could (there's no editor to go to the line in until
+    // the file tool's made it)
     function goToLine(lineNumber) {
-      if (view) goToLineIn(view, lineNumber);
+      if (!view) return false;
+      goToLineIn(view, lineNumber);
+      return true;
     }
 
     function keep() {
@@ -568,8 +615,12 @@ export default function KnitoutEditorTool(handle, element, context) {
   if (isJs) element.dropInto = { label: "import here", lineAt, drop };
 
   return () => {
+    gone = true;
     delete element.dropInto;
     element.removeEventListener(EXTENSIONS_EVENT, onExtensions);
+    element.removeEventListener(DEFINITION_EVENT, onDefinition);
+    handle.off("change", giveServerDocs);
+    serverDocs?.close();
     dispose();
     link?.remove();
   };

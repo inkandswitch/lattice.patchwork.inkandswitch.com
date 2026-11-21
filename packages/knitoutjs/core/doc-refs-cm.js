@@ -10,10 +10,15 @@ const isMac = () => typeof navigator !== "undefined" && /Mac/.test(navigator.pla
 // import of one bound, opens it (`open(url)`); and `doc("…").` or `r.` of an
 // imported doc completes the doc's own fields.
 //
-// returns {extension, source}: the extension has both in it, and `source` is
-// the completion source on its own, for a language server's hook to be given
-// (when it's on, its completions stand in for these)
-export function docRefs({ repo, open }) {
+// `names: false` leaves a click on a name to a language server's go to
+// definition, which knows the line it's on in a .js
+//
+// returns {extension, click, source}: the extension has both in it, `click`
+// is the cmd+click on its own, and `source` the completion source on its own,
+// for a language server's hook to be given (it sits beside the server's own
+// completions there, so it mustn't be language data as well: that would offer
+// each field twice)
+export function docRefs({ repo, open, names = true }) {
   // a doc's handle, found once for as long as the editor lives. a find that
   // rejects is no completions
   const found = new Map();
@@ -56,7 +61,7 @@ export function docRefs({ repo, open }) {
         if (event.button !== 0 || !(isMac() ? event.metaKey : event.ctrlKey)) return false;
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
         if (pos == null) return false;
-        const url = docRefAt(view.state.doc.toString(), pos);
+        const url = docRefAt(view.state.doc.toString(), pos, { names });
         if (!url) return false;
         event.preventDefault();
         open(url);
@@ -67,6 +72,7 @@ export function docRefs({ repo, open }) {
 
   return {
     extension: [click, EditorState.languageData.of(() => [{ autocomplete: source }])],
+    click,
     source,
   };
 }

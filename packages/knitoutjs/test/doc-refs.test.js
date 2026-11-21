@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { completionAt, docRefAt, keysOf, toolFor } from "../core/doc-refs.js";
+import { completionAt, definitionDoc, docRefAt, keysOf, toolFor } from "../core/doc-refs.js";
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
@@ -107,4 +107,31 @@ test("a .js opens in the code editor, anything else in its own tool", () => {
   assert.equal(toolFor({ name: "x", extension: "js" }), "editor");
   assert.equal(toolFor({ width: 1 }), undefined);
   assert.equal(toolFor(undefined), undefined);
+});
+
+test("a definition in a doc's file is that doc", () => {
+  const id = A.slice("automerge:".length);
+  assert.equal(definitionDoc(`file:///${id}/index.js`), A);
+  assert.equal(definitionDoc(`file:///${id}/index.d.ts`), A);
+});
+
+test("a definition anywhere else isn't a doc", () => {
+  for (const uri of [
+    "file:///lattice/globals.d.ts",
+    "file:///lib.dom.d.ts",
+    "file:///node_modules/typescript/lib/lib.es5.d.ts",
+    "file:///0OIl/index.js",
+    "file:///2Qf9/other.js",
+    "https://example.com/x/index.js",
+    undefined,
+  ]) {
+    assert.equal(definitionDoc(uri), null, String(uri));
+  }
+});
+
+test("with names left to a language server, a doc ref is only a url's string", () => {
+  const code = `import r from "${A}"\nr`;
+  assert.equal(docRefAt(code, code.indexOf("automerge") + 3, { names: false }), A);
+  assert.equal(docRefAt(code, code.length, { names: false }), null);
+  assert.equal(docRefAt(code, code.length), A);
 });

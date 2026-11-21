@@ -4,7 +4,7 @@ import { createStore, unwrap } from "solid-js/store";
 // (by hand, or by itself with autobuild on) and says so here, so the panes
 // showing the .k it writes can say so too. keyed by the .js's url:
 // { state: "idle" | "running" | "ok" | "error" | "ask", line?, message?, at,
-//   auto, failed, builder?: { now(), goToLine(line) } }
+//   auto, failed, builder?: { now(), goToLine(line) → whether it could } }
 // there's only a builder while that .js is open in an editor. failed is how
 // its last build that finished went, kept while it's edited and built again.
 // at is when its state was last said
