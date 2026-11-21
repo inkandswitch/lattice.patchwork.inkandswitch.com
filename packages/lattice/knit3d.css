@@ -34,7 +34,8 @@
 		font: 12px var(--knit3d-sans);
 	}
 
-	& .knit3d-bar {
+	/* the yarn path's bar (not trays) */
+	& .knit3d-bar:not(.trays) {
 		display: flex;
 		flex: none;
 		flex-wrap: wrap;
@@ -44,6 +45,38 @@
 		border-bottom: 1px solid var(--knit3d-line-soft);
 		background: var(--knit3d-chrome);
 		color: var(--knit3d-chrome-ink);
+	}
+
+	& .knitout-button.knit3d-play {
+		--knit3d-button-fill: var(--knit3d-accent);
+		min-width: 5em;
+		background: var(--knit3d-button-fill);
+		color: var(--knit3d-button-ink, var(--knit3d-accent-ink));
+	}
+
+	/* the bar's trays (wm/ui/trays.css): the play button filled; the checks
+	   button and the yarns at home in a tray */
+	& .knit3d-bar .knit3d-play {
+		--knit3d-button-fill: var(--knit3d-accent);
+		min-width: 5.5em;
+		background: var(--knit3d-button-fill);
+		color: var(--knit3d-button-ink, var(--knit3d-accent-ink));
+	}
+
+	& .knit3d-bar .tray .knitout-button {
+		height: 32px;
+		border: 0;
+		border-radius: 9px;
+		box-shadow: none;
+		background: none;
+	}
+
+	& .knit3d-bar .knit3d-looks,
+	& .knit3d-bar .knit3d-round-tray {
+		gap: 6px;
+		padding: 3px 10px;
+		min-height: 38px;
+		box-sizing: border-box;
 	}
 
 	/* chee.party buttons: a 1px line and a 1px shadow, lifting on hover */
@@ -68,15 +101,7 @@
 		}
 	}
 
-	/* (its text by contrast with its fill: latticework.css's --knit3d-button-ink.
-	   doubled up to outrank a shell's `button { color: inherit }`) */
-	& .knitout-button.knit3d-play {
-		--knit3d-button-fill: var(--knit3d-accent);
-		min-width: 5em;
-		background: var(--knit3d-button-fill);
-		color: var(--knit3d-button-ink, var(--knit3d-accent-ink));
-	}
-
+	/* (the yarn path's, which shares this sheet) */
 	& .knit3d-select {
 		padding: 2px 4px;
 		border: 1px solid var(--knit3d-line);

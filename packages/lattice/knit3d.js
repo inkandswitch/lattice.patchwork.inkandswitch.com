@@ -8,7 +8,8 @@ import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting
 import {SETTINGS_CHANGED, readSettings} from "./settings.js"
 import {turnOf} from "./strands.js"
 import {YARNS_CHANGED, yarnPicker, yarnStrands} from "../knitoutjs/core/yarns.js"
-import {icon, withIcon} from "../wm/ui/icons.js"
+import {boldIcon} from "../wm/ui/bold-icons.js"
+import {TRAYS_STYLESHEET, press, speedTray, tray, trayBar, trayButton} from "../wm/ui/trays.js"
 import {stylesheet} from "../wm/ui/stylesheet.js"
 import {viewStateOf} from "../wm/view-state.js"
 import {easeInOut, lessMotion} from "../wm/ui/ease.js"
@@ -34,10 +35,12 @@ const STILL_BUDGET = 14
 // how far below its head a loop's legs start
 const BASE = 1.6 * ROW
 
+// slowest first, as the speed tray's animals (wm/ui/trays.js)
 const SPEEDS = [
-	{name: "slow", perSecond: 40},
-	{name: "run", perSecond: 300},
-	{name: "fly", perSecond: 3000},
+	{name: "snail", perSecond: 40},
+	{name: "turtle", perSecond: 300},
+	{name: "rabbit", perSecond: 1000},
+	{name: "panicked rabbit", perSecond: 3000},
 ]
 
 // a knit loop, seen from its face: from the sinker at its bottom left, up a
@@ -93,13 +96,26 @@ const LOOP_CURVE = (() => {
 const INSTANCE = ["head", "along", "up", "face", "reach", "colour", "strands", "colour2"]
 const INSTANCE_FLOATS = INSTANCE.length * 3
 
-function button(text, title, onClick) {
-	const element = document.createElement("button")
-	element.className = "knitout-button"
-	element.textContent = text
-	element.title = title
-	element.addEventListener("click", onClick)
-	return element
+// an icon button that's on or off: `checked`, as a checkbox's, and onChange
+// when it's clicked
+function toggle({icon, label, title, checked = false, onChange}) {
+	let on = checked
+	const button = trayButton({icon, label, title, onClick: () => {
+		on = !on
+		press(button, on)
+		onChange?.()
+	}})
+	press(button, on)
+	return {
+		button,
+		get checked() {
+			return on
+		},
+		set checked(value) {
+			on = !!value
+			press(button, on)
+		},
+	}
 }
 
 // ── a mesh, built up a triangle at a time
@@ -387,22 +403,25 @@ export default function Knit3dTool(handle, element, context = {}) {
 	const root = document.createElement("div")
 	root.className = "knit3d"
 	const link = stylesheet(STYLESHEET, root)
-	element.append(link, root)
+	const traysLink = stylesheet(TRAYS_STYLESHEET, root)
+	element.append(link, traysLink, root)
 
 	// ── the controls
 
-	const bar = document.createElement("div")
-	bar.className = "knit3d-bar"
+	const bar = trayBar("knit3d-bar")
 	root.appendChild(bar)
 
-	const playButton = button("", "watch the fabric grow", () => (playing ? pause() : play()))
-	playButton.append(icon("play"), " play")
+	const playText = document.createElement("span")
+	playText.className = "tray-text"
+	const playButton = trayButton({icon: "play", text: "play", label: "play", title: "watch the fabric grow", onClick: () => (playing ? pause() : play())})
 	playButton.classList.add("knit3d-play")
-	const speedSelect = document.createElement("select")
-	speedSelect.className = "knit3d-select"
-	speedSelect.title = "how fast it knits"
-	for (const [index, speed] of SPEEDS.entries()) speedSelect.append(new Option(speed.name, String(index)))
-	speedSelect.value = "1"
+	const showPlaying = on => playButton.replaceChildren(boldIcon(on ? "pause" : "play"), Object.assign(playText, {textContent: on ? "pause" : "play"}))
+	const speeds = speedTray(SPEEDS, index => {
+		speed = SPEEDS[index] ?? SPEEDS[1]
+		speeds.set(SPEEDS.indexOf(speed))
+		share()
+	})
+	speeds.set(1)
 	const scrubber = document.createElement("input")
 	scrubber.type = "range"
 	scrubber.min = "0"
@@ -418,36 +437,34 @@ export default function Knit3dTool(handle, element, context = {}) {
 	roundSlider.max = "1"
 	roundSlider.step = "0.01"
 	roundLabel.append("on the machine", roundSlider, "worn")
+	const roundTray = tray(roundLabel)
+	roundTray.classList.add("knit3d-round-tray")
 
-	const bedLabel = document.createElement("label")
-	bedLabel.className = "knit3d-toggle"
-	bedLabel.title = "show the needle beds and the carriage"
-	const bedBox = document.createElement("input")
-	bedBox.type = "checkbox"
-	bedBox.checked = true
-	bedLabel.append(bedBox, "needle bed")
-
-	const strainLabel = document.createElement("label")
-	strainLabel.className = "knit3d-toggle"
-	strainLabel.title = "colour each stitch by how hard it's pulled: red is as long as its yarn reaches (on the machine, that's what can break or drop)"
-	const strainBox = document.createElement("input")
-	strainBox.type = "checkbox"
-	strainLabel.append(strainBox, "strain")
+	const bedBox = toggle({icon: "bed", label: "needle bed", title: "show the needle beds and the carriage", checked: true, onChange: () => (refresh(), share())})
+	const strainBox = toggle({
+		icon: "strain",
+		label: "strain",
+		title: "colour each stitch by how hard it's pulled: red is as long as its yarn reaches (on the machine, that's what can break or drop)",
+		onChange: () => (refresh(), share()),
+	})
 	const yarns = yarnPicker({handle, strands: true})
+	const looks = tray(yarns.element)
+	looks.classList.add("knit3d-looks")
 
 	bar.append(
-		playButton,
-		speedSelect,
+		tray(playButton),
+		speeds.element,
 		scrubber,
-		roundLabel,
-		bedLabel,
-		strainLabel,
-		yarns.element,
-		withIcon(
-			"fit",
-			button("reset view", "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)", () =>
-				moveCamera(framed()),
-			),
+		roundTray,
+		tray(bedBox.button, strainBox.button),
+		looks,
+		tray(
+			trayButton({
+				icon: "fit",
+				label: "reset view",
+				title: "look at it from the front again (drag to turn it, shift-drag to move, scroll to zoom)",
+				onClick: () => moveCamera(framed()),
+			}),
 		),
 	)
 
@@ -472,7 +489,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			new CustomEvent("knitout:select-source", {detail: located(handle, knitout.ops[op]), bubbles: true, composed: true}),
 		)
 	}, {handle, context, onProfiles: resolved => onProfiles(resolved)})
-	bar.appendChild(panel.button)
+	bar.appendChild(tray(panel.button))
 
 	const empty = document.createElement("div")
 	empty.className = "knit3d-empty"
@@ -491,6 +508,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			yarns.destroy()
 			root.remove()
 			link.remove()
+			traysLink.remove()
 		}
 	}
 
@@ -1039,14 +1057,14 @@ export default function Knit3dTool(handle, element, context = {}) {
 		if (upTo >= knitout.ops.length) upTo = 0
 		playhead = upTo
 		playing = true
-		playButton.replaceChildren(icon("pause"), " pause")
+		showPlaying(true)
 		refresh()
 		share()
 	}
 
 	function pause() {
 		playing = false
-		playButton.replaceChildren(icon("play"), " play")
+		showPlaying(false)
 		share()
 	}
 
@@ -1103,10 +1121,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 		canvas.addEventListener(type, listener, {passive: false})
 	}
 
-	speedSelect.addEventListener("change", () => {
-		speed = SPEEDS[Number(speedSelect.value)] ?? SPEEDS[1]
-		share()
-	})
 	scrubber.addEventListener("input", () => {
 		pause()
 		upTo = Number(scrubber.value)
@@ -1118,8 +1132,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 		refresh()
 		shareSoon()
 	})
-	bedBox.addEventListener("change", () => (refresh(), share()))
-	strainBox.addEventListener("change", () => (refresh(), share()))
 	// the machine and yarn, as they're set (see settings.js), and so how big
 	// each stitch is
 	// (and the machine and yarns the .k's knitted with, as the check finds them)
@@ -1227,7 +1239,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 		try {
 			if (Number.isInteger(state.speed) && SPEEDS[state.speed] && SPEEDS[state.speed] !== speed) {
 				speed = SPEEDS[state.speed]
-				speedSelect.value = String(state.speed)
+				speeds.set(state.speed)
 			}
 			if (typeof state.bed === "boolean") bedBox.checked = state.bed
 			if (typeof state.strain === "boolean") strainBox.checked = state.strain
@@ -1297,5 +1309,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 		panel.remove()
 		root.remove()
 		link.remove()
+		traysLink.remove()
 	}
 }
