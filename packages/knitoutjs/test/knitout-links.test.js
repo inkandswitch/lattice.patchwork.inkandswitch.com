@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildState, links } from "../core/knitout-links.js";
+import { buildState, importsOf, links } from "../core/knitout-links.js";
 
 const JS = "automerge:js";
 const K = "automerge:k";
@@ -72,4 +72,16 @@ test("a .k with no sources behaves as before", () => {
   assert.equal(buildState(K, api, deps), "stale");
   assert.equal(buildState(K, api, { builds: { [JS]: { state: "error" } }, headsNow: () => "x" }), "error");
   assert.equal(buildState(K, fake({ [K]: { source: JS }, [JS]: { target: "automerge:z" } }), deps), null);
+});
+
+test("a .js imports each url once, in order, unpinned", () => {
+  const doc = {
+    name: "p.knitout.js",
+    content: `import a from "automerge:aaa#x|y"\nimport b from "/automerge:aaa"\nconst d = doc("automerge:bbb")\n`,
+  };
+  assert.deepEqual(importsOf(doc), ["automerge:aaa", "automerge:bbb"]);
+});
+
+test("a .k imports nothing", () => {
+  assert.deepEqual(importsOf({ name: "p.k", content: `import a from "automerge:aaa"` }), []);
 });

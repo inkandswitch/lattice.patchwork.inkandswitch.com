@@ -6,10 +6,8 @@
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { builds, setBuild } from "./core/builds.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
-import { collectSources } from "./core/instrument.js";
-import { unpinned } from "./core/sources.js";
 import { headsNow } from "./core/heads.js";
-import { buildOf as buildOfIn, buildState as buildStateIn, links, linksOf as linksOfIn } from "./core/knitout-links.js";
+import { buildOf as buildOfIn, buildState as buildStateIn, importsOf, links, linksOf as linksOfIn } from "./core/knitout-links.js";
 import defaultSource from "./core/default-source.js";
 
 const string = (value) => (value == null ? "" : String(value));
@@ -90,8 +88,7 @@ export const knitout = {
     return {
       ...knitoutOf(doc),
       textHash: js ? textHash(docText(doc)) : null,
-      // what a .js imports or reads with doc(), unpinned, each once
-      imports: js ? [...new Set(collectSources(docText(doc)).map((use) => unpinned(use.url)))] : [],
+      imports: importsOf(doc),
     };
   },
 

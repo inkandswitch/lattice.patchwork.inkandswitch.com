@@ -5,23 +5,28 @@ import { headsOf } from "./sources.js";
 // core/sources.js's headsOf reads off `automerge:<id>#a|b`), keyed by the
 // doc's unpinned url. a store, so whatever reads one is told when it moves
 const [heads, setHeads] = createStore({});
-const watching = new Set();
+// every url asked about, found or not. one that couldn't be found isn't
+// asked for again this page-session (status() reads this all the time)
+const asked = new Set();
 
-function watch(url, repo) {
-  watching.add(url);
-  repo
-    .find(url)
-    .then((handle) => {
-      // made the way a pin is made, so the two compare exactly
-      const update = () => setHeads(url, headsOf(handle.view(handle.heads()).url));
-      update();
-      handle.on("change", update);
-    })
-    .catch(() => watching.delete(url));
+async function watch(url, repo) {
+  let handle;
+  try {
+    handle = await repo.find(url);
+    // made the way a pin is made, so the two compare exactly
+    const update = () => setHeads(url, headsOf(handle.view(handle.heads()).url));
+    update();
+    handle.on("change", update);
+  } catch (error) {
+    console.warn(`couldn't watch the heads of ${url}`, error);
+  }
 }
 
 // a doc's heads now, or undefined until they're found. the first ask finds it
 export function headsNow(url, repo) {
-  if (!watching.has(url)) watch(url, repo);
+  if (!asked.has(url)) {
+    asked.add(url);
+    watch(url, repo);
+  }
   return heads[url];
 }

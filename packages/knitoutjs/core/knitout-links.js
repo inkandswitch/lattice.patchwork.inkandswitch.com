@@ -4,7 +4,16 @@
 // arguments: `api` (see packages/wm/workspace.js), `builds` (how each .js's
 // builds are going) and `headsNow(unpinnedUrl)` (a doc's heads now, as
 // core/sources.js's headsOf gives them for a pin, or undefined if not known yet)
-import { staleSources } from "./sources.js";
+import { docText, fileExtension } from "./files.js";
+import { collectSources } from "./instrument.js";
+import { staleSources, unpinned } from "./sources.js";
+
+// what a .js imports or reads with doc(), unpinned, each once, in order;
+// nothing for any other file
+export function importsOf(doc) {
+  if (fileExtension(doc) !== "js") return [];
+  return [...new Set(collectSources(docText(doc)).map((use) => unpinned(use.url)))];
+}
 
 // what wm keeps of a doc for us: its knitout links, and a .js's code now,
 // to tell when the .k it writes is out of date
