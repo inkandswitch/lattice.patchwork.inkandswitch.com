@@ -1,6 +1,6 @@
 // wm: a project's panes, and its files down the side. what each app's
 // project tool shows (lattice's frame has one in its middle)
-import { createSignal, createMemo, createEffect, on, onCleanup, For, Show } from "solid-js";
+import { createSignal, createMemo, createEffect, on, onCleanup, untrack, For, Show } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
@@ -236,7 +236,7 @@ function cellStyle(node, direction) {
  *              file, if not what its name says. a doc none of them shows
  *              shows with patchwork's own tool for it
  *   extensions what the app adds to the panes: [{name, watch, links,
- *              status, actions, touched, menu, presence}], each part
+ *              status, actions, bar, touched, menu, presence}], each part
  *              optional. see EXTENSIONS below
  *   self       tool ids never offered in a pane (the app's own project and
  *              frame tools: not inside a pane of themselves)
@@ -268,7 +268,23 @@ function cellStyle(node, direction) {
  *   actions(url, api)    buttons for its pane's bar, just before the status
  *                        (and looking like its action): [{icon?, label,
  *                        title?, run(from)}]. every extension's are drawn,
- *                        in order
+ *                        in order. (nothing of lattice's or knitoutjs's
+ *                        has any just now: a .k's "build kcode" is its
+ *                        build bar's, below)
+ *   bar(url, api)        a bar of its own for the doc, or null: a solid
+ *                        component, drawn at the top of each pane showing
+ *                        the doc, above the tool, whatever tool it is
+ *                        (knitoutjs's build bar: a .js's, a .k's, a
+ *                        patternstoat's). it's called with {from}, the
+ *                        pane it's in (for api.reveal), and it's there for
+ *                        as long as the pane is, shown or not, so it can
+ *                        hold on to something while the doc's open. the
+ *                        first extension's that isn't null is drawn.
+ *                        asked again as what it reads changes, as status
+ *                        is: give back the same component for the same
+ *                        bar, as a new one is drawn afresh. tools are told
+ *                        it's drawn for them (context.bars), so a tool that
+ *                        draws such a bar itself elsewhere needn't here
  *   touched(url, api)    when it was last done something to, if not edited:
  *                        {verb, at, flash?}: "built 3 min ago" in the files.
  *                        flash tints its panes when at changes
@@ -283,8 +299,12 @@ function cellStyle(node, direction) {
  *
  * api: {repo, createFile(name, fields), reveal(url, from, edge, tool),
  * openRow([[{url, tool}]]), files(), people(), docInfo(url), ago(time),
- * showing(url)}. `from` is what an action's run is handed: the pane it's in.
- * showing is whether a doc's open in a pane here (in any tab), reactively
+ * showing(url), hover(url | null), docColour(url)}. `from` is what an
+ * action's run is handed: the pane it's in. showing is whether a doc's open
+ * in a pane here (in any tab), reactively. hover lights up the panes
+ * showing a doc (and what's linked to it), as pointing at its tab does, till
+ * it's hover(null); docColour is the colour a doc wears here, as a css
+ * colour, for a bar to draw in
  */
 export function mountWorkspace(
   element,
@@ -906,6 +926,7 @@ export function mountWorkspace(
     return null;
   };
   const statusOf = (url) => firstOf("status", url);
+  const barOf = (url) => firstOf("bar", url);
   // unlike a status, every extension's actions are drawn
   const actionsOf = (url) => extensions.flatMap((extension) => extension.actions?.(url, api) ?? []);
   const touchedOf = (url) => firstOf("touched", url);
@@ -949,6 +970,8 @@ export function mountWorkspace(
     hover: setHovered,
     // the colour a doc wears here, as a css colour, for a tool to draw in
     docColour: (url) => `var(--lattice-wm-${docColour(url)})`,
+    // an extension's bar for a doc is drawn over its tool (EXTENSIONS: bar)
+    bars: true,
   };
 
   const hosts = new Map();
@@ -1175,6 +1198,8 @@ export function mountWorkspace(
     // is it open in a pane here (in any of its tabs): read in an effect, it
     // changes as panes open and close
     showing: (url) => (paneCounts().get(url) ?? 0) > 0,
+    hover: setHovered,
+    docColour: (url) => `var(--lattice-wm-${docColour(url)})`,
   };
 
   // what the extensions add to the + menu
@@ -2052,6 +2077,9 @@ export function mountWorkspace(
     const panel = props.panel;
     const info = docInfo(panel.url);
     let flash;
+    // an extension's bar for its doc, over the tool: drawn again only when
+    // it's another component
+    const bar = createMemo(() => barOf(panel.url));
 
     // something an extension says was done to the doc it shows, here or by
     // anyone else, tints it for a moment, so you can see it
@@ -2082,6 +2110,10 @@ export function mountWorkspace(
       onPointerEnter=${() => setHovered(panel.url)}
       onPointerLeave=${unhover}
     >
+      ${() => {
+        const Bar = bar();
+        return Bar ? untrack(() => Bar({ from: panel.id })) : null;
+      }}
       <${Slot} panel=${panel} />
       <div class="lattice-wm-flash" ref=${(el) => (flash = el)}></div>
     </div>`;

@@ -586,10 +586,12 @@
 		min-height: 0;
 	}
 
+	/* an extension's bar for the doc (a build bar), then the tool */
 	& .lattice-wm-panel {
 		position: relative;
 		display: flex;
 		flex: 1 1 0;
+		flex-direction: column;
 		min-width: 0;
 		min-height: 0;
 

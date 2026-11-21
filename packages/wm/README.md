@@ -38,10 +38,16 @@ built on, and Knitout JS too.
 what an app adds to the panes it adds as an extension: see the top of
 `workspace.js`. knitoutjs's is `../knitoutjs/wm.js`. an extension can say
 how a doc is doing (`status`: a line at the end of its pane's bar, one
-extension's), and give it buttons (`actions`: every extension's, just before
-the status, looking like its action): lattice's `kcode-wm.js` has a .k's
-"build kcode" there. `api.showing(url)` says whether a doc's open in a pane
-(reactively), for what should only go on while it is: a .kc's autobuild.
+extension's), give it buttons (`actions`: every extension's, just before
+the status, looking like its action), and give it a bar of its own (`bar`:
+a component, drawn at the top of every pane showing the doc, above
+whatever tool's showing it, one extension's). knitoutjs's build bar is one
+(`../knitoutjs/core/build-bar.js`): a .js's, a .k's (lattice's
+`kcode-wm.js`, into its .kc) and a patternstoat's (lattice's `project.js`).
+`api.showing(url)` says whether a doc's open in a pane (reactively), for
+what should only go on while it is; `api.hover(url)` and
+`api.docColour(url)` light up a doc's panes and give the colour it wears,
+for a bar to point at one and draw in it.
 
 it started as the panes in [knitoutjs](../knitoutjs), and is
 [AGPL-3.0-or-later](LICENSE), as it was there.

@@ -1,11 +1,12 @@
-// knitoutjs in a wm workspace: a .js and the .k it writes, linked; how its
-// builds are going, on the .k's pane and the .js's; and new patterns. it's
-// handed to wm by whoever mounts one (lattice, or the Knitout JS app), and
-// imports nothing of wm's: what it needs of the workspace is `api` (see
-// packages/wm/workspace.js)
+// knitoutjs in a wm workspace: a .js and the .k it writes, linked; a .js's
+// build bar, over whatever shows it; how its builds are going, on the .k's
+// pane; and new patterns. it's handed to wm by whoever mounts one (lattice,
+// or the Knitout JS app), and imports nothing of wm's: what it needs of the
+// workspace is `api` (see packages/wm/workspace.js)
 import { isValidAutomergeUrl } from "@automerge/automerge-repo/slim";
 import { builds } from "./core/builds.js";
 import { buildOnce } from "./core/builder.js";
+import { wmBuildBar } from "./core/build-bar.js";
 import { jsBuild } from "./core/js-build.js";
 import { docText, fileExtension, knitoutOf, textHash } from "./core/files.js";
 import { headsNow } from "./core/heads.js";
@@ -86,6 +87,11 @@ export const knitout = {
 
   // see core/knitout-links.js
   links,
+
+  // a .js's build bar, over whatever's showing it (it writes its .k)
+  bar(url, api) {
+    return api.docInfo(url).extension === "js" ? wmBuildBar(jsBuild, url, api) : null;
+  },
 
   // a generated .k's line: built just now, out of date, or its .js failed,
   // only while its .js still writes into it. a .js has none: its editor
