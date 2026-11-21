@@ -31,6 +31,14 @@ export function staleSources(sources, headsNow) {
   });
 }
 
+// what a build records of the docs it read: the .js first, then the rest,
+// but not the .js again or the .k it writes (`self`, `target`). a pattern
+// can doc() its own .k, and its .k would be stale by its own write
+export function recordedSources(sources, { self, target }) {
+  const skip = new Set([self, target].filter(Boolean).map(unpinned));
+  return sources.filter((url, index) => index === 0 || !skip.has(unpinned(url)));
+}
+
 const isHeader = (line, index) => line.startsWith(";;") || (index === 0 && line.startsWith(";!"));
 
 // knitout with its sources line (replacing any it had), just after the ;;

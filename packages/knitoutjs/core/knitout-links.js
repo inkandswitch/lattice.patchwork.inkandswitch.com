@@ -4,9 +4,9 @@
 // arguments: `api` (see packages/wm/workspace.js), `builds` (how each .js's
 // builds are going) and `headsNow(unpinnedUrl)` (a doc's heads now, as
 // core/sources.js's headsOf gives them for a pin, or undefined if not known yet)
-import { docText, fileExtension } from "./files.js";
+import { docText, fileExtension, knitoutOf } from "./files.js";
 import { collectSources } from "./instrument.js";
-import { staleSources, unpinned } from "./sources.js";
+import { recordedSources, staleSources, unpinned } from "./sources.js";
 
 // what a .js imports or reads with doc(), unpinned, each once, in order;
 // nothing for any other file
@@ -23,6 +23,29 @@ export function watchedSources(jsDoc, kDoc, { self, target }) {
   const known = (kDoc?.knitoutSources ?? []).slice(1).map((url) => unpinned(String(url)));
   const skip = new Set([self && unpinned(self), target && unpinned(target)]);
   return [...new Set([...importsOf(jsDoc), ...known])].filter((url) => !skip.has(url));
+}
+
+// whether a doc the .k was built from has moved on since (the .js itself
+// aside, and one whose heads aren't known yet), so it's due a build
+export function sourcesMoved(kDoc, headsNow) {
+  return staleSources(knitoutOf(kDoc).sources, headsNow).length > 0;
+}
+
+// which docs to go and find: each once, but one whose find failed is let
+// through again on an ask once `retryAfter` ms have passed (a find can fail
+// for a moment, offline, say), so it isn't left unwatched all session
+export function findOnce({ retryAfter = 30_000, now = Date.now } = {}) {
+  const failedAt = new Map(); // url → when its find failed, or null if found or finding
+  return {
+    ask(url) {
+      if (failedAt.has(url) && (failedAt.get(url) === null || now() - failedAt.get(url) < retryAfter)) return false;
+      failedAt.set(url, null);
+      return true;
+    },
+    failed(url) {
+      failedAt.set(url, now());
+    },
+  };
 }
 
 // what wm keeps of a doc for us: its knitout links, and a .js's code now,
@@ -54,7 +77,10 @@ export function buildState(kUrl, api, { builds, headsNow }) {
   if (build.state === "running") return "running";
   if (build.state === "error") return "error";
   const edited = !!k.sourceHash && !!js.textHash && k.sourceHash !== js.textHash;
-  const moved = (k.sources ?? []).length > 1 && staleSources(k.sources, headsNow).length > 0;
+  // (a .k built before builds left out the .k itself, and the .js again,
+  // can still list them: they'd be stale by its own write)
+  const sources = recordedSources(k.sources ?? [], { self: k.source, target: kUrl });
+  const moved = sources.length > 1 && staleSources(sources, headsNow).length > 0;
   // with autobuild on, it's about to build anyway
   if (edited || moved) return build.auto && build.builder ? "running" : "stale";
   return "built";

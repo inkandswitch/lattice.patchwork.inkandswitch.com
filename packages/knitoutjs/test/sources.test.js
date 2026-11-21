@@ -8,6 +8,7 @@ import {
   unpinned,
   headsOf,
   staleSources,
+  recordedSources,
 } from "../core/sources.js";
 
 const knitout = ";!knitout-2\n;;Carriers: 1 2 3 4 5 6\nin 3\n";
@@ -55,4 +56,17 @@ test("a source is stale when its heads have moved", () => {
   const now = { "automerge:a": "2", "automerge:b": "9", "automerge:js": "7" };
   assert.deepEqual(staleSources(sources, (url) => now[url]), ["automerge:b#3"]);
   assert.deepEqual(staleSources(sources, (url) => ({ "automerge:a": "2" })[url]), []);
+});
+
+test("a build never records the .k it writes, or the .js again after the first", () => {
+  const sources = ["automerge:js#1", "automerge:lib#2", "automerge:k#3", "/automerge:js#4", "automerge:other#5"];
+  assert.deepEqual(recordedSources(sources, { self: "automerge:js", target: "automerge:k" }), [
+    "automerge:js#1",
+    "automerge:lib#2",
+    "automerge:other#5",
+  ]);
+  assert.deepEqual(recordedSources(["automerge:js#1", "automerge:k#3"], { self: "automerge:js", target: null }), [
+    "automerge:js#1",
+    "automerge:k#3",
+  ]);
 });

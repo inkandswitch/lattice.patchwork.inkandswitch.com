@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildState, importsOf, links, watchedSources } from "../core/knitout-links.js";
+import { buildState, findOnce, importsOf, links, sourcesMoved, watchedSources } from "../core/knitout-links.js";
 
 const JS = "automerge:jsAAA";
 const K = "automerge:kAAA";
@@ -104,4 +104,41 @@ test("watchedSources: never the .js or its target, even if listed", () => {
 test("watchedSources: no .k, imports only", () => {
   const js = { name: "a.js", content: `import "${IMP}"` };
   assert.deepEqual(watchedSources(js, undefined, { self: JS, target: undefined }), [IMP]);
+});
+
+test("sourcesMoved: a .k whose sources have moved since it was built", () => {
+  const k = { knitoutSources: [`${JS}#a`, `${LIB}#b`] };
+  assert.equal(sourcesMoved(k, (url) => (url === LIB ? "b" : undefined)), false);
+  assert.equal(sourcesMoved(k, (url) => (url === LIB ? "c" : undefined)), true);
+  // the .js itself isn't looked at, and one not found yet hasn't moved
+  assert.equal(sourcesMoved(k, (url) => (url === JS ? "z" : undefined)), false);
+  assert.equal(sourcesMoved(undefined, () => "c"), false);
+  assert.equal(sourcesMoved({}, () => "c"), false);
+});
+
+test("findOnce: each url once, and one that failed again after a while", () => {
+  let time = 0;
+  const finds = findOnce({ retryAfter: 30_000, now: () => time });
+  assert.equal(finds.ask(LIB), true);
+  assert.equal(finds.ask(LIB), false);
+  finds.failed(LIB);
+  time = 29_999;
+  assert.equal(finds.ask(LIB), false);
+  time = 30_000;
+  assert.equal(finds.ask(LIB), true);
+  // and only the one ask that's let through, while that find goes
+  assert.equal(finds.ask(LIB), false);
+  // a found one is never found again
+  time = 1_000_000;
+  assert.equal(finds.ask(LIB), false);
+  assert.equal(finds.ask(OUT), true);
+});
+
+test("a .k that lists itself or its .js again among its sources isn't stale by its own write", () => {
+  const api = fake({
+    [K]: { source: JS, sources: [`${JS}#a`, `${K}#old`, `${JS}#old`, `${LIB}#b`] },
+    [JS]: { target: K },
+  });
+  const headsNow = (url) => ({ [K]: "new", [JS]: "new", [LIB]: "b" })[url];
+  assert.equal(buildState(K, api, { builds: {}, headsNow }), "built");
 });

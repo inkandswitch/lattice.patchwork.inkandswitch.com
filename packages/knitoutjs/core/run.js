@@ -4,7 +4,7 @@ import { parser } from "./vendor/lezer-javascript.js";
 import { docText, knitoutOf, moduleWorker, textHash } from "./files.js";
 import { instrument } from "./instrument.js";
 import { buildGraph, buildRounds } from "./graph.js";
-import { withSourcesLine } from "./sources.js";
+import { recordedSources, withSourcesLine } from "./sources.js";
 
 export { instrument };
 
@@ -184,20 +184,21 @@ export async function runInto(jsHandle, kHandle, repo, { signal } = {}) {
     return done({ knitout: "", error: { message: String(error?.message ?? error), line: error?.line ?? null }, sources: [] });
   }
   const { result, graph } = built;
+  const sources = recordedSources(graph.sources, { self: jsHandle.url, target: kHandle.url });
   // a build that failed leaves the .k as it was
-  if (result.error) return done({ knitout: result.knitout, error: result.error, sources: graph.sources });
-  const knitout = withSourcesLine(result.knitout, graph.sources);
+  if (result.error) return done({ knitout: result.knitout, error: result.error, sources });
+  const knitout = withSourcesLine(result.knitout, sources);
   kHandle.change((doc) => {
     doc.content = new ImmutableString(knitout);
     doc.knitoutSource = jsHandle.url;
     doc.knitoutSourceHash = textHash(code);
     doc.knitoutBuiltAt = Date.now();
-    doc.knitoutSources = graph.sources;
+    doc.knitoutSources = sources;
   });
   if (knitoutOf(jsHandle.doc()).target !== kHandle.url) {
     jsHandle.change((doc) => {
       doc.knitoutTarget = kHandle.url;
     });
   }
-  return done({ knitout, error: null, sources: graph.sources });
+  return done({ knitout, error: null, sources });
 }

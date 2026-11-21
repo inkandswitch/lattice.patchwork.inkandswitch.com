@@ -9,7 +9,8 @@ import { docRefs } from "./doc-refs-cm.js";
 import { definitionDoc, toolFor } from "./doc-refs.js";
 import { languageServerDocs } from "./language-server.js";
 import { runInto } from "./run.js";
-import { importsOf, watchedSources } from "./knitout-links.js";
+import { importsOf, sourcesMoved, watchedSources } from "./knitout-links.js";
+import { headsOf } from "./sources.js";
 import { builderOf, setBuild } from "./builds.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
@@ -227,6 +228,20 @@ export default function KnitoutEditorTool(handle, element, context) {
       console.warn(`knitoutjs: can't watch ${url}`, error);
     }
 
+    // the heads a watched doc has now, as a pin says them, once it's found
+    function headsNow(url) {
+      const found = watching.get(url)?.handle;
+      return found ? headsOf(found.view(found.heads()).url) : undefined;
+    }
+
+    // a doc the .k was built from may have moved before this was open (or
+    // while it was being found), with no change to come to say so: if one
+    // has, that's an edit too (so with autobuild off, still nothing)
+    function buildIfMoved() {
+      const kDoc = kWatch?.handle?.doc();
+      if (kDoc && sourcesMoved(kDoc, headsNow)) edited();
+    }
+
     function recompute() {
       if (closed) return;
       const want = watchedSources(handle.doc(), kWatch?.handle?.doc(), {
@@ -247,8 +262,10 @@ export default function KnitoutEditorTool(handle, element, context) {
           if (closed || watching.get(url) !== entry) return;
           entry.handle = found;
           found.on("change", edited);
+          buildIfMoved();
         }, (error) => warnOnce(url, error));
       }
+      buildIfMoved();
     }
 
     // the target .k's own doc says what it was built from; a build writes it
