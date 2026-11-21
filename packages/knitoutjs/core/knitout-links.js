@@ -115,9 +115,16 @@ export function links(url, api) {
       found.push({ url: file.url, label: "used by", title: "open a .js that imports this", live: true });
     }
   }
-  // the first source is the .js itself, which "written by" has
+  // the first source is the .js itself, which "written by" has. a chip opens
+  // the doc as it is now (the pinned version would be a read-only view, and
+  // a pane of its own): the version it was built from is in its title
   for (const source of (doc.sources ?? []).slice(1)) {
-    found.push({ url: source, label: "built from", title: "open a doc this was built from", live: false });
+    found.push({
+      url: unpinned(source),
+      label: "built from",
+      title: `open a doc this was built from (it was built from ${source})`,
+      live: false,
+    });
   }
   return found;
 }

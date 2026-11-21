@@ -28,12 +28,14 @@ test("a .js links to what it imports, and they link back", () => {
   );
 });
 
-test("a .k links to what it was built from, not live, past the .js itself", () => {
+test("a .k links to what it was built from, unpinned, not live, past the .js itself", () => {
   const api = fake({ [K]: { source: JS, sources: [`${JS}#a`, `${LIB}#b`] }, [JS]: { target: K } });
   assert.deepEqual(
     links(K, api).map((l) => [l.url, l.label, l.live]),
-    [[JS, "written by", true], [`${LIB}#b`, "built from", false]],
+    [[JS, "written by", true], [LIB, "built from", false]],
   );
+  // the version it was built from is in the chip's title
+  assert.match(links(K, api)[1].title, new RegExp(`${LIB}#b`));
 });
 
 test("a source with new heads makes the .k stale", () => {
