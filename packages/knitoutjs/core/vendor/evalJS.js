@@ -781,7 +781,13 @@ Writer.prototype.getNeedleBed = function(needleNum){
 	//note: don't think frontend supports in line comment anyway? so no conflicts?
 	//patchwork: walks the stack to the first frame in the user's code (the
 	//only code run through `new Function`), instead of a fixed depth
+	//patchwork: and then what the op was made from, if options.currentReads()
+	//says (the doc values it read: see reads.js), after its line
 	function findLineNumber() {
+		return findSourceLine() + (options.currentReads?.() ?? "")
+	}
+
+	function findSourceLine() {
 		let err = new Error()
 		let stack = err.stack.split(/\n/)
 

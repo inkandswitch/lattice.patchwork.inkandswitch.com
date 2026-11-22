@@ -139,7 +139,8 @@ async function parseKnitout(codeText, machine, useKnitoutAsSource=false, opts={}
 
 		//handle !source: directive in comment
 		if (semi !== -1 && line.startsWith(';!source:', semi)) {
-			if (hasSource) machine.source(line.substring(semi + 9));
+			//patchwork: up to the next space (a ;!read: tag can follow it)
+			if (hasSource) machine.source(line.substring(semi + 9).split(/\s/, 1)[0]);
 		} else if (useKnitoutAsSource) {
 			machine.source(lineNumber);
 		}

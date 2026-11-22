@@ -160,15 +160,18 @@ export const KNITOUT_SHIM = "export const Writer = globalThis.__knitout.Writer; 
 // for. one the graph hasn't got throws `suspend(url, kind)`, kind being how
 // it was asked ("doc" or "dynamic", as extendGraph takes it). `module` of
 // something that isn't a doc url is null: the caller loads it as it is
-export function linkGraph({ pins = {}, modules = [], snapshots = {} }, { makeUrl, suspend }) {
+// `watch(pinned, value)`, if given, is what the pattern's handed for each
+// frozen doc (reads.js's watched, to see what it reads)
+export function linkGraph({ pins = {}, modules = [], snapshots = {} }, { makeUrl, suspend, watch = null }) {
   const docs = {};
-  for (const [pinned, value] of Object.entries(snapshots)) docs[pinned] = deepFreeze(value);
   const urls = {};
   const map = { knitout: makeUrl(KNITOUT_SHIM) };
   // a .js read with `doc()` is a value, not a module: importing it asks for it
   // again, as a module
-  for (const [pinned, value] of Object.entries(docs)) {
-    if (fileExtension(value) !== "js") urls[pinned] = map[pinned] = makeUrl(snapshotModule(pinned, value));
+  for (const [pinned, value] of Object.entries(snapshots)) {
+    const frozen = deepFreeze(value);
+    docs[pinned] = watch ? watch(pinned, frozen) : frozen;
+    if (fileExtension(frozen) !== "js") urls[pinned] = map[pinned] = makeUrl(snapshotModule(pinned, frozen));
   }
   // a module wins over a doc at the same pin
   for (const { pinned, code } of modules) {
