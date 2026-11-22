@@ -891,10 +891,14 @@ Writer.prototype.getNeedleBed = function(needleNum){
 		codeText = "//" + codeText
 	}
 
+	//patchwork: code the engine can't read never runs, so there's no stack to
+	//say where it stopped. safari says anyway (the error's `line`), but counts
+	//the wrapper's lines too; chrome and firefox don't (null: the caller looks)
+	let run
 	try {
 		//patchwork: the code starts a line of its own (no indent), so a source
 		//map's columns for it still hold on its first line
-		const run = new Function(
+		run = new Function(
 			"require",
 			"console",
 			...Object.keys(globals),
@@ -904,7 +908,14 @@ ${codeText}
 			})();
 			//# sourceURL=${PATTERN_URL}${sourceMapComment(options.sourceMap, sourceLineOffset)}`
 		)
+	} catch (e) {
+		const line = typeof e?.line === "number" ? e.line - sourceLineOffset : null
+		if (options.onError) options.onError(e, line >= 1 ? line : null)
+		else console.error(`Code failed to run fully:\n ${e}`)
+		return ""
+	}
 
+	try {
 		//patchwork: modules the pattern imports get the knitout library from here
 		//(their `import … from "knitout"` is a shim that reads it)
 		globalThis.__knitout = {Writer: NewWriter}

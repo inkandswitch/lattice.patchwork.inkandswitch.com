@@ -13,6 +13,7 @@ import { builderOf } from "./builds.js";
 import { takeBuilder } from "./builder.js";
 import { BuildBar } from "./build-bar.js";
 import { jsBuild } from "./js-build.js";
+import { changesBetween, format } from "./format.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
 
@@ -49,8 +50,9 @@ const DEFINITION_WAIT = 2000;
  *   bar's drawn here
  *
  * a .js file builds into a .k file (its builder, ./builder.js: ⌘↵ builds,
- * and your own edits autobuild). docs dropped onto its code become imports
- * (the frame asks `element.dropInto`)
+ * and your own edits autobuild), and ⌘S tidies it (prettier, as splices).
+ * docs dropped onto its code become imports (the frame asks
+ * `element.dropInto`)
  */
 export default function KnitoutEditorTool(handle, element, context) {
   const { repo, events, project, hover, open, openIfClosed, docColour } = context;
@@ -158,6 +160,46 @@ export default function KnitoutEditorTool(handle, element, context) {
     }
   }
   element.addEventListener(EXTENSIONS_EVENT, onExtensions);
+
+  // ⌘S tidies a .js (prettier, format.js), as the few changes that make it
+  // tidy, so it's a handful of splices, not the whole text again: carets
+  // stay put, yours and everyone's, and so does what anyone's typing. in
+  // any file it's this, not the browser saving the page. code prettier
+  // can't read is marked where it stops (and cleared by the next tidy)
+  let tidying = false;
+  let untidy = false;
+  async function tidy() {
+    if (!view || tidying) return;
+    tidying = true;
+    try {
+      // (typed into while prettier's at it: again, from what's there now)
+      for (let tries = 0; tries < 3 && view; tries++) {
+        const before = view.state.doc.toString();
+        const result = await format(before);
+        if (!view) return;
+        if (result.error) {
+          untidy = true;
+          showError(view, { line: result.error.line ?? 1, message: `can't tidy this: ${result.error.message}` });
+          return;
+        }
+        if (view.state.doc.toString() !== before) continue;
+        if (untidy) showError(view, null);
+        untidy = false;
+        const changes = changesBetween(before, result.text);
+        if (changes.length) view.dispatch({ changes, userEvent: "format" });
+        return;
+      }
+    } finally {
+      tidying = false;
+    }
+  }
+  function onKey(event) {
+    if (event.key !== "s" || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (isJs) tidy();
+  }
+  element.addEventListener("keydown", onKey, { capture: true });
 
   // a definition in another doc: open it beside, and a .js at its line, once
   // its editor's there to go to it (an lsp line counts from 0)
@@ -306,6 +348,7 @@ export default function KnitoutEditorTool(handle, element, context) {
     gone = true;
     delete element.dropInto;
     element.removeEventListener(EXTENSIONS_EVENT, onExtensions);
+    element.removeEventListener("keydown", onKey, { capture: true });
     element.removeEventListener(DEFINITION_EVENT, onDefinition);
     handle.off("change", giveServerDocs);
     serverDocs?.close();

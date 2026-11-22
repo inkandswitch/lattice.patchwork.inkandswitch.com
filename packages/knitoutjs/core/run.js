@@ -1,8 +1,7 @@
 import { ImmutableString } from "@automerge/automerge";
 import { MessagePortTransport } from "@automerge/automerge-subduction/slim";
-import { parser } from "./vendor/lezer-javascript.js";
 import { docText, knitoutOf, moduleWorker, textHash } from "./files.js";
-import { instrument } from "./instrument.js";
+import { firstBrokenLine, instrument } from "./instrument.js";
 import { buildGraph, buildRounds } from "./graph.js";
 import { recordedSources, withSourcesLine } from "./sources.js";
 
@@ -20,18 +19,6 @@ const SETUP_BUDGET = 10_000;
 
 const WORKER_URL = new URL("./run-worker.js", import.meta.url);
 
-// where the code first stops making sense, for syntax errors (the engine
-// doesn't say which line)
-function firstBrokenLine(code) {
-  let at = null;
-  parser.parse(code).iterate({
-    enter(node) {
-      if (at !== null) return false;
-      if (node.type.isError) at = node.from;
-    },
-  });
-  return at === null ? null : code.slice(0, at).split("\n").length;
-}
 
 // what the worker and the window call the subduction link between them
 const SERVICE = "knitout-run";

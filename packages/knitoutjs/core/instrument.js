@@ -296,3 +296,31 @@ function encodeMappings(lines) {
     })
     .join(";");
 }
+
+// what lezer's grammar reads as typescript, which a pattern can't be: the
+// engine stops there, so it's where the code stops making sense too
+const TYPESCRIPT = new Set([
+  "TypeAnnotation",
+  "TypeParamList",
+  "TypeArgList",
+  "TypePredicate",
+  "TypeAliasDeclaration",
+  "InterfaceDeclaration",
+  "EnumDeclaration",
+  "NamespaceDeclaration",
+  "AmbientDeclaration",
+  "AmbientFunctionDeclaration",
+]);
+
+// where the code first stops making sense, for syntax errors (chrome and
+// firefox don't say which line)
+export function firstBrokenLine(code) {
+  let at = null;
+  parser.parse(code).iterate({
+    enter(node) {
+      if (at !== null) return false;
+      if (node.type.isError || TYPESCRIPT.has(node.name)) at = node.from;
+    },
+  });
+  return at === null ? null : code.slice(0, at).split("\n").length;
+}
