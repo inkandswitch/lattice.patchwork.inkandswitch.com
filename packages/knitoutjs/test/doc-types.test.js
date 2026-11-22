@@ -38,8 +38,15 @@ test("past the depth it's unknown", () => {
   assert.equal(typeOf({ a: 1 }, 0), "unknown");
 });
 
-test("a key that isn't an identifier is quoted as json", () => {
-  assert.equal(typeOf({ "a b": 1, 'q"': 2 }), `{ "a b": number; "q\\"": number; }`);
+// one such key (`@patchwork`, say) would be completed from the dot as
+// `["@patchwork"]`, which the editor then filters every completion by, so
+// it'd be the only one offered
+test("a key that isn't an identifier is left to an index signature, not named", () => {
+  assert.equal(
+    typeOf({ "@patchwork": { type: "x" }, width: 2, "a b": 1 }),
+    `{ [key: string]: unknown; "width": number; }`,
+  );
+  assert.equal(typeOf({ "a b": 1 }), `{ [key: string]: unknown; }`);
 });
 
 test("a doc's declarations type doc() of its url, with or without a slash", () => {
@@ -71,8 +78,8 @@ test("a doc's declarations use its id, whatever its url says", () => {
 
 test("a key that isn't an identifier isn't a named export", () => {
   const text = docDeclarations(A, { "a b": 1, class: 2, ok: 3 });
-  assert.match(text, /"a b": number;/);
-  assert.doesNotMatch(text, /const a b/);
+  assert.match(text, /\[key: string\]: unknown;/);
+  assert.doesNotMatch(text, /a b/);
   assert.doesNotMatch(text, /const class/);
   assert.match(text, /export declare const ok: number;/);
 });
