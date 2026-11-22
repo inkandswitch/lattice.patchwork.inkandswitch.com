@@ -17,7 +17,7 @@ const nameOf = (doc, url) => doc?.name || doc?.title || doc?.["@patchwork"]?.typ
 // a colour a doc's value stands for: a patternwitch's pixel is a place in its palette
 function colourOf(doc, read) {
 	const palette = doc?.palette
-	if (!Array.isArray(palette) || !Number.isInteger(read.value)) return null
+	if (!Array.isArray(palette) || read?.path[0] !== "pixels" || !Number.isInteger(read.value)) return null
 	const colour = palette[read.value]
 	return typeof colour === "string" ? colour : null
 }
@@ -79,7 +79,9 @@ export default function ProvenanceTool(handle, element, context = {}) {
 	function find(url) {
 		if (found.has(url)) return found.get(url)
 		const finding = (async () => {
-			const handle = await context.repo.find(unpinned(url))
+			// (a doc nobody here has can take forever to not be found)
+			const late = new Promise((_, reject) => setTimeout(() => reject(new Error("not found")), 4000))
+			const handle = await Promise.race([context.repo.find(unpinned(url)), late])
 			const heads = headsOf(url)
 			const doc = heads ? handle.view(heads.split("|")).doc() : handle.doc()
 			const info = {doc, name: nameOf(doc, url)}
@@ -121,7 +123,13 @@ export default function ProvenanceTool(handle, element, context = {}) {
 		text = now
 		model = readRows(text)
 		readDocs = readDocsOf(text)
-		for (const url of readDocs) find(url).then(requestDraw)
+		for (const url of readDocs) {
+			if (known(url)) continue
+			find(url).then(() => {
+				requestDraw()
+				showBox()
+			})
+		}
 		empty.hidden = model.rows.length > 0
 		const reads = model.lines.filter(line => line.includes(";!read:")).length
 		status.textContent = model.rows.length
@@ -211,14 +219,19 @@ export default function ProvenanceTool(handle, element, context = {}) {
 		const left = Math.max(0, Math.floor(scroller.scrollLeft / cell))
 		const right = Math.min(columns, Math.ceil((scroller.scrollLeft + width) / cell))
 		const gap = cell >= 8 ? 1 : 0
-		const fill = (entry, x, y, w, h) => {
-			let colour = colours[entry.op]
-			const reads = readsOf(model.lines[entry.line] ?? "")
-			if (byRead) {
-				const read = reads.at(-1)
-				colour = (read && colourOf(known(readDocs[read.doc])?.doc, read)) ?? style("--provenance-unread")
+		const unread = style("--provenance-unread")
+		// a stitch's colour: its op's, or the first colour it read
+		const colourFor = (entry, reads) => {
+			if (!byRead) return colours[entry.op]
+			for (const read of reads) {
+				const colour = colourOf(known(readDocs[read.doc])?.doc, read)
+				if (colour) return colour
 			}
-			g.fillStyle = colour
+			return unread
+		}
+		const fill = (entry, x, y, w, h) => {
+			const reads = readsOf(model.lines[entry.line] ?? "")
+			g.fillStyle = colourFor(entry, reads)
 			g.fillRect(x, y, w, h)
 			// a stitch that read something says so, in its corner
 			if (!byRead && reads.length && cell >= 8) {
@@ -397,7 +410,9 @@ export default function ProvenanceTool(handle, element, context = {}) {
 									"via ",
 									...each.via.flatMap((step, index) => [
 										index ? " ← " : "",
-										link(step.name, js.url, step.line, `go to where ${step.name} is made, line ${step.line}`),
+										step.kind
+											? link(`the ${step.kind} on line ${step.line}`, js.url, step.line, `go to the ${step.kind} it's in`)
+											: link(step.name, js.url, step.line, `go to where ${step.name} is made, line ${step.line}`),
 									]),
 								)
 							: null
@@ -459,6 +474,9 @@ export default function ProvenanceTool(handle, element, context = {}) {
 	}
 
 	function onClick(event) {
+		// (a double click's second click isn't another pick)
+		if (event.detail > 1) return
+		root.focus({preventScroll: true})
 		const at = pointAt(event)
 		if (!at || same(at, pinned)) return unpin()
 		pinned = at

@@ -8,9 +8,12 @@
 	"scripts": {
 		"push": "echo \"its imports reach packages/ beside it, which a pushed folder can't: stage it (pnpm stage knitoutjs --state <its .pushwork>, from the repo's root), then pushwork sync in stage/knitoutjs\" && exit 1",
 		"register": "pw-modules add \"$MODULE_SETTINGS_DOC_URL\" \"$(pushwork url)\"",
-		"test": "node --test test/*.test.js"
+		"test": "node --test test/*.test.js",
+		"vendor": "echo 'export {format} from \"prettier/standalone\"; export * as babel from \"prettier/plugins/babel\"; export * as estree from \"prettier/plugins/estree\"' | esbuild --bundle --minify --format=esm --outfile=core/vendor/prettier.js --legal-comments=inline --banner:js=\"// MIT, James Long and contributors: prettier, with its babel and estree plugins. vendored by pnpm vendor in packages/knitoutjs from its devDependencies, as it is not in patchwork's importmap\""
 	},
 	"devDependencies": {
-		"@automerge/automerge": "3.5.0"
+		"@automerge/automerge": "3.5.0",
+		"esbuild": "^0.28.2",
+		"prettier": "^3.10.1"
 	}
 }

@@ -15,7 +15,7 @@ import { scan } from "./instrument.js";
 // once, by the shortest way to it. `name` is what it's bound to in the code,
 // `line` where it's imported, and `via` the names in between, from the line
 // back to the doc. one the line's reached through an if or a loop round it
-// starts with {name: "if" | "loop", line}
+// starts with {kind: "if" | "loop", line} (where the if or loop starts)
 
 const SCOPES = new Set([
   "Script",
@@ -256,7 +256,7 @@ export function tracer(code) {
     const [own, ...heads] = startsOf(line);
     for (const start of [own, ...heads]) {
       if (!start) continue;
-      visit(start, start === own ? [] : [{ name: start.parent.name === "IfStatement" ? "if" : "loop", line: lineAt(start.from) }]);
+      visit(start, start === own ? [] : [{ kind: start.parent.name === "IfStatement" ? "if" : "loop", line: lineAt(start.from) }]);
       for (let steps = 0; edge.length && steps < MOST; steps++) {
         const next = edge;
         edge = [];

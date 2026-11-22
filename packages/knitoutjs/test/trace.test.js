@@ -27,10 +27,10 @@ test("through a copy into a local array, and the loops round the line", () => {
   const found = tracer(code)(8);
   assert.deepEqual(urls(found).sort(), [W, V].sort());
   const witch = found.find((each) => each.url === W);
-  assert.deepEqual(witch.via.map((step) => step.name), ["if", "on", "grid", "row"]);
+  assert.deepEqual(witch.via.map((step) => step.name ?? step.kind), ["if", "on", "grid", "row"]);
   const cols = found.find((each) => each.url === V);
   assert.equal(cols.name, "cols");
-  assert.deepEqual(cols.via, [{ name: "loop", line: 5 }]);
+  assert.deepEqual(cols.via, [{ kind: "loop", line: 5 }]);
 });
 
 test("through a function, and its parameters' arguments", () => {

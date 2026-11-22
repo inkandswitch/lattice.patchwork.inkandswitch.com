@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collectSources, instrument, isDocUrl } from "../core/instrument.js";
+import { collectSources, firstBrokenLine, instrument, isDocUrl } from "../core/instrument.js";
 
 const pins = { "automerge:abc": "automerge:abc#h1" };
 
@@ -150,4 +150,12 @@ test("a default and a namespace are both bound", () => {
 test("two combined imports get their own temporaries", () => {
   const code = instrument('import x, {a} from "knitout"; import y, {b} from "knitout"').code;
   assert.ok(code.includes("__m1") && code.includes("__m2"));
+});
+
+test("where code first stops making sense: an error, or typescript", () => {
+  const ts = "let a = 1\n\nfunction lerp(t: number, min, max) {\n  return min\n}\n\nfunction remap(v) {}";
+  assert.equal(firstBrokenLine(ts), 3);
+  assert.equal(firstBrokenLine("let a = 1\nlet b = (\nlet c"), 3);
+  assert.equal(firstBrokenLine("type A = number\nlet a = 1"), 1);
+  assert.equal(firstBrokenLine("import * as k from 'knitout'\nlet a = 1"), null);
 });

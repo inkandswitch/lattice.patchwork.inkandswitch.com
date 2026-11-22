@@ -168,7 +168,9 @@ onmessage = async ({ data }) => {
       onError: (e, at) =>
         (error = {
           message: String(e?.message ?? e),
-          line: e?.line ?? at ?? null,
+          // (an engine's own `line` on a syntax error is safari's, counted
+          // from the top of evalJS's wrapper: `at` is the pattern's)
+          line: (e?.name === "SyntaxError" ? at : e?.line ?? at) ?? null,
           syntax: e?.name === "SyntaxError",
         }),
     });
