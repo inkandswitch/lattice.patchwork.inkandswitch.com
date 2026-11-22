@@ -23,7 +23,7 @@ import { menuKeys } from "../wm/ui/menus.js";
 import { rowMenu, showMenuAt } from "../wm/ui/context-menu.js";
 import { arrivals } from "../wm/ui/arriving.js";
 import { carrying } from "../wm/ui/carrying.js";
-import { holdSecret, secret } from "../wm/ui/secret.js";
+import { secret } from "../wm/ui/secret.js";
 import { roughFilters } from "../knitoutjs/look.js";
 import { useThemes } from "./themes.js";
 import { SettingsPage } from "./settings-page.js";
@@ -1135,23 +1135,18 @@ function Frame(props) {
           if (files.length) takeArchives(files);
         }}
       />
-      <${Show} when=${secret}>
-        <form class="lattice-wm-menu-url" ref=${holdSecret} onSubmit=${onAddFromUrl}>
-          <input
-            name="url"
-            placeholder="automerge:… url"
-            aria-label="a project's, folder's or directory's automerge url, or a .latticeproject pasted"
-            autocomplete="off"
-            disabled=${() => !!adding()}
-            onInput=${() => setAddProblem(null)}
-          />
-        </form>
-      <//>
+      <form class="lattice-wm-menu-url" onSubmit=${onAddFromUrl}>
+        <input
+          name="url"
+          placeholder="automerge:… url"
+          aria-label="a project's, folder's or directory's automerge url, or a .latticeproject pasted"
+          autocomplete="off"
+          disabled=${() => !!adding()}
+          onInput=${() => setAddProblem(null)}
+        />
+      </form>
       <p class="lattice-wm-menu-hint" data-problem=${() => (addProblem() ? "" : undefined)}>
-        ${() =>
-          addProblem() ??
-          adding() ??
-          (secret() ? "a project, folder or directory · or drop or paste a .latticeproject" : "drop or paste a .latticeproject")}
+        ${() => addProblem() ?? adding() ?? "a project, folder or directory · or drop or paste a .latticeproject"}
       </p>
     </div>`;
   }
