@@ -1,8 +1,8 @@
 // what's hidden until ctrl, alt and command are tapped together twice, with
 // nothing else in between (a key, a click), and hidden again by the same, or
 // by itself after a couple of seconds (not while you're at one of them: the
-// pointer over it, or typing in it): lattice's box for a project's
-// automerge url, and your own packages. one for the page, whoever asks
+// pointer over it, or typing in it): lattice's list of your own packages.
+// one for the page, whoever asks
 //
 // a tap is all three down together, then all let go, with no other key
 // pressed meanwhile. anything else starts the count again
