@@ -8,8 +8,9 @@ import { docIdOf } from "./sources.js";
 import { KNITOUT_TYPES } from "./knitout-types.js";
 
 // a doc's value (made plain, as graph.js's plainValue does) as a typescript
-// type. a list is the type of its first element; a map's keys are always
-// quoted, so any key is fine. past `depth` it's just unknown
+// type. a list is the type of its first element; a map's keys are quoted.
+// past `depth` it's just unknown
+const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 export function typeOf(value, depth = 4) {
   if (value === null) return "null";
   if (typeof value === "string") return "string";
@@ -26,7 +27,13 @@ export function typeOf(value, depth = 4) {
     if (depth <= 0) return "unknown";
     const fields = Object.entries(value).filter(([, field]) => field !== undefined);
     if (!fields.length) return "{}";
-    return `{ ${fields.map(([key, field]) => `${JSON.stringify(key)}: ${typeOf(field, depth - 1)}; `).join("")}}`;
+    // a key that isn't a name ("@patchwork", say) is only said to be there.
+    // named, it'd be completed from the dot as `["@patchwork"]`, and the
+    // editor filters all the completions by what's after where that starts,
+    // so it'd be the only one offered. (as knitfold's given.ts has it)
+    const named = fields.filter(([key]) => IDENTIFIER.test(key));
+    const others = named.length < fields.length ? "[key: string]: unknown; " : "";
+    return `{ ${others}${named.map(([key, field]) => `${JSON.stringify(key)}: ${typeOf(field, depth - 1)}; `).join("")}}`;
   }
   return "unknown";
 }
