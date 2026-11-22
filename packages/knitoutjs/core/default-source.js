@@ -1,5 +1,4 @@
-export default `
-//this is javascript code that produces knitout
+export default `//this is javascript code that produces knitout
 const knitout = require('knitout');
 
 // need this line for kniterate
