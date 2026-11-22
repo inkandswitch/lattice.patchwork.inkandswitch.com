@@ -68,3 +68,21 @@ test("a path reads as javascript", () => {
   assert.equal(pathText(["pixels", "12", "4"]), "pixels[12][4]");
   assert.equal(pathText(["a", "b c", "d"]), 'a["b c"].d');
 });
+
+test("a loop's turn before last is as far back as an op's reads go", () => {
+  const log = readLog();
+  const W = "automerge:w#h";
+  // a grid copied first, then a loop over the doc's rows
+  for (let i = 0; i < 4; i++) log.note(W, ["pixels", "0", String(i)], i);
+  log.note(W, ["height"], 2);
+  log.turn();
+  log.note(W, ["width"], 2);
+  log.turn();
+  log.note(W, ["pixels", "0", "0"], 7);
+  log.note(W, ["pixels", "0", "0"], 7);
+  assert.equal(log.take(), " ;!read:0:width=2,0:pixels/0/0=7");
+  // for (const c of row): c's read before its turn
+  log.note(W, ["pixels", "0", "1"], 8);
+  log.turn();
+  assert.equal(log.take(), " ;!read:0:pixels/0/1=8");
+});

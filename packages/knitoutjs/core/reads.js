@@ -68,37 +68,62 @@ export function watched(value, note) {
 
 // what a run read, op by op. `note(pinned, path, value)` says a read of a
 // doc (pinned: its pinned url; `docs` are the ones read, in the order first
-// read, and a read says which by its place there);
-// `turn()` that a loop's gone round; `take()`, as an op is written, is the
-// reads it's made from as its tag (or ""). an op with no reads of its own
-// since the one before takes that one's, unless a loop's turned since: in one
-// turn, everything's made from what that turn read
+// read, and a read says which by its place there); `turn()` that a loop's
+// gone round; `take()`, as an op is written, is the reads it's made from, as
+// its tag (or ""). those are the reads since the op before, but none from
+// before the loop's last turn but one (a `for (const c of row)` reads its `c`
+// just before the turn it's for; anything before that was for something
+// else), each once. an op with no reads of its own since the one before
+// takes that one's, unless a loop's turned since: in one turn, everything's
+// made from what that turn read
 export function readLog() {
   const docs = [];
   let since = [];
+  let turns = []; // where in `since` each turn since the op before came
   let last = [];
-  let turned = false;
   return {
     docs,
     note(pinned, path, value) {
-      // (once past FEW there's no telling which, so no need to keep them)
-      if (since.length > FEW) return;
       let doc = docs.indexOf(pinned);
       if (doc < 0) doc = docs.push(pinned) - 1;
       since.push({ doc, path, value });
+      // (more than FEW since the turn before last, and there's no telling which)
+      const from = turns.length > 1 ? turns[turns.length - 2] : 0;
+      if (since.length - from > FEW + 1) {
+        since = since.slice(-(FEW + 1));
+        turns = turns.map((at) => Math.max(0, at - (since.length - FEW - 1)));
+      }
     },
     turn() {
-      turned = true;
+      turns.push(since.length);
+      if (turns.length > 2) {
+        const drop = turns[turns.length - 3];
+        since = since.slice(drop);
+        turns = turns.slice(-2).map((at) => at - drop);
+      }
     },
     // what's been read since the last op isn't any op's
     forget() {
       since = [];
+      turns = [];
     },
     take() {
-      if (since.length) last = since.length > FEW ? [] : since.slice(-SAID);
-      else if (turned) last = [];
+      const from = turns.length > 1 ? turns[turns.length - 2] : 0;
+      const mine = since.slice(from);
+      if (mine.length) {
+        if (mine.length > FEW) last = [];
+        else {
+          const each = new Map();
+          for (const read of mine) {
+            const key = `${read.doc}:${read.path.join("/")}`;
+            each.delete(key);
+            each.set(key, read);
+          }
+          last = [...each.values()].slice(-SAID);
+        }
+      } else if (turns.length) last = [];
       since = [];
-      turned = false;
+      turns = [];
       return readTag(last);
     },
   };
