@@ -14,7 +14,8 @@ import { scan } from "./instrument.js";
 // tracer(code)(line) → [{url, name, line, via: [{name, line}]}], each doc
 // once, by the shortest way to it. `name` is what it's bound to in the code,
 // `line` where it's imported, and `via` the names in between, from the line
-// back to the doc
+// back to the doc. one the line's reached through an if or a loop round it
+// starts with {name: "if" | "loop", line}
 
 const SCOPES = new Set([
   "Script",
@@ -250,11 +251,17 @@ export function tracer(code) {
         } else if (binding.from.length) edge.push({ binding, via: [...via, { name: binding.name, line: binding.line }] });
       }
     };
-    for (const node of startsOf(line)) visit(node, []);
-    for (let steps = 0; edge.length && steps < MOST; steps++) {
-      const next = edge;
-      edge = [];
-      for (const { binding, via } of next) for (const node of binding.from) visit(node, via);
+    // the line itself first, and only then the ifs and loops round it, so a
+    // doc both reach is said the way the line uses it
+    const [own, ...heads] = startsOf(line);
+    for (const start of [own, ...heads]) {
+      if (!start) continue;
+      visit(start, start === own ? [] : [{ name: start.parent.name === "IfStatement" ? "if" : "loop", line: lineAt(start.from) }]);
+      for (let steps = 0; edge.length && steps < MOST; steps++) {
+        const next = edge;
+        edge = [];
+        for (const { binding, via } of next) for (const node of binding.from) visit(node, via);
+      }
     }
     const result = [...found.values()];
     traced.set(line, result);
