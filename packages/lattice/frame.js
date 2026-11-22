@@ -1227,6 +1227,42 @@ function Frame(props) {
     </nav>`;
   }
 
+  // the projects, shut: a strip down the side, "projects" down it to open
+  // them again, a phone for each project with a call on (to go to it), and
+  // you, down the bottom
+  function SidebarShut() {
+    return html`<nav class="lattice-sidebar lattice-sidebar-shut" aria-label="projects">
+      <button class="lattice-sidebar-shut-name" title="show the projects" onClick=${() => folders.setOpen(true)}>
+        projects
+      </button>
+      <div class="lattice-sidebar-shut-calls">
+        <${For} each=${projects}>${(project) => html`<${ProjectCall} project=${project} />`}<//>
+      </div>
+      <${Me} />
+    </nav>`;
+  }
+
+  // a project's call, on the shut projects' strip: there while one's on in
+  // it, and it takes you there
+  function ProjectCall(props) {
+    const project = props.project;
+    const call = callIn(project.url);
+    const title = () =>
+      `${project.name}: ${call()?.here ? "you're in its call" : "there's a call on in it"}`;
+    return html`<${Show} when=${() => !!call()?.here || call()?.others > 0}>
+      <button
+        class="lattice-icon-button lattice-sidebar-shut-call"
+        data-here=${() => (call()?.here ? "" : undefined)}
+        aria-current=${() => (!page() && currentUrl() === project.url ? "page" : undefined)}
+        title=${title}
+        aria-label=${title}
+        onClick=${() => choose(project.url)}
+      >
+        ${icon("phone", 14)}
+      </button>
+    <//>`;
+  }
+
   // the theme, on the page (themes.js), and the settings, in the middle,
   // while they're open
   const themes = useThemes(element, { repo: baseRepo, hive });
@@ -1264,7 +1300,7 @@ function Frame(props) {
       >
         <${TopBar} />
         <div class="lattice-body">
-          <${Show} when=${folders.open}><${Sidebar} /><//>
+          <${Show} when=${folders.open} fallback=${html`<${SidebarShut} />`}><${Sidebar} /><//>
           <${Show} when=${() => page() === "settings"}><${Settings} /><//>
           <${Show} when=${currentKey} fallback=${html`<${NoProject} />`}>
             <div

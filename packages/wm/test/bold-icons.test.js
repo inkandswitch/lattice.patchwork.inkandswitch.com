@@ -11,7 +11,7 @@ test("every icon the trays use is there, as svg that closes", () => {
 		const markup = BOLD[name]
 		assert.ok(markup, name)
 		assert.match(markup, /^<(path|g) /, name)
-		const opened = (markup.match(/<(path|g|circle)\b/g) ?? []).length
+		const opened = (markup.match(/<(path|g|circle|ellipse)\b/g) ?? []).length
 		const closed = (markup.match(/\/>|<\/g>/g) ?? []).length
 		assert.equal(opened, closed, name)
 		assert.doesNotMatch(markup, /undefined|NaN/, name)

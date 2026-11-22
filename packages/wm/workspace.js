@@ -241,8 +241,9 @@ function cellStyle(node, direction) {
  *   self       tool ids never offered in a pane (the app's own project and
  *              frame tools: not inside a pane of themselves)
  *   sidebar    the files sidebar's state (sidebars.js), when something else
- *              opens and shuts it (an app's top bar). without one, it keeps
- *              its own, with a strip down the side to open it again
+ *              opens and shuts it too (an app's top bar). without one, it
+ *              keeps its own. shut, either way, it's a strip down the side
+ *              to open it again
  *   onShowing  hears the docs the panes are showing ({url, name}, one per
  *              pane), for inspectors
  *   onFocused  hears the one you're in ({url, name}, or null): what's
@@ -2867,18 +2868,7 @@ export function mountWorkspace(
         <header class="lattice-wm-files-heading">
           <span class="lattice-wm-path" title=${() => projectName()}>${projectName}</span>
           <${Faces} />
-          <${Show} when=${() => roomHandle}>
-            <button
-              class="lattice-wm-icon-button lattice-wm-phone"
-              data-on=${() => (callHere() ? "" : undefined)}
-              data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
-              title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
-              aria-label=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
-              onClick=${pressPhone}
-            >
-              ${() => icon(callHere() ? "hang-up" : "phone", 14)}
-            </button>
-          <//>
+          <${Phone} />
           <button
             class="lattice-wm-icon-button"
             title=${orderTitle}
@@ -3156,14 +3146,33 @@ export function mountWorkspace(
   const followingColour = () => people.find((person) => person.peer === following())?.colour || null;
 
   // the files, shut, when nothing else opens them: a strip to open them
+  // the call here: to start one, join it, or hang up. by the project's name,
+  // and down the files' strip while they're shut
+  function Phone() {
+    return html`<${Show} when=${() => roomHandle}>
+      <button
+        class="lattice-wm-icon-button lattice-wm-phone"
+        data-on=${() => (callHere() ? "" : undefined)}
+        data-ringing=${() => (callOn() && !callHere() ? "" : undefined)}
+        title=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
+        aria-label=${() => (callHere() ? "hang up" : callOn() ? "join the call" : "call everyone here")}
+        onClick=${pressPhone}
+      >
+        ${() => icon(callHere() ? "hang-up" : "phone", 14)}
+      </button>
+    <//>`;
+  }
+
+  // the files, shut: a strip down the side, "files" down it to open them
+  // again, and who's here and the call kept on it
   function FilesShut() {
-    return html`<button
-      class="lattice-wm-files-shut"
-      title="show the files"
-      onClick=${() => filesSidebar.setOpen(true)}
-    >
-      files
-    </button>`;
+    return html`<nav class="lattice-wm-files-shut" aria-label="files">
+      <button class="lattice-wm-files-shut-name" title="show the files" onClick=${() => filesSidebar.setOpen(true)}>
+        files
+      </button>
+      <${Faces} />
+      <${Phone} />
+    </nav>`;
   }
 
   onOpen?.(open);
@@ -3231,7 +3240,7 @@ export function mountWorkspace(
         class="lattice-wm lattice-wm-project"
         style=${() => (styled() ? {} : { visibility: "hidden" })}
       >
-        <${Show} when=${filesSidebar.open} fallback=${sidebar ? null : html`<${FilesShut} />`}>
+        <${Show} when=${filesSidebar.open} fallback=${html`<${FilesShut} />`}>
           <${Files} />
         <//>
         <div

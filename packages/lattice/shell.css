@@ -211,6 +211,64 @@
 		border-right: 1px solid var(--lattice-rule);
 	}
 
+	/* shut: a strip down the side, "projects" down it (upright, a letter
+	   under the next) to open them again, a phone for each project with a
+	   call on, and you, your face without your name, down the bottom */
+	& .lattice-sidebar-shut {
+		align-items: center;
+		width: calc(32 * var(--lattice-px, 1px));
+
+		& .lattice-sidebar-foot {
+			align-self: stretch;
+			justify-content: center;
+			padding: calc(6 * var(--lattice-px, 1px)) 0;
+		}
+		& .lattice-me,
+		& .lattice-me:has(.lattice-me-name) {
+			padding: calc(2 * var(--lattice-px, 1px));
+		}
+		& .lattice-me-name {
+			display: none;
+		}
+	}
+	& .lattice-sidebar-shut-name {
+		flex: none;
+		align-self: stretch;
+		padding: calc(10 * var(--lattice-px, 1px)) 0;
+		border: none;
+		background: none;
+		color: var(--lattice-muted);
+		cursor: pointer;
+		writing-mode: vertical-rl;
+		text-orientation: upright;
+		letter-spacing: -0.1em;
+		font: 600 calc(11 * var(--lattice-px, 1px)) var(--lattice-path-family);
+
+		&:hover {
+			background: var(--lattice-shell-chrome-fill-offset-20);
+			color: inherit;
+		}
+	}
+	& .lattice-sidebar-shut-calls {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		align-items: center;
+		gap: calc(4 * var(--lattice-px, 1px));
+		min-height: 0;
+		padding-top: calc(6 * var(--lattice-px, 1px));
+		overflow: hidden auto;
+		scrollbar-width: none;
+	}
+	& .lattice-sidebar-shut-call {
+		flex: none;
+		color: var(--lattice-shell-primary);
+
+		&[aria-current="page"] {
+			background: var(--lattice-current);
+		}
+	}
+
 	/* a .latticeproject over it, to be dropped */
 	& .lattice-sidebar[data-dropping] {
 		background: var(--lattice-current);
