@@ -1,5 +1,6 @@
 import { evalJS } from "./vendor/evalJS.js";
 import { linkGraph, runState } from "./modules.js";
+import { readLog, watched, withReadDocs } from "./reads.js";
 
 // runs one knitout.js pattern off the page's thread, so a pattern that never
 // ends can't freeze anything: the page just stops this worker.
@@ -67,6 +68,14 @@ function windowEndpoint(service, MessagePortTransport) {
   };
 }
 
+// a loop's turn is counted, and the reads told (an op's reads are its turn's)
+function turns(counter, reads) {
+  return function __loop(line) {
+    reads.turn();
+    return counter(line);
+  };
+}
+
 function loopCounter(loopBudget, timeBudget) {
   const start = performance.now();
   let turns = 0;
@@ -112,6 +121,8 @@ onmessage = async ({ data }) => {
   // the graph's docs and modules, each as a blob url, all let go of when the
   // run's done. a doc it hasn't got suspends the run (see runState)
   const state = runState();
+  // what the pattern reads of its docs, for each op it writes (reads.js)
+  const reads = readLog();
   const blobs = [];
   const makeUrl = (text) => {
     const url = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
@@ -123,6 +134,7 @@ onmessage = async ({ data }) => {
     graph = linkGraph(data.graph ?? {}, {
       makeUrl,
       suspend: (url, kind) => state.suspend(url, { kind, line }),
+      watch: (pinned, value) => watched(value, (path, read) => reads.note(pinned, path, read)),
     });
   } catch (e) {
     for (const url of blobs) URL.revokeObjectURL(url);
@@ -138,7 +150,8 @@ onmessage = async ({ data }) => {
   const __import = async (at, specifier) => {
     line = at;
     const blob = graph.module(specifier);
-    if (blob) return import(blob);
+    // what a module reads as it's loaded (its exports) isn't any stitch's
+    if (blob) return import(blob).finally(() => reads.forget());
     let url = specifier;
     try {
       url = new URL(specifier, data.base).href;
@@ -149,8 +162,9 @@ onmessage = async ({ data }) => {
   try {
     knitout = await evalJS(data.code, {
       sourceMap: data.sourceMap,
-      globals: { __loop: loopCounter(data.loopBudget, data.timeBudget), __at, __import, repo, doc: graph.doc },
+      globals: { __loop: turns(loopCounter(data.loopBudget, data.timeBudget), reads), __at, __import, repo, doc: graph.doc },
       currentLine: () => line,
+      currentReads: () => reads.take(),
       onError: (e, at) =>
         (error = {
           message: String(e?.message ?? e),
@@ -164,5 +178,5 @@ onmessage = async ({ data }) => {
   // whatever it did after asking, it didn't have what it asked for
   const asked = state.suspension();
   if (asked) postMessage({ type: "done", notReady: asked.url, kind: asked.kind, line: asked.line });
-  else postMessage({ type: "done", knitout, error });
+  else postMessage({ type: "done", knitout: withReadDocs(knitout, reads.docs), error });
 };
