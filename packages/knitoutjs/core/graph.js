@@ -131,12 +131,17 @@ function walker(graph, repo, { timeout, self, selfValue }) {
 // the graph a pattern (`code`, the text of `self`, a .js handle, at `heads`)
 // runs against. rejects with {message, line} when a doc can't be found or
 // the imports go round in a circle; line is the pattern's, where it leads
-// there. pass the heads `code` was read at, so the pin says the same version
-export async function buildGraph(code, repo, { self, heads = self.heads(), timeout = 10_000 }) {
+// there. pass the heads `code` was read at, so the pin says the same version.
+// `pinned` (pinned urls, a build's sources) are read at their pins, not as
+// they are now, so it's the same docs a build was made from
+export async function buildGraph(code, repo, { self, heads = self.heads(), timeout = 10_000, pinned: given = [] }) {
   const view = self.view(heads);
   const url = isDocUrl(self.url) ?? self.url;
   const pinned = view.url;
-  const walk = walker({ pins: { [url]: pinned }, modules: [], snapshots: {}, sources: [pinned] }, repo, {
+  const pins = {};
+  for (const each of given) if (headsOf(each)) pins[unpinned(each)] = each;
+  pins[url] = pinned;
+  const walk = walker({ pins, modules: [], snapshots: {}, sources: [pinned] }, repo, {
     timeout,
     self: url,
     selfValue: plainValue(view.doc()),

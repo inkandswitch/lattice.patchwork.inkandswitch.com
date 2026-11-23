@@ -1,4 +1,5 @@
 import { parser } from "./vendor/lezer-javascript.js";
+import { probeTarget } from "./probe.js";
 
 // a doc's url as the graph knows it: `/automerge:…` is the same doc as
 // `automerge:…`, and `#heads` (if written) say which version. anything else
@@ -132,10 +133,15 @@ function callTarget(call) {
 //   library, `await __import(line, "…")` for a doc. `pins` says which
 //   version of each doc to load (a url's `#heads`, or none: whatever's
 //   current). a declaration keeps its line count, so nothing below it moves
-export function instrument(code, { pins = {} } = {}) {
+// - with `probe` (a place in the code), the name there is watched, so the
+//   run can say what it was at any op (probe.js). `probed` says whether
+//   there was one there to watch
+export function instrument(code, { pins = {}, probe = null } = {}) {
   const tree = parser.parse(code);
   const lineAt = (pos) => code.slice(0, pos).split("\n").length;
   const inserts = [];
+  const target = probe == null ? null : probeTarget(code, probe, tree);
+  if (target) inserts.push(...target.insert);
   let temps = 0;
   const pinned = (url) => JSON.stringify(pins[url] ?? url);
   for (const use of scan(code)) {
@@ -259,7 +265,7 @@ export function instrument(code, { pins = {} } = {}) {
   }
   original(at, code.length);
 
-  return { code: out, mappings: encodeMappings(lines) };
+  return { code: out, mappings: encodeMappings(lines), probed: target };
 }
 
 // a source map's mappings, from [generated column, original line, original

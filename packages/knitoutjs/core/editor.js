@@ -13,6 +13,7 @@ import { builderOf } from "./builds.js";
 import { takeBuilder } from "./builder.js";
 import { BuildBar } from "./build-bar.js";
 import { jsBuild } from "./js-build.js";
+import { stitchValues } from "./peek.js";
 import { changesBetween, format } from "./format.js";
 import { icon } from "./icons.js";
 import { stylesheet } from "./stylesheet.js";
@@ -140,6 +141,9 @@ export default function KnitoutEditorTool(handle, element, context) {
           ),
       }),
     );
+    // pointing at a name says what it was as the animation's stitch was
+    // knitted (peek.js)
+    if (isJs) extensions.push(stitchValues({ repo, events, handle }));
     if (run) {
       extensions.push(
         Prec.high(
