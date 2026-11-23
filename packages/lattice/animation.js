@@ -93,8 +93,19 @@ function svg(name, attributes = {}, parent) {
  * cursor there), or drag it to pull on the fabric. flip it to see it from
  * behind. with the animation paused, moving the cursor in an editor winds the
  * knitting to where that line knits
+ *
+ * another tool can be built on it (provenance.js), with `extra`:
+ * - mount({root, bar, stage, redraw, whereIs}): once it's all there.
+ *   whereIs(op) is where op's stitch is on the screen, {x, top, bottom}, or
+ *   null if it isn't knitted yet
+ * - loaded(text, knitout): each time the .k's read
+ * - point(at), pick(at): the stitch pointed at, and clicked: {op, stitch},
+ *   or null for none
+ * - colourOf(loop): a colour for a stitch, in place of its yarn's (or null)
+ * - kept(): an op whose stitches are marked, as the one pointed at is
+ * - drawn(): after each frame's drawn
  */
-export default function KnitoutAnimationTool(handle, element, context = {}) {
+export default function KnitoutAnimationTool(handle, element, context = {}, extra = {}) {
 	const events = context.events ?? element
 	const id = `knit-${++instances}`
 
@@ -396,10 +407,12 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const d = loopPath(hx, hangY(needle) - at * 1.6, loop.tuck && at > 0 ? null : footOf(loop))
 			const pulled = strainOn ? Math.round((fabric.strain[loop.id] ?? 0) * 3) : 0
 			const className = `loop y${shownYarn(loop)}${loop.tuck ? " tuck" : ""}${pulled ? ` strain-${pulled}` : ""}`
-			if (pathData.get(path) === d + className) return
-			pathData.set(path, d + className)
+			const paint = (!pulled && extra.colourOf?.(loop)) || ""
+			if (pathData.get(path) === d + className + paint) return
+			pathData.set(path, d + className + paint)
 			path.setAttribute("d", d)
 			path.setAttribute("class", className)
+			path.style.stroke = paint
 			path.setAttribute("data-op", loop.op)
 		})
 	}
@@ -502,6 +515,13 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		// before it was, after a seek back)
 		const onNeedles = new Set()
 		for (const held of machine.held.values()) for (const loop of held.loops) onNeedles.add(loop.id)
+		// (and what another tool's marked, or coloured: see `extra`)
+		const kept = extra.kept?.() ?? null
+		const painted = new Map() // colour → [far path, near path]
+		const paintPath = (colour, far) => {
+			if (!painted.has(colour)) painted.set(colour, [new Path2D(), new Path2D()])
+			return painted.get(colour)[far ? 0 : 1]
+		}
 		for (let id = first; id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
@@ -510,8 +530,11 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			const far = loop.back !== back
 			const pulled = showStrain ? Math.round((fabric.strain[id] ?? 0) * 3) : 0
 			const depth = Math.max(0, Math.min(DEPTHS - 1, Math.floor(nearness(id) / layer)))
-			const marked = loop.op === pointing ? marks : pulled ? marks + pulled : null
-			const path = paths[marked ?? (far ? shownYarn(loop, true) : depth * STRANDS * YARNS + YARNS + loop.yarn)]
+			const marked = loop.op === pointing || loop.op === kept ? marks : pulled ? marks + pulled : null
+			const paint = marked == null && extra.colourOf?.(loop)
+			const path = paint
+				? paintPath(paint, far)
+				: paths[marked ?? (far ? shownYarn(loop, true) : depth * STRANDS * YARNS + YARNS + loop.yarn)]
 			if (far) {
 				path.moveTo(x - 3.8, y + 1.8)
 				path.quadraticCurveTo(x, y - 4.4, x + 3.8, y + 1.8)
@@ -541,7 +564,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				path.moveTo(x + half + out, y - 3.6)
 				path.lineTo(footX + 0.5 + out, footY)
 			}
-			if (marked != null || !twoStrands(loop)) {
+			if (marked != null || paint || !twoStrands(loop)) {
 				legs(path, 0)
 				continue
 			}
@@ -562,6 +585,14 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			c.globalAlpha = at < YARNS ? FAR : at > marks ? (at - marks) / 3 : 1
 			c.strokeStyle = at === marks ? colours.ink : at > marks ? colours.danger : colours.yarns[at % YARNS]
 			c.stroke(paths[at])
+		}
+		c.lineWidth = 2.1
+		for (const [colour, [far, near]] of painted) {
+			c.strokeStyle = colour
+			c.globalAlpha = FAR
+			c.stroke(far)
+			c.globalAlpha = 1
+			c.stroke(near)
 		}
 		c.globalAlpha = 1
 	}
@@ -920,6 +951,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		placeCamera(playing ? dt : 1)
 		drawFabric()
 		showWhere()
+		extra.drawn?.()
 		if (playing || needsFrame) {
 			needsFrame = false
 			frame = requestAnimationFrame(tick)
@@ -1074,6 +1106,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		picture.classList.toggle("can-pull", stitch != null)
 		if (op === pointing) return
 		pointing = op
+		extra.point?.(op == null ? null : {op, stitch})
 		requestFrame()
 		if (op == null) {
 			dispatch("knitout:hover-source", {url: null, at: []})
@@ -1088,6 +1121,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 	function onPointerLeave() {
 		if (pointing == null) return
 		pointing = null
+		extra.point?.(null)
 		requestFrame()
 		dispatch("knitout:hover-source", {url: null, at: []})
 		showWhere()
@@ -1116,6 +1150,27 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 				return
 			}
 		}
+	}
+
+	// where op's stitch is on the screen: its loop on a needle, or in the
+	// fabric (its latest, for an op that makes more than one)
+	function whereIs(op) {
+		const m = world.getScreenCTM()
+		if (!m || op == null) return null
+		const held = picture.querySelector(`.layer-backLoops [data-op="${op}"], .layer-frontLoops [data-op="${op}"]`)
+		if (held) {
+			const rect = held.getBoundingClientRect()
+			return {x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom}
+		}
+		const {loops} = machine
+		for (let id = loops.length - 1; id >= firstLoop(machine); id--) {
+			if (loops[id].op !== op) continue
+			if (Number.isNaN(shown.xs[id] ?? NaN)) return null
+			const at = new DOMPoint(shown.xs[id], shown.ys[id]).matrixTransform(m)
+			const half = (ROW / 2) * Math.hypot(m.a, m.b)
+			return {x: at.x, top: at.y - half, bottom: at.y + half}
+		}
+		return null
 	}
 
 	// ── pointer, wheel and keys
@@ -1161,6 +1216,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		if (drag && !drag.moved && drag.op != null) {
 			dispatch("knitout:select-source", located(handle, knitout.ops[drag.op]))
 		}
+		if (drag && !drag.moved) extra.pick?.(drag.op == null ? null : {op: drag.op, stitch: drag.stitch})
 		drag = null
 		if (pull) {
 			pull = null
@@ -1270,6 +1326,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 			errorBar.textContent = `line ${problem.line}: ${problem.text}${knitout.problems.length > 1 ? ` (and ${knitout.problems.length - 1} more)` : ""}`
 			errorBar.dataset.line = String(problem.line)
 		}
+		extra.loaded?.(text, knitout)
 		drawBeds()
 		// the knitting stays where it was, if it's still that long
 		seek(Math.min(index, knitout.ops.length))
@@ -1336,6 +1393,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}) {
 		})
 	}
 
+	extra.mount?.({root, bar, stage, redraw: requestFrame, whereIs})
 	reread()
 
 	return () => {
