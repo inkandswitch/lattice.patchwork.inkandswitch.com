@@ -1,4 +1,5 @@
-/* the provenance tool: a .k's stitches as a chart, and where each came from */
+/* the provenance tool: the animation (animation.css), and a box beside a
+   stitch saying where it came from */
 @layer package {
 	:root,
 	:host,
@@ -7,95 +8,17 @@
 		--provenance-ink: var(--editor-line);
 		--provenance-sans: var(--studio-family-ui);
 		--provenance-mono: var(--studio-family-code);
-		--provenance-chrome: var(--studio-chrome-fill-offset-20);
 		--provenance-rule: var(--editor-fill-offset-20);
 		--provenance-muted: oklch(from var(--provenance-sheet) calc(l + (1 - 2 * round(l)) * 0.5) c h);
 		--provenance-accent: var(--studio-primary-fill);
-		/* for its canvas (provenance.js reads them) */
-		--provenance-knit: oklch(0.66 0.13 150);
-		--provenance-tuck: oklch(0.76 0.14 85);
-		--provenance-miss: oklch(0.65 0.01 250);
-		--provenance-split: oklch(0.6 0.15 310);
-		--provenance-transfer: oklch(0.6 0.15 250);
-		--provenance-drop: oklch(0.6 0.19 25);
+		/* a stitch that read no colour, coloured by what it read (provenance.js reads it) */
 		--provenance-unread: oklch(from var(--provenance-sheet) calc(l + (1 - 2 * round(l)) * 0.15) 0 h);
-		--provenance-line: var(--editor-line);
-		--provenance-mark: var(--editor-line);
 	}
 }
 
-.provenance {
+/* what a stitch came from, beside it */
+.provenance-box {
 	& {
-		position: relative;
-		display: flex;
-		flex-direction: column;
-		flex: 1 1 auto;
-		width: 100%;
-		height: 100%;
-		min-width: 0;
-		min-height: 0;
-		overflow: hidden;
-		background: var(--provenance-sheet);
-		color: var(--provenance-ink);
-		font: 12px var(--provenance-sans);
-		outline: none;
-	}
-
-	& .provenance-bar {
-		display: flex;
-		flex: none;
-		align-items: center;
-		gap: 8px;
-		padding: 4px 8px;
-		border-bottom: 1px solid var(--provenance-rule);
-		background: var(--provenance-chrome);
-	}
-
-	& .provenance-select {
-		font: inherit;
-		color: inherit;
-		background: var(--provenance-sheet);
-		border: 1px solid var(--provenance-rule);
-		border-radius: 4px;
-		padding: 1px 4px;
-	}
-
-	& .provenance-status {
-		color: var(--provenance-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	& .provenance-scroller {
-		position: relative;
-		flex: 1 1 0;
-		min-height: 0;
-		overflow: auto;
-		cursor: crosshair;
-	}
-
-	& .provenance-canvas {
-		position: absolute;
-		top: 0;
-		left: 0;
-		pointer-events: none;
-	}
-
-	& .provenance-spacer {
-		pointer-events: none;
-	}
-
-	& .provenance-empty {
-		position: absolute;
-		inset: 40px 0 auto;
-		text-align: center;
-		color: var(--provenance-muted);
-		pointer-events: none;
-	}
-
-	/* what a stitch came from, beside it */
-	& .provenance-box {
 		position: absolute;
 		z-index: 2;
 		display: flex;
@@ -109,10 +32,15 @@
 		background: var(--provenance-sheet);
 		color: var(--provenance-ink);
 		box-shadow: 0 2px 10px oklch(0 0 0 / 0.18);
+		font: 12px var(--provenance-sans);
 		pointer-events: none;
 	}
 
-	& .provenance-box[data-pinned] {
+	&[hidden] {
+		display: none;
+	}
+
+	&[data-pinned] {
 		pointer-events: auto;
 		border-color: var(--provenance-accent);
 	}
@@ -199,7 +127,7 @@
 	}
 
 	/* the link isn't anything to follow till the box is kept open */
-	& .provenance-box:not([data-pinned]) .provenance-link {
+	&:not([data-pinned]) .provenance-link {
 		text-decoration: none;
 	}
 

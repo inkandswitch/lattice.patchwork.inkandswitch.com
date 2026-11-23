@@ -79,7 +79,7 @@ export const TOOLS = {
   provenance: {
     id: "provenance",
     name: "provenance",
-    title: "every stitch, and where it came from: its line of the .k, the line of the .js that wrote it, and what that read of the docs it was made from (a patternwitch's pixel, say). click one to keep it open, and go to any of them",
+    title: "watch it knit, and see where every stitch came from: its line of the .k, the line of the .js that wrote it, and what that read of the docs it was made from (a patternwitch's pixel, say). click one to keep it open, and go to any of them",
     position: 7,
     extensions: ["k"],
     load: () => import("./provenance.js"),
