@@ -13,7 +13,8 @@ import { isOldLatticeFolder, updateLatticeFolder, updatedTo } from "./migrate.js
 import { OLD_KNITOUTJS_TYPES, isOldKnitoutjs, updateKnitoutjs } from "../knitoutjs/app/migrate.js";
 import { createDoc, findSoon, urlFromText } from "../wm/patchwork/docs.js";
 import { seedActive } from "../wm/active.js";
-import { downloadArchive, isArchive, unpackArchive } from "./archive.js";
+import { downloadArchive, isArchive, unpackArchive, unpackFolder } from "./archive.js";
+import { dropped, patchworkFolderFiles } from "./dropped-folder.js";
 import { folderTitle } from "../wm/folder.js";
 import { directoryTitle } from "../wm/directory.js";
 import { Resizer, remember, remembered, sidebarState } from "../wm/ui/sidebars.js";
@@ -964,18 +965,31 @@ function Frame(props) {
     if (text && problem) noteTimer = setTimeout(() => setNote(null), 8000);
   }
 
-  // .latticeprojects (or .patchworkfolders): each unpacked into new docs, and
-  // what it's of added as if by its url. says what went wrong, or nothing
-  async function addArchives(files) {
-    const archives = [...(files ?? [])].filter(isArchive);
+  // .latticeprojects (or .patchworkfolders, or folders dropped in that are
+  // one unzipped): each unpacked into new docs, and what it's of added as if
+  // by its url. says what went wrong, or nothing
+  async function addArchives(files, folders = []) {
+    const archives = [...(files ?? [])]
+      .filter(isArchive)
+      .map((file) => ({ name: file.name, unpack: () => unpackArchive(baseRepo, file, hive) }));
+    for (const dir of folders) {
+      let found;
+      try {
+        found = await patchworkFolderFiles(dir);
+      } catch (error) {
+        console.error("[lattice] couldn't read", dir.name, error);
+        return `couldn't read ${dir.name}: ${String(error?.message ?? error)}`;
+      }
+      if (found) archives.push({ name: dir.name, unpack: () => unpackFolder(baseRepo, found, hive) });
+    }
     if (!archives.length) return "that's not a .latticeproject";
-    for (const file of archives) {
+    for (const { name, unpack } of archives) {
       let root;
       try {
-        root = await unpackArchive(baseRepo, file, hive);
+        root = await unpack();
       } catch (error) {
-        console.error("[lattice] couldn't unpack", file.name, error);
-        return `couldn't unpack ${file.name}: ${String(error?.message ?? error)}`;
+        console.error("[lattice] couldn't unpack", name, error);
+        return `couldn't unpack ${name}: ${String(error?.message ?? error)}`;
       }
       const problem = await addFromUrl(root);
       if (problem) return problem;
@@ -985,13 +999,13 @@ function Frame(props) {
 
   // chosen, dropped or pasted: how it's going shows in the + menu, if that's
   // open, else under the projects
-  async function takeArchives(files) {
+  async function takeArchives(files, folders) {
     const inMenu = homeMenu?.matches(":popover-open");
     if (inMenu) {
       setAddProblem(null);
       setAdding("unpacking it…");
     } else say("unpacking…");
-    const problem = await addArchives(files);
+    const problem = await addArchives(files, folders);
     if (!inMenu) return say(problem, true);
     setAdding(null);
     setAddProblem(problem);
@@ -1175,7 +1189,8 @@ function Frame(props) {
         if (!hasFiles(event)) return;
         event.preventDefault();
         setDropping(false);
-        takeArchives(event.dataTransfer.files);
+        const { files, folders } = dropped(event.dataTransfer);
+        takeArchives(files, folders);
       }}
       onPaste=${(event) => {
         const files = [...(event.clipboardData?.files ?? [])];
