@@ -51,13 +51,17 @@ function automergeForWorker() {
 // its own, synced with `repo` over subduction, so `repo.find(url)` there finds
 // what this window has. aborting `signal` stops it. `graph` (graph.js) is the
 // docs it can `import` and `doc()`, pinned; one it asks for that isn't there
-// stops the run, and it answers {notReady: url, kind, line, ms} instead
-export function compile(code, { repo, signal, name, graph } = {}) {
+// stops the run, and it answers {notReady: url, kind, line, ms} instead.
+// with `probe` ({at, op}: a place in the code, and an op's place among those
+// written), the name at `at` is watched and the run stops as op `op` is
+// written, answering {probe, error, ms} (see run-worker.js) with no knitout
+export function compile(code, { repo, signal, name, graph, probe = null } = {}) {
   const start = performance.now();
   let budgeted;
   let sourceMap = null;
   try {
-    const instrumented = instrument(code, { pins: graph?.pins ?? {} });
+    const instrumented = instrument(code, { pins: graph?.pins ?? {}, probe: probe?.at ?? null });
+    if (probe && !instrumented.probed) return Promise.resolve({ probe: { nothing: true }, error: null, ms: 0 });
     budgeted = instrumented.code;
     // so devtools shows (and steps through) the pattern as it was written
     sourceMap = {
@@ -116,7 +120,7 @@ export function compile(code, { repo, signal, name, graph } = {}) {
       } else if (data.type === "done") {
         const error = data.error;
         if (error?.syntax && error.line == null) error.line = firstBrokenLine(code);
-        finish({ knitout: data.knitout, error });
+        finish({ knitout: data.knitout, error, ...(data.probe && { probe: data.probe }) });
       } else if (data.type === "connect") {
         accept(data.port);
       } else if (data.type === "started") {
@@ -143,6 +147,7 @@ export function compile(code, { repo, signal, name, graph } = {}) {
       timeBudget: TIME_BUDGET,
       automerge: automergeForWorker(),
       graph: graph && { pins: graph.pins, modules: graph.modules, snapshots: graph.snapshots },
+      stopAt: probe?.op ?? null,
     });
   });
 }

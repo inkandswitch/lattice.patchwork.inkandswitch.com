@@ -812,6 +812,9 @@ Writer.prototype.getNeedleBed = function(needleNum){
 			this._operations.push = function (...args) {
 				const source = findLineNumber()
 				for (const arg of args) {
+					//patchwork: each op as it's written, before it's kept
+					//(options.onOp can stop the run there by throwing)
+					options.onOp?.(String(arg))
 					_operations.push(`${arg}${source}`)
 					this.oldPush(`${arg}${source}`)
 				}

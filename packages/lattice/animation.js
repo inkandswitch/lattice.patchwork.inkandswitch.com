@@ -1037,12 +1037,29 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 		scrubber.value = String(index)
 		counter.textContent = `${index} / ${knitout.ops.length}`
 		strip.at(index, knitout.ops.length)
+		tellStitch()
 		if (pointing != null) return
 		const op = progress > 0 ? knitout.ops[index] : index > 0 ? knitout.ops[index - 1] : null
 		status.textContent = op
 			? describe(op)
 			: "press play to watch it knit · point at a stitch to see what made it, drag it to pull · space plays, ← → step, f flips"
 		status.toggleAttribute("data-hint", !op)
+	}
+
+	// the editors of the .js that wrote this, which op's the one we're at:
+	// one kept (provenance.js), or pointed at, or else the one knitting (or
+	// last knitted). pointing at a name in the .js says what it was then
+	// (knitoutjs/core/peek.js)
+	let told = null
+	function tellStitch(gone = false) {
+		const source = knitoutOf(handle.doc()).source
+		const at = gone ? null : (extra.kept?.() ?? pointing ?? (progress > 0 ? index : index > 0 ? index - 1 : null))
+		const op = at == null ? null : knitout.ops[at]
+		const key = op ? `${source} ${at} ${op.kLine}` : null
+		if (key === told) return
+		told = key
+		if (!source) return
+		dispatch("knitout:at-stitch", {url: handle.url, source, op: op ? at : null, kLine: op?.kLine ?? null})
 	}
 
 	function dispatch(type, detail) {
@@ -1397,6 +1414,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 	reread()
 
 	return () => {
+		tellStitch(true)
 		settler.destroy()
 		strip.destroy()
 		view?.stop()
