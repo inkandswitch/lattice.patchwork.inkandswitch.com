@@ -45,25 +45,98 @@ function importParts(code, decl) {
   return parts.string && parts;
 }
 
-// `doc("x")`'s string, if that's all the call has
-function docString(code, call) {
+// `{a, b: c}`, as importParts writes a group: [[field, name it's bound to]]
+export function groupNames(group) {
+  if (!group) return [];
+  return group
+    .slice(1, -1)
+    .split(",")
+    .map((name) => name.split(":").map((part) => part.trim()))
+    .filter(([field]) => field)
+    .map(([field, local = field]) => [field, local]);
+}
+
+// lattice's own: `doc(url)`, a doc's value, and `get(url, as)`, what's at a
+// url. a pattern (or a .js it imports) has them by importing them, as
+// `import {doc, get} from "lattice"`, `import * as lattice from "lattice"` or
+// `import lattice from "lattice"`. there's no such module: a pattern's import
+// is swapped for the object the run hands it (`__lattice`, see instrument),
+// and a module's for a little one that hands that on (modules.js)
+export const LATTICE = "lattice";
+const LATTICE_FIELDS = ["doc", "get"];
+
+// the names `code` gives lattice's doc and get (`doc`, `get`), and the
+// whole of it (`ns`), from its imports of "lattice"
+export function latticeNames(code, tree = parser.parse(code)) {
+  const names = { doc: new Set(), get: new Set(), ns: new Set() };
+  for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
+    if (node.name !== "ImportDeclaration") continue;
+    const parts = importParts(code, node);
+    if (!parts || stringValue(code, parts.string) !== LATTICE) continue;
+    if (parts.def) names.ns.add(parts.def);
+    if (parts.ns) names.ns.add(parts.ns);
+    for (const [field, local] of groupNames(parts.group)) {
+      if (LATTICE_FIELDS.includes(field)) names[field].add(local);
+    }
+  }
+  return names;
+}
+
+// which of lattice's a call is a call of, by the names `latticeNames` found:
+// "doc" for `doc(…)` or `lattice.doc(…)`, "get" likewise, else null. (a name
+// that shadows the import, in a function, isn't noticed)
+export function latticeCall(code, call, names) {
   const callee = call.firstChild;
-  if (callee?.name !== "VariableName" || code.slice(callee.from, callee.to) !== "doc") return null;
-  const args = callee.nextSibling;
+  const text = (node) => code.slice(node.from, node.to);
+  if (callee?.name === "VariableName") {
+    const name = text(callee);
+    return LATTICE_FIELDS.find((field) => names[field].has(name)) ?? null;
+  }
+  if (callee?.name !== "MemberExpression") return null;
+  const object = callee.firstChild;
+  const property = callee.lastChild;
+  if (object?.name !== "VariableName" || !names.ns.has(text(object)) || property?.name !== "PropertyName") return null;
+  return LATTICE_FIELDS.includes(text(property)) ? text(property) : null;
+}
+
+// a call's arguments, if every one is a string: their String nodes
+function stringArgs(call) {
+  const args = call.firstChild?.nextSibling;
   if (args?.name !== "ArgList") return null;
-  const open = args.firstChild;
-  const string = open?.nextSibling;
-  if (string?.name !== "String" || string.nextSibling?.name !== ")") return null;
-  return string;
+  const strings = [];
+  for (let node = args.firstChild; node; node = node.nextSibling) {
+    if (node.name === "(" || node.name === ")" || node.name === ",") continue;
+    if (node.name !== "String") return null;
+    strings.push(node);
+  }
+  return strings;
+}
+
+// lattice's `doc("x")`'s string, if that's all the call has
+export function docCallString(code, call, names) {
+  if (latticeCall(code, call, names) !== "doc") return null;
+  const strings = stringArgs(call);
+  return strings?.length === 1 ? strings[0] : null;
+}
+
+// lattice's `get("x")` or `get("x", "as")`: its strings, if that's all it has
+function getCallStrings(code, call, names) {
+  if (latticeCall(code, call, names) !== "get") return null;
+  const strings = stringArgs(call);
+  return strings?.length === 1 || strings?.length === 2 ? strings : null;
 }
 
 // every place a pattern names a doc: `import … from "x"`, `import "x"`,
-// `import("x")`, `doc("x")`. only a literal url counts, since that's all
-// that can be known before the pattern runs
+// `import("x")`, lattice's `doc("x")`. only a literal url counts, since
+// that's all that can be known before the pattern runs. and each `get("x")`
+// (or `get("x", "as")`) of lattice's, as kind "get" with its `as`: what it
+// gets isn't a doc, so its `url` is null
 export function scan(code) {
   const lineAt = (pos) => code.slice(0, pos).split("\n").length;
+  const tree = parser.parse(code);
+  const names = latticeNames(code, tree);
   const found = [];
-  parser.parse(code).iterate({
+  tree.iterate({
     enter(node) {
       let string;
       let kind;
@@ -76,7 +149,23 @@ export function scan(code) {
         string = node.node.getChild("String");
         kind = "dynamic";
       } else if (node.name === "CallExpression") {
-        string = docString(code, node.node);
+        const got = getCallStrings(code, node.node, names);
+        if (got) {
+          const [url, as] = got.map((each) => stringValue(code, each));
+          if (url === null || as === null || got.some((each) => each.type.isError)) return;
+          found.push({
+            kind: "get",
+            text: url,
+            url: null,
+            as: as ?? "clever",
+            line: lineAt(node.from),
+            from: node.from,
+            to: node.to,
+            string: { from: got[0].from, to: got[0].to },
+          });
+          return;
+        }
+        string = docCallString(code, node.node, names);
         kind = "doc";
       }
       if (!string || string.type.isError) return;
@@ -102,6 +191,14 @@ export function collectSources(code) {
   return scan(code)
     .filter((use) => use.url)
     .map(({ url, line, kind }) => ({ url, line, kind }));
+}
+
+// what a pattern `get()`s with a literal url, as it's asked for (`as`), so
+// it can be fetched before the pattern runs
+export function collectGets(code) {
+  return scan(code)
+    .filter((use) => use.kind === "get")
+    .map(({ text, as, line }) => ({ url: text, as, line }));
 }
 
 function loopBody(node) {
@@ -130,7 +227,8 @@ function callTarget(call) {
 //   on the page's own site, where the service worker hands out docs
 // - `import x from "…"` can't be in a function body, so a declaration is
 //   swapped for the line it means: `require("knitout")` for the knitout
-//   library, `await __import(line, "…")` for a doc. `pins` says which
+//   library, `__lattice` (what the run hands it) for lattice's doc and get,
+//   `await __import(line, "…")` for a doc. `pins` says which
 //   version of each doc to load (a url's `#heads`, or none: whatever's
 //   current). a declaration keeps its line count, so nothing below it moves
 // - with `probe` (a place in the code), the name there is watched, so the
@@ -147,13 +245,12 @@ export function instrument(code, { pins = {}, probe = null } = {}) {
   for (const use of scan(code)) {
     if (use.kind === "import") {
       const { def, ns, group } = use.decl;
-      const source =
-        use.text === "knitout"
-          ? 'require("knitout")'
-          : use.url && `await __import(${use.line}, ${pinned(use.url)})`;
+      // knitout's and lattice's are on hand already, and their default is
+      // the library itself; a doc's is its `default`
+      const builtin = use.text === "knitout" ? 'require("knitout")' : use.text === LATTICE ? "__lattice" : null;
+      const source = builtin ?? (use.url && `await __import(${use.line}, ${pinned(use.url)})`);
       if (!source) continue;
-      // knitout's default is the library itself; a doc's is its `default`
-      const dflt = use.text === "knitout" ? "" : ".default";
+      const dflt = builtin ? "" : ".default";
       const names = [def, ns, group].filter(Boolean).length;
       let text;
       if (names === 0) text = `${source};`;

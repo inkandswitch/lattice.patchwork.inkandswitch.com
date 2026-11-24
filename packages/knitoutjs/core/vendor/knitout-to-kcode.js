@@ -1116,8 +1116,8 @@ function knitoutToPasses(knitout) {
 			args.length > 0 ? pauseMessage = args.join(' ') : pauseMessage = undefined;
 		} else if (op === 'x-vis-color') {
 			//do nothing -- visualization color doesn't matter to kcode creation!
-		} else if (op === 'x-patchwork-sources') {
-			//patchwork: the docs a .k was built from, for the .k (and its .kc, as a comment) to say -- nothing for the machine
+		} else if (op === 'x-patchwork-sources' || op === 'x-web-sources') {
+			//patchwork: the docs a .k was built from (and the urls it fetched), for the .k (and its .kc, as a comment) to say -- nothing for the machine
 		} else if (op.match(/^x-/)) {
 			console.warn(`${lineIdx+1} WARNING: unsupported extension operation '${op}'.`);
 		} else {

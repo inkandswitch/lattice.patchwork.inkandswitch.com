@@ -10,6 +10,10 @@ import {
   staleSources,
   recordedSources,
   exceptPinned,
+  webSource,
+  readWebSource,
+  readWebSourcesLine,
+  isSourcesLine,
 } from "../core/sources.js";
 
 const knitout = ";!knitout-2\n;;Carriers: 1 2 3 4 5 6\nin 3\n";
@@ -90,4 +94,39 @@ test("a doc read both pinned and as it is now is listed twice, and only the pinn
   const sources = ["automerge:js#1", "automerge:x#h", "automerge:x#h"];
   assert.deepEqual(staleSources(sources, () => "moved", { pinned: ["automerge:x#h"] }), ["automerge:x#h"]);
   assert.deepEqual(exceptPinned(sources.slice(1), ["automerge:x#h", "automerge:x#h"]), ["automerge:x#h"]);
+});
+
+test("what get() fetched is a web source: its url, and when", () => {
+  const at = Date.UTC(2026, 10, 24, 21, 34, 5, 123);
+  const source = webSource("https://x.test/p.png", at);
+  assert.equal(source, "https://x.test/p.png@2026-11-24T21:34:05.123Z");
+  assert.deepEqual(readWebSource(source), { url: "https://x.test/p.png", fetchedAt: at });
+  // (an @ in the url is the url's: the time's after the last one)
+  assert.deepEqual(readWebSource(webSource("https://me@x.test/a#b", at)), { url: "https://me@x.test/a#b", fetchedAt: at });
+  assert.equal(readWebSource("https://x.test/a"), null);
+});
+
+test("web sources go on a line of their own after the sources, and only if there are some", () => {
+  const web = [webSource("https://x.test/a;b c", 0), webSource("https://x.test/p", 1000)];
+  assert.deepEqual(web, ["https://x.test/a%3Bb%20c@1970-01-01T00:00:00.000Z", "https://x.test/p@1970-01-01T00:00:01.000Z"]);
+  const out = withSourcesLine(knitout, ["automerge:a#x"], web);
+  assert.equal(
+    out,
+    `;!knitout-2\n;;Carriers: 1 2 3 4 5 6\nx-patchwork-sources automerge:a#x\nx-web-sources ${web.join(" ")}\nin 3\n`,
+  );
+  assert.deepEqual(readSourcesLine(out), ["automerge:a#x"]);
+  assert.deepEqual(readWebSourcesLine(out), web);
+  // built again with nothing fetched, the line goes
+  const again = withSourcesLine(out, ["automerge:a#y"]);
+  assert.equal(again, ";!knitout-2\n;;Carriers: 1 2 3 4 5 6\nx-patchwork-sources automerge:a#y\nin 3\n");
+  assert.deepEqual(readWebSourcesLine(again), []);
+  assert.ok(isSourcesLine("x-web-sources a@b") && isSourcesLine("x-patchwork-sources") && !isSourcesLine("in 3"));
+});
+
+test("a .kc's comment says what its .k fetched, on the next line", () => {
+  const web = [webSource("https://x.test/p", 0)];
+  const comment = kcodeSourcesComment("automerge:k#z", ["automerge:a#x"], web);
+  assert.equal(comment, `// x-patchwork-sources automerge:k#z automerge:a#x\n// x-web-sources ${web[0]}`);
+  assert.deepEqual(readWebSourcesLine(`${comment}\nexport default 1\n`), web);
+  assert.equal(kcodeSourcesComment("automerge:k#z", []), "// x-patchwork-sources automerge:k#z");
 });

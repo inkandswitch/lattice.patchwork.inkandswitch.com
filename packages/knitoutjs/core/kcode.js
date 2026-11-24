@@ -19,7 +19,7 @@ export async function buildKcode(kHandle, kcHandle, convert, { signal } = {}) {
   const pinned = kHandle.view(kHandle.heads());
   const k = pinned.doc();
   const text = docText(k);
-  const kSources = knitoutOf(k).sources;
+  const { sources: kSources, webSources: kWebSources } = knitoutOf(k);
   const name = String(kcHandle.doc()?.name ?? k?.name ?? "pattern").replace(/\.kc?$/, "");
   const result = await convert(text, name, {});
   const warnings = result?.warnings ?? [];
@@ -28,11 +28,12 @@ export async function buildKcode(kHandle, kcHandle, convert, { signal } = {}) {
     return { error: String(result?.error ?? "no kcode came back"), warnings };
   }
   kcHandle.change((doc) => {
-    doc.content = new ImmutableString(`${kcodeSourcesComment(pinned.url, kSources)}\n${result.kcode}`);
+    doc.content = new ImmutableString(`${kcodeSourcesComment(pinned.url, kSources, kWebSources)}\n${result.kcode}`);
     doc.kcodeSource = kHandle.url;
     doc.kcodeSourceHash = textHash(text);
     doc.kcodeBuiltAt = Date.now();
     doc.kcodeSources = [pinned.url, ...kSources];
+    doc.kcodeWebSources = kWebSources;
   });
   if (knitoutOf(kHandle.doc()).kcodeTarget !== kcHandle.url) {
     kHandle.change((doc) => {

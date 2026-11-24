@@ -1,5 +1,5 @@
 import { parser } from "./vendor/lezer-javascript.js";
-import { scan } from "./instrument.js";
+import { groupNames, latticeCall, latticeNames, scan } from "./instrument.js";
 import { fileExtension } from "./files.js";
 import { unpinned } from "./sources.js";
 
@@ -13,18 +13,13 @@ function bindingsOf(code) {
     const { def, ns, group } = use.decl;
     if (def) bound.set(def, { url, path: [] });
     if (ns) bound.set(ns, { url, path: [] });
-    if (group) {
-      for (const name of group.slice(1, -1).split(",")) {
-        const [field, local = field] = name.split(":").map((part) => part.trim());
-        if (field) bound.set(local, { url, path: [field] });
-      }
-    }
+    for (const [field, local] of groupNames(group)) bound.set(local, { url, path: [field] });
   }
   return bound;
 }
 
 // the url a doc ref at `pos` points to: inside the string of an `import`,
-// `import()` or `doc()` of a doc, or on a name an import of a doc bound
+// `import()` or lattice's `doc()` of a doc, or on a name an import of a doc bound
 // (unless `names` is off: a language server goes to where a name's defined)
 export function docRefAt(code, pos, { names = true } = {}) {
   for (const use of scan(code)) {
@@ -42,9 +37,17 @@ export function docRefAt(code, pos, { names = true } = {}) {
   return null;
 }
 
-// `doc("x")` or a name, then `.a.b`, then `.` and what's typed of the next
+// `doc("x")` (or `lattice.doc("x")`: whatever it's imported as) or a name,
+// then `.a.b`, then `.` and what's typed of the next
 const CHAIN =
-  /(?<![\w$.])(?:doc\(\s*(["'])([^"'\\]*)\1\s*\)|([A-Za-z_$][\w$]*))((?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)?$/;
+  /(?<![\w$.])(?:((?:[A-Za-z_$][\w$]*\.)?[A-Za-z_$][\w$]*)\(\s*(["'])([^"'\\]*)\2\s*\)|([A-Za-z_$][\w$]*))((?:\.[A-Za-z_$][\w$]*)*)\.([A-Za-z_$][\w$]*)?$/;
+
+// whether `callee` (as written: `doc`, `lattice.doc`) is lattice's doc(),
+// by what the code imports
+function isDocCallee(code, callee) {
+  const call = parser.parse(`${callee}()`).topNode.firstChild?.firstChild;
+  return call?.name === "CallExpression" && latticeCall(`${callee}()`, call, latticeNames(code)) === "doc";
+}
 
 // what's being completed at `pos`: the doc, the path to the value being
 // completed in it, and where the typed member starts. `isJs(url)` says a
@@ -53,7 +56,7 @@ export function completionAt(code, pos, { isJs }) {
   const before = code.slice(0, pos);
   const match = CHAIN.exec(before);
   if (!match) return null;
-  const [, , literal, name, members, typed = ""] = match;
+  const [, callee, , literal, name, members, typed = ""] = match;
   const inside = parser.parse(before).resolveInner(pos, -1).name;
   if (/Comment|String/.test(inside)) return null;
   const path = members ? members.slice(1).split(".") : [];
@@ -64,7 +67,7 @@ export function completionAt(code, pos, { isJs }) {
     return { url: bound.url, path: [...bound.path, ...path], from };
   }
   const url = /^\/?(automerge:[1-9A-HJ-NP-Za-km-z]+)/.exec(literal)?.[1];
-  return url ? { url, path, from } : null;
+  return url && isDocCallee(code, callee) ? { url, path, from } : null;
 }
 
 const kindOf = (value) =>

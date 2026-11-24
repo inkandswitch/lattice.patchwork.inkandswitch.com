@@ -10,7 +10,7 @@ const FIND_WAIT = 2000;
 const isMac = () => typeof navigator !== "undefined" && /Mac/.test(navigator.platform ?? "");
 
 // cmd+click (ctrl+click off a mac) on an imported doc's url, or on a name an
-// import of one bound, opens it (`open(url)`); and `doc("…").` or `r.` of an
+// import of one bound, opens it (`open(url)`); and lattice's `doc("…").` or `r.` of an
 // imported doc completes the doc's own fields.
 //
 // `names: false` leaves a click on a name to a language server's go to

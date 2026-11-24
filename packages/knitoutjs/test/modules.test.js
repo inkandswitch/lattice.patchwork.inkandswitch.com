@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rewriteSpecifiers, snapshotModule, moduleSources, runState, NotReady, deepFreeze, linkGraph } from "../core/modules.js";
+import { Picture } from "../core/get.js";
 
 const map = { "automerge:a": "automerge:a#h1|h2", knitout: "blob:knitout" };
 
@@ -25,15 +26,15 @@ test("rewriteSpecifiers pins imports and exports, and leaves plain strings alone
 });
 
 test("rewriteSpecifiers pins dynamic imports and doc() strings", () => {
-  const code = 'const m = await import("automerge:a")\nconst d = doc(\'automerge:a\').width\nimport "automerge:b"';
+  const code = 'import {doc} from "lattice"; const m = await import("automerge:a")\nconst d = doc(\'automerge:a\').width\nimport "automerge:b"';
   assert.equal(
     rewriteSpecifiers(code, map),
-    'const m = await import("automerge:a#h1|h2")\nconst d = doc("automerge:a#h1|h2").width\nimport "automerge:b"',
+    'import {doc} from "lattice"; const m = await import("automerge:a#h1|h2")\nconst d = doc("automerge:a#h1|h2").width\nimport "automerge:b"',
   );
 });
 
 test("moduleSources lists every literal doc url a module uses, exports too", () => {
-  const code = 'import x from "automerge:a"\nexport {y} from "automerge:b"\ndoc("automerge:c")\nimport("knitout")';
+  const code = 'import {doc} from "lattice"; import x from "automerge:a"\nexport {y} from "automerge:b"\ndoc("automerge:c")\nimport("knitout")';
   assert.deepEqual(moduleSources(code), [
     { url: "automerge:a", line: 1, kind: "import" },
     { url: "automerge:b", line: 2, kind: "export" },
@@ -99,10 +100,10 @@ test("snapshotModule doesn't export globalThis or __docs", async () => {
 });
 
 test("rewriteSpecifiers can leave doc() strings alone", () => {
-  const code = 'import a from "automerge:a"\nconst b = doc("automerge:a")';
+  const code = 'import {doc} from "lattice"; import a from "automerge:a"\nconst b = doc("automerge:a")';
   assert.equal(
     rewriteSpecifiers(code, { "automerge:a": "blob:a" }, { docs: false }),
-    'import a from "blob:a"\nconst b = doc("automerge:a")',
+    'import {doc} from "lattice"; import a from "blob:a"\nconst b = doc("automerge:a")',
   );
 });
 
@@ -134,7 +135,7 @@ test("linkGraph makes each module and doc importable, children first", async () 
       { pinned: "automerge:b#h", code: 'import {Writer} from "knitout"\nexport default Writer' },
       {
         pinned: "automerge:a#h",
-        code: 'import W from "automerge:b#h"\nimport {width} from "automerge:w#h"\nexport default [W, width, doc("automerge:w#h").width]',
+        code: 'import {doc} from "lattice"; import W from "automerge:b#h"\nimport {width} from "automerge:w#h"\nexport default [W, width, doc("automerge:w#h").width]',
       },
     ],
     snapshots: { "automerge:w#h": { width: 20 }, "automerge:j#h": { extension: "js", content: "x" } },
@@ -147,7 +148,7 @@ test("linkGraph makes each module and doc importable, children first", async () 
   class Writer {}
   globalThis.__knitout = { Writer };
   globalThis.__docs = run.docs;
-  globalThis.doc = run.doc;
+  globalThis.__lattice = run.lattice;
   try {
     const a = await import(run.module("/automerge:a"));
     assert.deepEqual(a.default, [Writer, 20, 20]);
@@ -166,6 +167,56 @@ test("linkGraph makes each module and doc importable, children first", async () 
   } finally {
     delete globalThis.__knitout;
     delete globalThis.__docs;
-    delete globalThis.doc;
+    delete globalThis.__lattice;
+  }
+});
+
+test("linkGraph's get() is what the graph got, made a Picture if it's pixels, and suspends for what it hasn't", () => {
+  const pixels = { width: 1, height: 1, data: new Uint8ClampedArray([255, 255, 255, 255]) };
+  const graph = {
+    gets: {
+      "clever https://x.test/p.png": { value: pixels },
+      "json https://x.test/a": { value: { n: 1 } },
+      "text https://x.test/gone": { error: 'get("https://x.test/gone", "text"): 404' },
+    },
+  };
+  const asked = [];
+  const run = linkGraph(graph, {
+    makeUrl: dataUrl,
+    suspend: (url, kind, details) => (asked.push([url, kind, details]), new NotReady(url)),
+  });
+  const picture = run.get("https://x.test/p.png");
+  assert.ok(picture instanceof Picture);
+  assert.equal(picture.light(0, 0), 1);
+  assert.equal(run.get("https://x.test/p.png"), picture);
+  assert.deepEqual(run.lattice.get("https://x.test/a", "json"), { n: 1 });
+  assert.ok(Object.isFrozen(run.get("https://x.test/a", "json")));
+  assert.throws(() => run.get("https://x.test/gone", "text"), /404/);
+  assert.throws(() => run.get("https://x.test/a"), NotReady);
+  assert.deepEqual(asked, [["https://x.test/a", "get", { as: "clever" }]]);
+  assert.throws(() => run.get("https://x.test/a", "wat"), TypeError);
+  assert.throws(() => run.get(3), TypeError);
+});
+
+test("a module's import of lattice is its doc() and get()", async () => {
+  const graph = {
+    pins: { "automerge:a": "automerge:a#h" },
+    modules: [
+      {
+        pinned: "automerge:a#h",
+        code: 'import {doc, get} from "lattice"\nimport * as l from "lattice"\nimport L from "lattice"\nexport default [doc, get, l.doc, L.get]',
+      },
+    ],
+  };
+  // (a url of its own: node keeps what it's imported by url, and the test
+  // before had the same shim. the worker's blob urls are new each run)
+  const makeUrl = (text) => dataUrl(`${text}\n// a module's import of lattice`);
+  const run = linkGraph(graph, { makeUrl, suspend: (url) => new NotReady(url) });
+  globalThis.__lattice = run.lattice;
+  try {
+    const a = await import(run.module("automerge:a"));
+    assert.deepEqual(a.default, [run.doc, run.get, run.doc, run.get]);
+  } finally {
+    delete globalThis.__lattice;
   }
 });

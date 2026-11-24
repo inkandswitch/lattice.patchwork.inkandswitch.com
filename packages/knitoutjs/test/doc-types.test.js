@@ -49,11 +49,14 @@ test("a key that isn't an identifier is left to an index signature, not named", 
   assert.equal(typeOf({ "a b": 1 }), `{ [key: string]: unknown; }`);
 });
 
-test("a doc's declarations type doc() of its url, with or without a slash", () => {
+// lattice's doc() looks a url up in LatticeDocs (GLOBALS), so each doc adds
+// itself there
+test("a doc's declarations type lattice's doc() of its url, with or without a slash", () => {
   const text = docDeclarations(A, { width: 20 });
   const global = text.slice(text.indexOf("declare global {"));
-  assert.match(global, new RegExp(`function doc\\(url: "${A}"\\): \\{ "width": number; \\};`));
-  assert.match(global, new RegExp(`function doc\\(url: "/${A}"\\): \\{ "width": number; \\};`));
+  assert.match(global, /interface LatticeDocs \{/);
+  assert.match(global, new RegExp(`"${A}": \\{ "width": number; \\};`));
+  assert.match(global, new RegExp(`"/${A}": \\{ "width": number; \\};`));
 });
 
 // it's the module an import of the doc finds, with or without a slash: the
@@ -71,8 +74,8 @@ test("a doc's declarations are a module, its value the default and its fields na
 
 test("a doc's declarations use its id, whatever its url says", () => {
   const text = docDeclarations(`/${A}#abc|def`, { n: 1 });
-  assert.match(text, new RegExp(`function doc\\(url: "${A}"\\)`));
-  assert.match(text, new RegExp(`function doc\\(url: "/${A}"\\)`));
+  assert.match(text, new RegExp(`  "${A}": `));
+  assert.match(text, new RegExp(`  "/${A}": `));
   assert.doesNotMatch(text, /#abc/);
 });
 
@@ -92,9 +95,17 @@ test("a doc with a field called what the default is called still has both", () =
   assert.match(text, /export declare const _default: number;/);
 });
 
-test("the globals have doc() and repo", () => {
-  assert.match(GLOBALS, /declare function doc\(url: string\): any;/);
+test("the globals have repo, and lattice's doc() and get() only by import", () => {
   assert.match(GLOBALS, /declare const repo: any;/);
+  assert.doesNotMatch(GLOBALS, /^declare function (doc|get)\b/m);
+  const lattice = GLOBALS.slice(GLOBALS.indexOf('declare module "lattice" {'));
+  assert.match(lattice, /export function doc<Url extends keyof LatticeDocs>\(url: Url\): LatticeDocs\[Url\];/);
+  assert.match(lattice, /export function doc\(url: string\): any;/);
+  assert.match(lattice, /export function get\(url: string, as: "bytes"\): Uint8Array;/);
+  assert.match(lattice, /export interface Picture \{/);
+  assert.match(lattice, /export interface Sound \{/);
+  assert.match(lattice, /export default lattice;/);
+  assert.match(GLOBALS, /^interface LatticeDocs \{\}$/m);
 });
 
 test("the knitout module declares a Writer class with typed members", () => {

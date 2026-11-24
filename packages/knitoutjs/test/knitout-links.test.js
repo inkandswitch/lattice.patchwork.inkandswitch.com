@@ -79,7 +79,7 @@ test("a .k with no sources behaves as before", () => {
 test("a .js imports each url once, in order, unpinned", () => {
   const doc = {
     name: "p.knitout.js",
-    content: `import a from "automerge:aaa#x|y"\nimport b from "/automerge:aaa"\nconst d = doc("automerge:bbb")\n`,
+    content: `import {doc} from "lattice"; import a from "automerge:aaa#x|y"\nimport b from "/automerge:aaa"\nconst d = doc("automerge:bbb")\n`,
   };
   assert.deepEqual(importsOf(doc), ["automerge:aaa", "automerge:bbb"]);
 });
@@ -92,7 +92,7 @@ const IMP = "automerge:impAAA";
 const DYN = "automerge:dynBBB";
 
 test("watchedSources: imports, then the .k's other sources, each once, unpinned", () => {
-  const js = { name: "a.js", content: `import "/${IMP}"\nconst d = await doc("${DYN}#abc")` };
+  const js = { name: "a.js", content: `import {doc} from "lattice"; import "/${IMP}"\nconst d = await doc("${DYN}#abc")` };
   const k = { knitoutSources: [`${JS}#h1`, `${DYN}#h2`, `automerge:Mre#h3`] };
   assert.deepEqual(watchedSources(js, k, { self: JS, target: K }), [IMP, DYN, "automerge:Mre"]);
 });
@@ -150,7 +150,7 @@ const PIN = "automerge:pinAAA";
 test("a .js pins the docs it names with #heads, as written", () => {
   const doc = {
     name: "p.knitout.js",
-    content: `import a from "/${PIN}#x|y"\nconst b = doc("${PIN}#x|y")\nconst c = doc("${LIB}")\nimport("${DYN}#z")\n`,
+    content: `import {doc} from "lattice"; import a from "/${PIN}#x|y"\nconst b = doc("${PIN}#x|y")\nconst c = doc("${LIB}")\nimport("${DYN}#z")\n`,
   };
   assert.deepEqual(pinsOf(doc), [`${PIN}#x|y`, `${DYN}#z`]);
   assert.deepEqual(pinsOf({ name: "p.k", content: `import a from "${PIN}#x"` }), []);
@@ -194,7 +194,7 @@ test("watchedSources: a doc only ever read at the heads the code pins isn't watc
   const k = { knitoutSources: [`${JS}#h1`, `${PIN}#old`, `${IMP}#h2`, `${DYN}#h3`] };
   assert.deepEqual(watchedSources(js, k, { self: JS, target: K }), [IMP, DYN]);
   // one also read as it is now is
-  const both = { name: "a.js", content: `import a from "${PIN}#old"\nconst b = doc("${PIN}")` };
+  const both = { name: "a.js", content: `import {doc} from "lattice"; import a from "${PIN}#old"\nconst b = doc("${PIN}")` };
   const built = { knitoutSources: [`${JS}#h1`, `${PIN}#old`, `${PIN}#h4`] };
   assert.deepEqual(watchedSources(both, built, { self: JS, target: K }), [PIN]);
   // and so is one a module the pattern imports pins, unless it's said
@@ -203,3 +203,4 @@ test("watchedSources: a doc only ever read at the heads the code pins isn't watc
   assert.deepEqual(watchedSources(usesLib, lib, { self: JS, target: K }), [LIB, PIN]);
   assert.deepEqual(watchedSources(usesLib, lib, { self: JS, target: K, pinned: [`${PIN}#old`] }), [LIB]);
 });
+

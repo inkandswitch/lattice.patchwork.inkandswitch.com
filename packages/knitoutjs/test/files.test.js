@@ -20,11 +20,13 @@ const none = {
   copyOf: null,
   builtAt: null,
   sources: [],
+  webSources: [],
   kcodeTarget: null,
   kcodeSource: null,
   kcodeSourceHash: null,
   kcodeBuiltAt: null,
   kcodeSources: [],
+  kcodeWebSources: [],
 };
 
 test("a doc without them has none", () => {
