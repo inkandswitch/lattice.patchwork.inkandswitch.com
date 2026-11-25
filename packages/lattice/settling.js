@@ -1,5 +1,5 @@
 import {apply, newMachine} from "./knitting.js"
-import {firstLoop, newFabric, relax, sizer, strain} from "./loopsim.js"
+import {newFabric, relax, sizer, strain} from "./loopsim.js"
 
 // the fabric settling (loopsim.js's relax) on a machine of its own: what
 // settling-worker.js runs off the page's thread, or settler.js on it, where
@@ -56,7 +56,7 @@ export function newSettling() {
 	function answer(moved) {
 		const count = fabric.count
 		const strains = new Float32Array(count)
-		for (let i = firstLoop(machine); i < count; i++) strains[i] = strain(fabric, i)
+		for (let i = 0; i < count; i++) strains[i] = strain(fabric, i)
 		return {
 			upTo: done,
 			count,

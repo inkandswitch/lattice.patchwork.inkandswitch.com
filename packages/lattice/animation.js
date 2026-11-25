@@ -2,7 +2,7 @@ import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {filmstrip} from "./filmstrip.js"
 import {docText, knitoutOf} from "./files.js"
-import {WALE, firstLoop} from "./loopsim.js"
+import {WALE} from "./loopsim.js"
 import {NO_FABRIC, settler as newSettler} from "./settler.js"
 import {sizeArgs} from "./settling.js"
 import {OVERRUN, across, apply, carriageTrack, lastLoop, newMachine, readKnitout} from "./knitting.js"
@@ -431,7 +431,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 		}
 		const {xs, ys} = shown
 		let unsettled = false
-		for (let id = firstLoop(machine); id < count; id++) {
+		for (let id = 0; id < count; id++) {
 			// (on a needle, or not settled yet)
 			if (id >= fabric.count || fabric.pinned[id]) {
 				xs[id] = NaN
@@ -500,11 +500,10 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 		const nearPath = (depth, strand, yarn) => paths[YARNS + (depth * STRANDS + strand) * YARNS + yarn]
 		const showStrain = strainOn
 		const back = f < 0
-		const first = firstLoop(machine)
 		const nearness = id => (back ? -fabric.zs[id] : fabric.zs[id])
 		let sum = 0
 		let near = 0
-		for (let id = first; id < loops.length; id++) {
+		for (let id = 0; id < loops.length; id++) {
 			if (loops[id].back !== back || Number.isNaN(xs[id])) continue
 			sum += nearness(id)
 			near++
@@ -522,7 +521,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 			if (!painted.has(colour)) painted.set(colour, [new Path2D(), new Path2D()])
 			return painted.get(colour)[far ? 0 : 1]
 		}
-		for (let id = first; id < loops.length; id++) {
+		for (let id = 0; id < loops.length; id++) {
 			const x = xs[id]
 			const y = ys[id]
 			if (!(x > left && x < right && y > top && y < bottom) || onNeedles.has(id)) continue
@@ -548,7 +547,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 			let across = 0
 			let highest = Infinity
 			for (const parent of loop.parents) {
-				if (parent < first || Number.isNaN(xs[parent])) continue
+				if (Number.isNaN(xs[parent])) continue
 				across += xs[parent]
 				highest = Math.min(highest, ys[parent])
 				shownParents++
@@ -1093,7 +1092,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 		let nearest = null
 		let best = Infinity
 		const {loops} = machine
-		for (let id = firstLoop(machine); id < loops.length; id++) {
+		for (let id = 0; id < loops.length; id++) {
 			const dx = (at.x - shown.xs[id]) / COL
 			const dy = (at.y - shown.ys[id]) / ROW
 			if (!(Math.abs(dx) < 1 && Math.abs(dy) < 1)) continue
@@ -1180,7 +1179,7 @@ export default function KnitoutAnimationTool(handle, element, context = {}, extr
 			return {x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom}
 		}
 		const {loops} = machine
-		for (let id = loops.length - 1; id >= firstLoop(machine); id--) {
+		for (let id = loops.length - 1; id >= 0; id--) {
 			if (loops[id].op !== op) continue
 			if (Number.isNaN(shown.xs[id] ?? NaN)) return null
 			const at = new DOMPoint(shown.xs[id], shown.ys[id]).matrixTransform(m)

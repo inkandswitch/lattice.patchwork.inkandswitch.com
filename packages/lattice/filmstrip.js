@@ -1,5 +1,5 @@
 import {apply, newMachine} from "./knitting.js"
-import {WALE, firstLoop} from "./loopsim.js"
+import {WALE} from "./loopsim.js"
 import {settler as newSettler} from "./settler.js"
 
 // the animation's scrubber, on a strip of little squares, evenly along it:
@@ -40,7 +40,6 @@ export function filmstrip({scrubber, look, request, yarnOf}) {
 
 	let ops = []
 	let loops = [] // every loop the .k makes, in the order it's made (and so by op)
-	let first = 0
 	let fabric = null
 	let drawSoon = 0
 
@@ -64,7 +63,6 @@ export function filmstrip({scrubber, look, request, yarnOf}) {
 		const machine = newMachine()
 		ops.forEach((op, i) => apply(machine, op, i, yarnOf))
 		loops = machine.loops
-		first = firstLoop(machine)
 		settler.load(ops, carriers)
 		ask()
 		soon()
@@ -81,7 +79,7 @@ export function filmstrip({scrubber, look, request, yarnOf}) {
 
 	// how many loops are made before op k
 	function madeBefore(k) {
-		let lo = first
+		let lo = 0
 		let hi = loops.length
 		while (lo < hi) {
 			const mid = (lo + hi) >> 1
@@ -128,14 +126,14 @@ export function filmstrip({scrubber, look, request, yarnOf}) {
 			c.stroke()
 			c.globalAlpha = 1
 		}
-		const settled = fabric && fabric.count > first ? fabric : null
+		const settled = fabric && fabric.count > 0 ? fabric : null
 		if (!settled) return
 		// the whole fabric's box, as it ends up: every square's drawn to the same scale
 		let [left, right, top, bottom] = [Infinity, -Infinity, Infinity, -Infinity]
 		const xOf = id => settled.xs[id] * COL
 		const yOf = id => (-settled.ys[id] / WALE) * ROW
 		const last = Math.min(settled.count, loops.length)
-		for (let id = first; id < last; id++) {
+		for (let id = 0; id < last; id++) {
 			const x = xOf(id)
 			const y = yOf(id)
 			if (!Number.isFinite(x) || !Number.isFinite(y)) continue
@@ -150,7 +148,7 @@ export function filmstrip({scrubber, look, request, yarnOf}) {
 		const dot = Math.max(1, Math.min(COL, ROW) * scale * 0.9)
 		const offsetX = (side - (right - left) * scale) / 2 - left * scale
 		const offsetY = (side - (bottom - top) * scale) / 2 - top * scale
-		let from = first
+		let from = 0
 		lefts.forEach((x0, i) => {
 			// the square before, and what's been made since
 			if (i > 0) c.drawImage(canvas, lefts[i - 1], 0, side, side, x0, 0, side, side)
