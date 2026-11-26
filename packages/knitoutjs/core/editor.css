@@ -67,4 +67,12 @@
 			--knitoutjs-button-ink: oklch(from color-mix(in oklch, contrast-color(var(--knitoutjs-button-fill)) 80%, var(--knitoutjs-button-fill)) max(l, round(l, 1)) calc(c * (1 - round(l, 1))) h);
 		}
 	}
+
+	/* every selection, drawn (drawSelection: editor.js), in the editor's
+	   selection colour. (codemirror's own colour for a focused editor's is
+	   said more specifically than the file tool's theme says it) */
+	& .cm-editor .cm-selectionLayer .cm-selectionBackground,
+	& .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground {
+		background: var(--text-editor-selection-fill, Highlight);
+	}
 }
