@@ -171,10 +171,12 @@ export function altToolsFor(extension) {
 }
 
 // for wm: a doc's tools are its kind's. one none of them fits shows with
-// patchwork's own tool for it (wm's)
+// patchwork's own tool for it (wm's). any doc can be shown raw, too:
+// patchwork's raw editor, its automerge doc as it is
 export const tools = {
   list: Object.values(TOOLS),
   for: (doc) => toolsFor(fileExtension(doc)),
   alt: (doc) => altToolsFor(fileExtension(doc)),
+  always: ["raw"],
   extension: fileExtension,
 };

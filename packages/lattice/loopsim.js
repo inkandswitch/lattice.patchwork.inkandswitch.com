@@ -114,6 +114,12 @@ export function newFabric() {
 		released: [], // the loops that just came off needles
 		homing: 0, // 1: being pulled on, 2: let go, coming back
 		px0: new Float32Array(0),
+		// the loops older than the newest `limit`, which don't settle: how
+		// many there are, and the loop each hangs from, and how far from it
+		still: 0,
+		hangs: new Int32Array(0),
+		ox: new Float32Array(0),
+		oy: new Float32Array(0),
 		held: [], // ids of the loops on needles last time
 		heldAt: new Float32Array(0),
 		machine: null,
@@ -153,6 +159,9 @@ function grow(f, need) {
 	f.hy = bigger(f.hy, Float32Array)
 	f.hold = bigger(f.hold, Float32Array)
 	f.px0 = bigger(f.px0, Float32Array)
+	f.hangs = bigger(f.hangs, Int32Array)
+	f.ox = bigger(f.ox, Float32Array)
+	f.oy = bigger(f.oy, Float32Array)
 	f.pinned = bigger(f.pinned, Uint8Array)
 	f.slack = bigger(f.slack, Uint8Array)
 	f.bed = bigger(f.bed, Int8Array)
@@ -192,10 +201,6 @@ export function sizer({fabric = null, yarns = null, gauge = 7, profiles = null} 
 	return size
 }
 const PLAIN = sizer()
-
-export function firstLoop(machine, limit = 20000) {
-	return Math.max(0, machine.loops.length - limit)
-}
 
 export function strain(f, i) {
 	const a = f.poff[i]
@@ -506,6 +511,37 @@ function carry(f, first, n) {
 	}
 }
 
+// the loops older than the newest `limit` (those before `first`) don't settle
+// any more, but they're still there: each hangs from the loop pulled through
+// it (or, with none, the next made), as far from it as it was when it last
+// settled, and goes where that goes, as the rows above it are pushed down
+// the fabric. (the sizes changed: they're laid out again, a wale under it)
+function freeze(f, first, n, resized) {
+	const {px, py, x0, child, wale, hangs, ox, oy} = f
+	for (let i = resized ? 0 : f.still; i < first; i++) {
+		const c = child[i]
+		const a = (hangs[i] = c > i && c < n ? c : i + 1)
+		ox[i] = resized ? x0[i] - x0[a] : px[i] - px[a]
+		oy[i] = resized ? (a === c ? -wale[a] : 0) : py[i] - py[a]
+	}
+	f.still = first
+}
+// (newest first: what each hangs from has gone where it's going. a loop on a
+// needle stays on it)
+function follow(f, first) {
+	const {px, py, pinned, hangs, ox, oy} = f
+	for (let i = first - 1; i >= 0; i--) {
+		const a = hangs[i]
+		if (pinned[i]) {
+			ox[i] = px[i] - px[a]
+			oy[i] = py[i] - py[a]
+		} else {
+			px[i] = px[a] + ox[i]
+			py[i] = py[a] + oy[i]
+		}
+	}
+}
+
 // being pulled on: what hangs from a loop that's been pulled down goes down
 // with it, as far as it's moved from where it was settled (and no further:
 // the bunched rows stay as they were)
@@ -763,11 +799,21 @@ function bending(f, machine, first, n, tube, rhoOf) {
 		a.cy = b.cy - Math.cos(t) * ds
 		a.cz = b.cz - Math.sin(t) * ds
 	}
+	// (the first round from the bottom that sigma's below the one above)
+	const roundAt = sigma => {
+		let lo = 0
+		let hi = fit.length - 2
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1
+			if (fit[mid + 1].sigma < sigma) lo = mid + 1
+			else hi = mid
+		}
+		return lo
+	}
 	const thetaAt = sigma => {
 		if (sigma <= fit[0].sigma) return fit[0].theta
 		if (sigma >= top.sigma) return top.theta
-		let k = 0
-		while (fit[k + 1].sigma < sigma) k++
+		const k = roundAt(sigma)
 		const a = fit[k]
 		const b = fit[k + 1]
 		return a.theta + ((b.theta - a.theta) * (sigma - a.sigma)) / (b.sigma - a.sigma || 1)
@@ -785,8 +831,7 @@ function bending(f, machine, first, n, tube, rhoOf) {
 			const ds = sigma - end.sigma
 			return {y: end.cy + Math.cos(t) * ds, z: end.cz + Math.sin(t) * ds, angle}
 		}
-		let k = 0
-		while (fit[k + 1].sigma < sigma) k++
+		const k = roundAt(sigma)
 		const a = fit[k]
 		const b = fit[k + 1]
 		const u = (sigma - a.sigma) / (b.sigma - a.sigma || 1)
@@ -895,6 +940,7 @@ export function relax(
 	if (resized && from > 0) relink(f, machine, 0, from)
 	if (n > from) layout(f, machine, from, n, first)
 	alongs(f, resized ? 0 : from, n)
+	if (first > f.still || (resized && first > 0)) freeze(f, first, n, resized)
 	f.count = n
 	f.settledZ = !fresh
 	f.settled = false
@@ -958,9 +1004,10 @@ export function relax(
 		f.settled = true
 		f.homing = 0
 	}
+	follow(f, first)
 	buckle(f, first, n, squash)
 	// (and not settled till its z is where it's going)
-	const easing = show(f, machine, first, n, gap, inflate)
+	const easing = show(f, machine, 0, n, gap, inflate)
 	if (easing > EASED && f.age <= 400) f.settled = false
 	return Math.max(most, easing > EASED ? easing : 0)
 }

@@ -2,6 +2,7 @@ import { evalJS } from "./vendor/evalJS.js";
 import { linkGraph, runState } from "./modules.js";
 import { readLog, watched, withReadDocs } from "./reads.js";
 import { preview } from "./probe.js";
+import { isLattice } from "./instrument.js";
 
 // runs one knitout.js pattern off the page's thread, so a pattern that never
 // ends can't freeze anything: the page just stops this worker.
@@ -20,8 +21,9 @@ import { preview } from "./probe.js";
 //                                {reached: true, op, unset: message} |
 //                                {reached: true, op, unseen: true} |
 //                                {reached: false, ops} (the run ended first)
-//      {type: "done", notReady: url, kind, line}
-//                                it asked for a doc it wasn't given: the page
+//      {type: "done", notReady: url, kind, line, as?}
+//                                it asked for a doc it wasn't given (or, kind
+//                                "get", what's at a url, as `as`): the page
 //                                adds it and runs it again (buildRounds)
 
 // a Repo of our own, with the window's Repo as its only peer: subduction over
@@ -140,7 +142,7 @@ onmessage = async ({ data }) => {
   try {
     graph = linkGraph(data.graph ?? {}, {
       makeUrl,
-      suspend: (url, kind) => state.suspend(url, { kind, line }),
+      suspend: (url, kind, details) => state.suspend(url, { kind, line, ...details }),
       watch: (pinned, value) => watched(value, (path, read) => reads.note(pinned, path, read)),
     });
   } catch (e) {
@@ -148,14 +150,16 @@ onmessage = async ({ data }) => {
     postMessage({ type: "done", knitout: "", error: { message: String(e?.message ?? e), line: null } });
     return;
   }
-  // on the global, for the modules: they read docs the same way
+  // on the global, for the modules: they read docs the same way, and
+  // import lattice's doc() and get() from a shim that hands on __lattice
   self.__docs = graph.docs;
-  self.doc = graph.doc;
+  self.__lattice = graph.lattice;
 
-  // `import(x)` in the pattern: a doc from the graph, anything else found
-  // from the page's address
+  // `import(x)` in the pattern: lattice's own, a doc from the graph,
+  // anything else found from the page's address
   const __import = async (at, specifier) => {
     line = at;
+    if (isLattice(specifier)) return { ...graph.lattice, default: graph.lattice };
     const blob = graph.module(specifier);
     // what a module reads as it's loaded (its exports) isn't any stitch's
     if (blob) return import(blob).finally(() => reads.forget());
@@ -190,7 +194,7 @@ onmessage = async ({ data }) => {
   try {
     knitout = await evalJS(data.code, {
       sourceMap: data.sourceMap,
-      globals: { __loop: turns(loopCounter(data.loopBudget, data.timeBudget), reads), __at, __import, __see, repo, doc: graph.doc },
+      globals: { __loop: turns(loopCounter(data.loopBudget, data.timeBudget), reads), __at, __import, __see, repo, __lattice: graph.lattice },
       currentLine: () => line,
       currentReads: () => reads.take(),
       onOp,
@@ -208,7 +212,7 @@ onmessage = async ({ data }) => {
   }
   // whatever it did after asking, it didn't have what it asked for
   const asked = state.suspension();
-  if (asked) postMessage({ type: "done", notReady: asked.url, kind: asked.kind, line: asked.line });
+  if (asked) postMessage({ type: "done", notReady: asked.url, kind: asked.kind, line: asked.line, as: asked.as });
   else if (data.stopAt != null) postMessage({ type: "done", knitout: "", error, probe: probe ?? { reached: false, ops: written } });
   else postMessage({ type: "done", knitout: withReadDocs(knitout, reads.docs), error });
 };

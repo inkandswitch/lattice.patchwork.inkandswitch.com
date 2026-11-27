@@ -35,7 +35,7 @@ test("through a copy into a local array, and the loops round the line", () => {
 
 test("through a function, and its parameters' arguments", () => {
   const code = [
-    `import witch from "${W}"`,
+    `import witch from "${W}"; import {doc} from "lattice"`,
     "function colour(x, y) { return witch.pixels[y][x] }",
     "const stitch = (c) => c ? 'f' : 'b'",
     `const other = doc("${V}")`,
@@ -64,4 +64,14 @@ test("assignments, and nothing from a doc", () => {
   assert.deepEqual(urls(trace(4)), [W]);
   assert.deepEqual(trace(5), []);
   assert.deepEqual(trace(99), []);
+});
+
+test("lattice's doc(), whatever it's imported as, and not a doc() of no import", () => {
+  const code = [
+    'import * as lattice from "lattice"',
+    `const a = lattice.doc("${W}")`,
+    `const b = doc("${V}")`,
+    "k.knit('+', 'f' + a.x + b.y, '3')",
+  ].join("\n");
+  assert.deepEqual(urls(tracer(code)(4)), [W]);
 });

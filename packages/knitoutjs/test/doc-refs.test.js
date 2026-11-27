@@ -4,6 +4,8 @@ import { completionAt, definitionDoc, docRefAt, dropImport, findWithin, importLi
 
 const A = "automerge:2Qf9bTzK3xJvPq7YwHnE5RcLmA8d";
 const never = () => false;
+// lattice's doc(), as a pattern has it
+const L = 'import {doc} from "lattice"\n';
 
 test("a doc ref is the url in an import's string", () => {
   const code = `import r from "${A}"\nr`;
@@ -11,8 +13,21 @@ test("a doc ref is the url in an import's string", () => {
 });
 
 test("a doc ref is the url in doc()'s string, unpinned", () => {
-  const code = `const d = doc("/${A}#abc|def")`;
+  const code = `${L}const d = doc("/${A}#abc|def")`;
   assert.equal(docRefAt(code, code.indexOf("automerge") + 3), A);
+});
+
+test("a doc ref is in lattice's doc() under any name it's imported as, and not in a doc() of no import", () => {
+  for (const code of [
+    `import {doc as d} from "lattice"\nd("${A}")`,
+    `import * as lattice from "lattice"\nlattice.doc("${A}")`,
+    `import l from "lattice"\nl.doc("${A}")`,
+  ]) {
+    assert.equal(docRefAt(code, code.indexOf("automerge") + 3), A, code);
+  }
+  for (const code of [`doc("${A}")`, `import {get} from "lattice"\nget("${A}")`, `import * as l from "x"\nl.doc("${A}")`]) {
+    assert.equal(docRefAt(code, code.indexOf("automerge") + 3), null, code);
+  }
 });
 
 test("a doc ref is an identifier bound by an import of a doc", () => {
@@ -35,12 +50,22 @@ test("a string that isn't a doc url is not a doc ref", () => {
 });
 
 test("completion after doc(url). is the doc's top level", () => {
-  const code = `const d = doc("${A}").`;
+  const code = `${L}const d = doc("${A}").`;
   assert.deepEqual(completionAt(code, code.length, { isJs: never }), { url: A, path: [], from: code.length });
 });
 
+test("completion after lattice's doc(url), whatever it's imported as", () => {
+  for (const code of [
+    `import {doc as d} from "lattice"\nd("${A}").`,
+    `import * as lattice from "lattice"\nlattice.doc("${A}").`,
+  ]) {
+    assert.deepEqual(completionAt(code, code.length, { isJs: never }), { url: A, path: [], from: code.length }, code);
+  }
+  assert.equal(completionAt(`doc("${A}").`, 0 + `doc("${A}").`.length, { isJs: never }), null);
+});
+
 test("completion after doc(url).a.b. is that path, and from is where the typed member starts", () => {
-  const code = `doc("${A}").size.wi`;
+  const code = `${L}doc("${A}").size.wi`;
   assert.deepEqual(completionAt(code, code.length, { isJs: never }), {
     url: A,
     path: ["size"],
@@ -69,7 +94,7 @@ test("completion is null for a binding of a .js (a module, not a doc value)", ()
 });
 
 test("completion after doc(url). ignores isJs", () => {
-  const code = `doc("${A}").`;
+  const code = `${L}doc("${A}").`;
   assert.deepEqual(completionAt(code, code.length, { isJs: () => true })?.path, []);
 });
 

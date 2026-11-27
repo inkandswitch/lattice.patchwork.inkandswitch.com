@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { collectSources, firstBrokenLine, instrument, isDocUrl } from "../core/instrument.js";
+import { collectGets, collectSources, firstBrokenLine, instrument, isDocUrl } from "../core/instrument.js";
 
 const pins = { "automerge:abc": "automerge:abc#h1" };
+// lattice's doc() and get(), as a pattern has them: on the line before, so
+// what's after it is where it'd be without
+const L = 'import {doc, get} from "lattice"; ';
 
 test("knitout imports become require", () => {
   assert.ok(instrument('import k from "knitout"\nk').code.startsWith('const k = require("knitout");'));
@@ -12,6 +15,12 @@ test("knitout imports become require", () => {
       'const {Writer: W, X} = require("knitout");',
     ),
   );
+});
+
+test("lattice imports become what the run hands the pattern", () => {
+  assert.ok(instrument('import {doc, get as g} from "lattice"\ng').code.startsWith("const {doc, get: g} = __lattice;"));
+  assert.ok(instrument('import * as lattice from "lattice"').code.startsWith("const lattice = __lattice;"));
+  assert.ok(instrument('import lattice from "lattice"').code.startsWith("const lattice = __lattice;"));
 });
 
 test("doc imports become pinned __import", () => {
@@ -28,7 +37,9 @@ test("an unpinned import keeps its url", () => {
 });
 
 test("doc() and import() strings are pinned", () => {
-  assert.ok(instrument('doc("automerge:abc").width', { pins }).code.includes('"automerge:abc#h1"'));
+  assert.ok(instrument(L + 'doc("automerge:abc").width', { pins }).code.includes('"automerge:abc#h1"'));
+  const ns = 'import * as l from "lattice"\nl.doc("automerge:abc")';
+  assert.ok(instrument(ns, { pins }).code.includes('"automerge:abc#h1"'));
   assert.ok(instrument('import("automerge:abc")', { pins }).code.includes('__import(1, "automerge:abc#h1")'));
 });
 
@@ -39,6 +50,21 @@ test("lines stay put", () => {
   assert.ok(out.split("\n")[4].includes("foo"));
 });
 
+test("a doc() that isn't lattice's isn't a source", () => {
+  for (const code of ['doc("automerge:abc")', 'import {get} from "lattice"\nget("automerge:abc")', 'import doc from "./doc.js"\ndoc("automerge:abc")']) {
+    assert.deepEqual(collectSources(code), [], code);
+  }
+});
+
+test("collectGets finds each get() of a written url, and what it's to be", () => {
+  const code = `${L}get("a.png")\nget('https://x.test/b', "bytes")\nget(url)\nget("c", as)`;
+  assert.deepEqual(collectGets(code), [
+    { url: "a.png", as: "clever", line: 1 },
+    { url: "https://x.test/b", as: "bytes", line: 2 },
+  ]);
+  assert.deepEqual(collectSources(`${L}get("automerge:abc")`), []);
+});
+
 test("urls that aren't imports or doc() aren't sources", () => {
   const code = '// automerge:abc\nconst u = "automerge:abc"\nfoo("automerge:abc")';
   assert.deepEqual(collectSources(code), []);
@@ -47,7 +73,7 @@ test("urls that aren't imports or doc() aren't sources", () => {
 });
 
 test("collectSources finds each use", () => {
-  const code = 'import a from "/automerge:abc"\nimport("automerge:abc#h2")\ndoc("automerge:abc")';
+  const code = L + 'import a from "/automerge:abc"\nimport("automerge:abc#h2")\ndoc("automerge:abc")';
   assert.deepEqual(collectSources(code), [
     { url: "automerge:abc", line: 1, kind: "import" },
     { url: "automerge:abc#h2", line: 2, kind: "dynamic" },
@@ -56,7 +82,7 @@ test("collectSources finds each use", () => {
 });
 
 test("a url carrying heads is used at those heads", () => {
-  assert.ok(instrument('doc("automerge:abc#h2")', { pins }).code.includes('"automerge:abc#h2"'));
+  assert.ok(instrument(L + 'doc("automerge:abc#h2")', { pins }).code.includes('"automerge:abc#h2"'));
 });
 
 test("isDocUrl", () => {
@@ -114,7 +140,7 @@ function originalColumn(result, token) {
 }
 
 test("tokens after a replaced string keep their columns", () => {
-  const code = 'const w = doc("automerge:abc").width + 1';
+  const code = L + 'const w = doc("automerge:abc").width + 1';
   const result = instrument(code, { pins });
   assert.deepEqual(originalColumn(result, "width"), { line: 0, column: code.indexOf("width") });
 });

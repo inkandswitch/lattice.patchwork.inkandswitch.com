@@ -2,7 +2,7 @@ import { ImmutableString } from "@automerge/automerge";
 import { MessagePortTransport } from "@automerge/automerge-subduction/slim";
 import { docText, knitoutOf, moduleWorker, textHash } from "./files.js";
 import { firstBrokenLine, instrument } from "./instrument.js";
-import { buildGraph, buildRounds } from "./graph.js";
+import { buildGraph, buildRounds, webSources } from "./graph.js";
 import { recordedSources, withSourcesLine } from "./sources.js";
 
 export { instrument };
@@ -50,8 +50,9 @@ function automergeForWorker() {
 // run a knitout.js pattern: {knitout, error, ms}. the pattern has a Repo of
 // its own, synced with `repo` over subduction, so `repo.find(url)` there finds
 // what this window has. aborting `signal` stops it. `graph` (graph.js) is the
-// docs it can `import` and `doc()`, pinned; one it asks for that isn't there
-// stops the run, and it answers {notReady: url, kind, line, ms} instead.
+// docs it can `import` and `doc()`, pinned, and what it `get()`s; one it asks
+// for that isn't there stops the run, and it answers {notReady: url, kind,
+// line, as, ms} instead.
 // with `probe` ({at, op}: a place in the code, and an op's place among those
 // written), the name at `at` is watched and the run stops as op `op` is
 // written, answering {probe, error, ms} (see run-worker.js) with no knitout
@@ -116,7 +117,7 @@ export function compile(code, { repo, signal, name, graph, probe = null } = {}) 
 
     worker.onmessage = ({ data }) => {
       if (data.type === "done" && data.notReady) {
-        finish({ notReady: data.notReady, kind: data.kind, line: data.line ?? null });
+        finish({ notReady: data.notReady, kind: data.kind, line: data.line ?? null, as: data.as });
       } else if (data.type === "done") {
         const error = data.error;
         if (error?.syntax && error.line == null) error.line = firstBrokenLine(code);
@@ -146,7 +147,7 @@ export function compile(code, { repo, signal, name, graph, probe = null } = {}) 
       loopBudget: LOOP_BUDGET,
       timeBudget: TIME_BUDGET,
       automerge: automergeForWorker(),
-      graph: graph && { pins: graph.pins, modules: graph.modules, snapshots: graph.snapshots },
+      graph: graph && { pins: graph.pins, modules: graph.modules, snapshots: graph.snapshots, gets: graph.gets },
       stopAt: probe?.op ?? null,
     });
   });
@@ -155,10 +156,11 @@ export function compile(code, { repo, signal, name, graph, probe = null } = {}) 
 // run the .js handle's code and write the knitout into the .k handle,
 // remembering on each side who it's linked to, and on the .k when it was
 // built and from what code (so it can tell when it's out of date) and every
-// doc it read, pinned (knitoutSources, and a line in the knitout). the
+// doc it read, pinned (knitoutSources, and a line in the knitout), and every
+// url it fetched and when (knitoutWebSources, and a line after that). the
 // knitout goes in as an ImmutableString: writing a big one as editable text
 // is slow, and a generated .k isn't for typing into (make an editable copy
-// for that). {knitout, error, ms, sources}
+// for that). {knitout, error, ms, sources, webSources}
 export async function runInto(jsHandle, kHandle, repo, { signal } = {}) {
   const start = performance.now();
   // the code and its pin, both from one version of the .js
@@ -177,20 +179,22 @@ export async function runInto(jsHandle, kHandle, repo, { signal } = {}) {
   }
   const { result, graph } = built;
   const sources = recordedSources(graph.sources, { self: jsHandle.url, target: kHandle.url });
+  const web = webSources(graph);
   // a build that failed leaves the .k as it was
-  if (result.error) return done({ knitout: result.knitout, error: result.error, sources });
-  const knitout = withSourcesLine(result.knitout, sources);
+  if (result.error) return done({ knitout: result.knitout, error: result.error, sources, webSources: web });
+  const knitout = withSourcesLine(result.knitout, sources, web);
   kHandle.change((doc) => {
     doc.content = new ImmutableString(knitout);
     doc.knitoutSource = jsHandle.url;
     doc.knitoutSourceHash = textHash(code);
     doc.knitoutBuiltAt = Date.now();
     doc.knitoutSources = sources;
+    doc.knitoutWebSources = web;
   });
   if (knitoutOf(jsHandle.doc()).target !== kHandle.url) {
     jsHandle.change((doc) => {
       doc.knitoutTarget = kHandle.url;
     });
   }
-  return done({ knitout, error: null, sources });
+  return done({ knitout, error: null, sources, webSources: web });
 }

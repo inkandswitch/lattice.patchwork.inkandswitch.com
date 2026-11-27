@@ -234,7 +234,8 @@ function cellStyle(node, direction) {
  *              doc, the first first; `alt` the ones a tab's tool menu offers
  *              too while alt is held; `extension` is what a doc's called as a
  *              file, if not what its name says. a doc none of them shows
- *              shows with patchwork's own tool for it
+ *              shows with patchwork's own tool for it. `always` is ids of
+ *              patchwork tools every doc's tool menu offers too (["raw"])
  *   extensions what the app adds to the panes: [{name, watch, links,
  *              status, actions, bar, touched, menu, presence}], each part
  *              optional. see EXTENSIONS below
@@ -1284,20 +1285,30 @@ export function mountWorkspace(
   function toolChoices(url) {
     const info = docInfo(url);
     const alt = new Set(info.altTools ?? []);
-    return [...info.tools, ...alt]
+    const theirChoice = (theirTool) => ({
+      tool: PATCHWORK.id,
+      patchworkTool: theirTool.id,
+      name: theirTool.name.toLowerCase(),
+      title: `patchwork's ${theirTool.name} tool`,
+    });
+    const choices = [...info.tools, ...alt]
       .map(toolById)
       .filter(Boolean)
       .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
       .flatMap((tool) => {
-        const theirs = tool.id === "patchwork" ? patchworkToolsFor(info.type) : [];
+        const theirs = tool.id === PATCHWORK.id ? patchworkToolsFor(info.type) : [];
         if (!theirs.length) return [{ tool: tool.id, name: tool.name, title: tool.title, alt: alt.has(tool.id) }];
-        return theirs.map((theirTool) => ({
-          tool: tool.id,
-          patchworkTool: theirTool.id,
-          name: theirTool.name.toLowerCase(),
-          title: `patchwork's ${theirTool.name} tool`,
-        }));
+        return theirs.map(theirChoice);
       });
+    // the patchwork tools every doc's offered (tools.always), last, once
+    // they've loaded, and if it hasn't one of them already
+    patchworkToolsChanged();
+    for (const id of tools.always ?? []) {
+      const theirTool = patchworkTools.get(id);
+      if (!theirTool || choices.some((choice) => choice.patchworkTool === id)) continue;
+      choices.push(theirChoice(theirTool));
+    }
+    return choices;
   }
 
   function shownWith(panel) {

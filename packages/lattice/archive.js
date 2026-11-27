@@ -1,12 +1,13 @@
 // a project as a .latticeproject, and one back: a zip of .amtext files, the
 // project and every doc it reaches (its files, the docs in its panes). it's a
 // .patchworkfolder by another name, so those are taken too, as is a .zip of
-// one. knit.patchwork.inkandswitch.com takes a .latticeproject as lattice
-// does. amtext's own code, in vendor/amtext: knit.patchwork.inkandswitch.com's
+// one, and a folder that's one unzipped (dropped-folder.js).
+// knit.patchwork.inkandswitch.com takes a .latticeproject as lattice does.
+// amtext's own code, in vendor/amtext: knit.patchwork.inkandswitch.com's
 // packages/amtext, copied, so the frame has it wherever it's installed
 import * as Automerge from "@automerge/automerge";
 import { getRegistry, isKeyhiveDoc } from "@inkandswitch/patchwork-plugins";
-import { patchworkFolder } from "./vendor/amtext/patchworkfolder.js";
+import { patchworkFolder, zip } from "./vendor/amtext/patchworkfolder.js";
 
 // a doc of a datatype for something unpacked: its type and nothing else. not
 // the datatype's init, which would make what a new one starts with (a
@@ -39,4 +40,10 @@ export function downloadArchive(repo, url, hive) {
 // unpacks a .latticeproject (or .patchworkfolder) into new docs. resolves with its root's url
 export async function unpackArchive(repo, file, hive) {
   return (await folder(repo, hive).importFolder(file)).root;
+}
+
+// unpacks a .patchworkfolder's files ({ name, data }, from a folder of them)
+// as unpackArchive would the .patchworkfolder. resolves with its root's url
+export async function unpackFolder(repo, files, hive) {
+  return (await folder(repo, hive).importFolder(await zip(files))).root;
 }

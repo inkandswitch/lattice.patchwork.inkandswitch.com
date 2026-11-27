@@ -3,11 +3,14 @@
 // and the signal a run throws when it asks for a doc it hasn't got. so it
 // imports nothing a worker (or node) can't load
 import { parser } from "./vendor/lezer-javascript.js";
-import { isDocUrl } from "./instrument.js";
+import { docCallString, isDocUrl, LATTICE, LATTICE_ALIASES, latticeNames } from "./instrument.js";
 import { fileExtension } from "./files.js";
+import { getArgs, getKey, madeOf } from "./get.js";
+import { addWasteSection, bindoff } from "./kniterate.js";
 
-// thrown by `doc(x)` or `import(x)` when x is a doc the run wasn't given. the
-// page pins it, adds it, and runs the pattern again
+// thrown by `doc(x)` or `import(x)` when x is a doc the run wasn't given (or
+// `get(x)` when it wasn't given what's at x). the page pins it (or fetches
+// it), adds it, and runs the pattern again
 export class NotReady extends Error {
   constructor(url) {
     super(`not ready: ${url}`);
@@ -39,24 +42,15 @@ function stringValue(code, node) {
   return text.slice(1, -1);
 }
 
-// `doc("x")`'s string, if that's all the call has
-function docString(code, call) {
-  const callee = call.firstChild;
-  if (callee?.name !== "VariableName" || code.slice(callee.from, callee.to) !== "doc") return null;
-  const args = callee.nextSibling;
-  if (args?.name !== "ArgList") return null;
-  const string = args.firstChild?.nextSibling;
-  if (string?.name !== "String" || string.nextSibling?.name !== ")") return null;
-  return string;
-}
-
 // every literal specifier in a module: `import … from "x"`, `import "x"`,
-// `export … from "x"`, `import("x")`, `doc("x")`. unlike a pattern, a module
-// stays a module, so its exports can name docs too
+// `export … from "x"`, `import("x")`, lattice's `doc("x")`. unlike a
+// pattern, a module stays a module, so its exports can name docs too
 function specifiers(code) {
   const lineAt = (pos) => code.slice(0, pos).split("\n").length;
+  const tree = parser.parse(code);
+  const names = latticeNames(code, tree);
   const found = [];
-  parser.parse(code).iterate({
+  tree.iterate({
     enter(node) {
       let string;
       let kind;
@@ -72,7 +66,7 @@ function specifiers(code) {
         string = node.node.getChild("String");
         kind = "dynamic";
       } else if (node.name === "CallExpression") {
-        string = docString(code, node.node);
+        string = docCallString(code, node.node, names);
         kind = "doc";
       }
       if (!string || string.type.isError) return;
@@ -152,6 +146,12 @@ export function deepFreeze(value) {
 // puts it on globalThis before the pattern runs
 export const KNITOUT_SHIM = "export const Writer = globalThis.__knitout.Writer; export default globalThis.__knitout;";
 
+// lattice's doc() and get() and the kniterate helpers, for modules that
+// `import … from "lattice"` (instrument.js's LATTICE, or one of its aliases).
+// the run puts them on globalThis.__lattice
+export const LATTICE_SHIM =
+  "const lattice = globalThis.__lattice; export const {doc, get, bindoff, addWasteSection} = lattice; export default lattice;";
+
 // a graph made ready to run: every doc that isn't code and every module gets
 // a url of its own (`makeUrl(text)`, a blob url in the worker), modules
 // after what they import, with their specifiers swapped for those urls.
@@ -161,11 +161,17 @@ export const KNITOUT_SHIM = "export const Writer = globalThis.__knitout.Writer; 
 // it was asked ("doc" or "dynamic", as extendGraph takes it). `module` of
 // something that isn't a doc url is null: the caller loads it as it is
 // `watch(pinned, value)`, if given, is what the pattern's handed for each
-// frozen doc (reads.js's watched, to see what it reads)
-export function linkGraph({ pins = {}, modules = [], snapshots = {} }, { makeUrl, suspend, watch = null }) {
+// frozen doc (reads.js's watched, to see what it reads). `get(url, as)` is
+// what's at a url, from the graph's `gets` (get.js), and one it hasn't got
+// throws `suspend(url, "get", {as})`. `lattice` is the two together, with
+// the kniterate helpers, as `import … from "lattice"` has them
+export function linkGraph({ pins = {}, modules = [], snapshots = {}, gets = {} }, { makeUrl, suspend, watch = null }) {
   const docs = {};
   const urls = {};
+  const made = new Map();
+  const latticeUrl = makeUrl(LATTICE_SHIM);
   const map = { knitout: makeUrl(KNITOUT_SHIM) };
+  for (const name of [LATTICE, ...LATTICE_ALIASES]) map[name] = latticeUrl;
   // a .js read with `doc()` is a value, not a module: importing it asks for it
   // again, as a module
   for (const [pinned, value] of Object.entries(snapshots)) {
@@ -179,15 +185,30 @@ export function linkGraph({ pins = {}, modules = [], snapshots = {} }, { makeUrl
   }
   const pinnedIn = (table, key) => (Object.hasOwn(table, key) ? key : pins[key]);
 
+  function doc(asked) {
+    const key = isDocUrl(asked);
+    if (!key) throw new Error(`doc() takes an automerge url, not ${JSON.stringify(asked)}`);
+    const pinned = pinnedIn(docs, key);
+    if (pinned === undefined || !Object.hasOwn(docs, pinned)) throw suspend(key, "doc");
+    return docs[pinned];
+  }
+  function get(...asked) {
+    const { url, as } = getArgs(...asked);
+    const key = getKey(url, as);
+    if (made.has(key)) return made.get(key);
+    if (!Object.hasOwn(gets, key)) throw suspend(url, "get", { as });
+    const got = gets[key];
+    if ("error" in got) throw new Error(got.error);
+    const value = deepFreeze(madeOf(got.value));
+    made.set(key, value);
+    return value;
+  }
+
   return {
     docs,
-    doc(asked) {
-      const key = isDocUrl(asked);
-      if (!key) throw new Error(`doc() takes an automerge url, not ${JSON.stringify(asked)}`);
-      const pinned = pinnedIn(docs, key);
-      if (pinned === undefined || !Object.hasOwn(docs, pinned)) throw suspend(key, "doc");
-      return docs[pinned];
-    },
+    doc,
+    get,
+    lattice: Object.freeze({ doc, get, bindoff, addWasteSection }),
     module(asked) {
       const key = isDocUrl(asked);
       if (!key) return null;

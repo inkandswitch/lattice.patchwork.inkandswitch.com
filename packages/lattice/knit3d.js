@@ -1,7 +1,7 @@
 import {backdropPicker} from "./backdrop.js"
 import {checkPanel, located, opOf} from "./checks.js"
 import {docText} from "./files.js"
-import {WALE, firstLoop} from "./loopsim.js"
+import {WALE} from "./loopsim.js"
 import {NO_FABRIC, settler as newSettler} from "./settler.js"
 import {sizeArgs} from "./settling.js"
 import {OVERRUN, apply, carriageTrack, newMachine, readKnitout} from "./knitting.js"
@@ -666,21 +666,19 @@ export default function Knit3dTool(handle, element, context = {}) {
 		const {xs, ys, zs, slack} = fabric
 		const {loops} = machine
 		const count = Math.min(loops.length, fabric.count)
-		// (only the loops relax lays out: the newest rows, when there are more)
-		const start = firstLoop(machine)
 		const next = new Int32Array(count).fill(-1)
-		for (let i = start; i < count; i++) {
+		for (let i = 0; i < count; i++) {
 			const prev = loops[i].prev
-			if (prev != null && prev >= start) next[prev] = i
+			if (prev != null) next[prev] = i
 		}
-		if (instances.length < (count - start) * INSTANCE_FLOATS) {
-			instances = new Float32Array(Math.max(instances.length * 2, (count - start) * INSTANCE_FLOATS))
+		if (instances.length < count * INSTANCE_FLOATS) {
+			instances = new Float32Array(Math.max(instances.length * 2, count * INSTANCE_FLOATS))
 		}
 
 		const lo = [Infinity, Infinity, Infinity]
 		const hi = [-Infinity, -Infinity, -Infinity]
 		let at = 0
-		for (let i = start; i < count; i++) {
+		for (let i = 0; i < count; i++) {
 			const loop = loops[i]
 			const x = xs[i]
 			const y = ys[i]
@@ -693,7 +691,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			// along its row: from the loop before to the one after, but not
 			// round the turn at a row's end, or along yarn that floats
 			const a =
-				loop.prev != null && loop.prev >= start && loops[loop.prev].dir === loop.dir && !slack[i] ? loop.prev : i
+				loop.prev != null && loops[loop.prev].dir === loop.dir && !slack[i] ? loop.prev : i
 			const b = next[i] >= 0 && loops[next[i]].dir === loop.dir && !slack[next[i]] ? next[i] : i
 			let tx = xs[b] - xs[a]
 			let ty = ys[b] - ys[a]
@@ -713,7 +711,6 @@ export default function Knit3dTool(handle, element, context = {}) {
 			let pz = 0
 			let parents = 0
 			for (const parent of loop.parents) {
-				if (parent < start) continue
 				px += xs[parent]
 				py += ys[parent]
 				pz += zs[parent]
@@ -772,7 +769,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			const before = loop.prev != null ? loops[loop.prev] : null
 			const rollIn = before ? turnOf(before, yarn.plated) : turnOf(loop, yarn.plated)
 			const rollOut = turnOf(loop, yarn.plated)
-			const from = before && loop.prev >= start ? loop.prev : -1
+			const from = before ? loop.prev : -1
 			const forwards =
 				from >= 0 ? tx * (x - xs[from]) + ty * (y - ys[from]) + tz * (z - zs[from]) >= 0 : tx * loop.dir >= 0
 			const v = instances
@@ -803,7 +800,7 @@ export default function Knit3dTool(handle, element, context = {}) {
 			v[at + 23] = colour2[2]
 			at += INSTANCE_FLOATS
 		}
-		instanceCount = count - start
+		instanceCount = count
 		gl.bindBuffer(gl.ARRAY_BUFFER, instanceBuffer)
 		gl.bufferData(gl.ARRAY_BUFFER, instances.subarray(0, at), gl.DYNAMIC_DRAW)
 

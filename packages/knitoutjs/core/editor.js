@@ -2,7 +2,7 @@ import { createSignal, onCleanup, Show } from "solid-js";
 import { render } from "solid-js/web";
 import html from "solid-js/html";
 import { EditorState, Prec, Transaction } from "@codemirror/state";
-import { EditorView, keymap, ViewPlugin } from "@codemirror/view";
+import { drawSelection, EditorView, keymap, ViewPlugin } from "@codemirror/view";
 import { goToLine as goToLineIn, keepCaretInPlace, knitoutEditorIntegration, showError } from "./cm-knitout.js";
 import { docText, fileExtension, knitoutOf } from "./files.js";
 import { docRefs } from "./doc-refs-cm.js";
@@ -116,6 +116,9 @@ export default function KnitoutEditorTool(handle, element, context) {
     const named = String(fileHandle.doc()?.name ?? "").trim();
     extensions.push(
       holdView,
+      // the file tool's editor allows more than one selection, but the
+      // browser's own selection only ever shows one of them: draw them all
+      drawSelection(),
       // what a screen reader calls it, and how to get out of it: tab
       // indents in here, so escape then tab is the way on
       EditorView.contentAttributes.of({

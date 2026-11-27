@@ -83,6 +83,11 @@ test("an op's place: after the header and the sources line", () => {
   assert.equal(opPlace(k, 5), 1);
 });
 
+test("an op's place: after the web sources line too", () => {
+  const k = ";!knitout-2\n;;Carriers: 1 2\nx-patchwork-sources automerge:a\nx-web-sources https://x.test/p@1970-01-01T00:00:00.000Z\nin 1 ;!source:3";
+  assert.equal(opPlace(k, 5), 0);
+});
+
 test("values said short", () => {
   assert.equal(preview("f12"), '"f12"');
   assert.equal(preview([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]), "[1, 2, 3, 4, 5, 6, 7, 8, … 2 more]");

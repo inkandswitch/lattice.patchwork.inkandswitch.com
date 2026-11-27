@@ -1,12 +1,12 @@
 import { parser } from "./vendor/lezer-javascript.js";
-import { scan } from "./instrument.js";
+import { docCallString, latticeNames, scan } from "./instrument.js";
 
 // which docs a line of a pattern is made from, read from its code, as far as
 // that can be known without running it: the names the line uses (and the
 // conditions of the ifs and loops it's in), back through where each was
 // made (`const grid = …`, `grid = …`, `grid[y] = …`, `grid.push(…)`, a
 // function's body, its parameters' arguments where it's called) to an
-// `import … from "automerge:…"` or a `doc("automerge:…")`. what it reads at
+// `import … from "automerge:…"` or a (lattice's) `doc("automerge:…")`. what it reads at
 // runtime is reads.js's; this is what the code says, so it finds a doc even
 // once its values are copied somewhere else first (or, as it can't tell
 // which way an `if` goes, one the line might not have used this time)
@@ -51,6 +51,7 @@ export function tracer(code) {
     return low + 1;
   };
   const text = (node) => code.slice(node.from, node.to);
+  const lattice = latticeNames(code, tree);
 
   const scopeOf = (node) => {
     for (let up = node.parent; up; up = up.parent) if (SCOPES.has(up.name)) return up;
@@ -179,12 +180,9 @@ export function tracer(code) {
     (function walk(node) {
       if (node.name === "VariableName") names.push({ name: text(node), at: node.from });
       else if (node.name === "CallExpression") {
-        const callee = node.firstChild;
-        const string = callee?.nextSibling?.getChild("String");
+        const string = docCallString(code, node, lattice);
         const url = string && /^["'](\/?automerge:[^"'\\]+)["']$/.exec(text(string))?.[1];
-        if (callee?.name === "VariableName" && text(callee) === "doc" && url) {
-          docs.push({ url: url.replace(/^\//, ""), at: callee.from });
-        }
+        if (url) docs.push({ url: url.replace(/^\//, ""), at: node.firstChild.from });
       }
       for (let child = node.firstChild; child; child = child.nextSibling) walk(child);
     })(node);

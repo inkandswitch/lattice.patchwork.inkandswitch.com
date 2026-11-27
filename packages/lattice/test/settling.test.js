@@ -227,3 +227,48 @@ test("an answer for an earlier op than asked is ready: it's behind, not wrong", 
 	assert.equal(s.ready, true)
 	s.destroy()
 })
+
+// each row's height, on the whole: a jersey's rows are `needles` loops each,
+// after the cast-on's
+function rowHeights(fabric, needles) {
+	const heights = []
+	for (let at = 0; at < fabric.count; at += needles) {
+		let sum = 0
+		const to = Math.min(fabric.count, at + needles)
+		for (let i = at; i < to; i++) sum += fabric.ys[i]
+		heights.push(sum / (to - at))
+	}
+	return heights
+}
+
+// only the newest `limit` loops settle: the older ones are still knitted, and
+// still hang below them, a row apart, wherever the newer ones have gone
+for (const [how, settle] of [
+	["laid out at once", (fabric, machine, knitout, opts) => {
+		knitout.ops.forEach((op, i) => apply(machine, op, i, () => 0))
+		relax(fabric, machine, 0, opts)
+		relax(fabric, machine, Infinity, opts)
+	}],
+	["knitted a little at a time", (fabric, machine, knitout, opts) => {
+		knitout.ops.forEach((op, i) => {
+			apply(machine, op, i, () => 0)
+			if (i % 5 === 0) relax(fabric, machine, 20, opts)
+		})
+		relax(fabric, machine, Infinity, opts)
+	}],
+]) {
+	test(`the rows older than the limit hang below the rest, ${how}`, () => {
+		const needles = 8
+		const knitout = jersey(needles, 40)
+		const machine = newMachine()
+		const fabric = newFabric()
+		const limit = 100
+		settle(fabric, machine, knitout, {gap: 0, inflate: 0, squash: 0.3, size: sizer({}), limit})
+		assert.ok(fabric.count > 3 * limit, `only ${fabric.count} loops`)
+		const heights = rowHeights(fabric, needles)
+		for (let r = 1; r < heights.length; r++) {
+			const step = heights[r] - heights[r - 1]
+			assert.ok(step > 0.3 && step < 1.5, `row ${r} is ${step.toFixed(2)} above the row before`)
+		}
+	})
+}

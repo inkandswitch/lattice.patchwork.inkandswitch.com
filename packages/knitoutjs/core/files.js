@@ -9,7 +9,8 @@ const links = (value) => (Array.isArray(value) ? value.map(link).filter((entry) 
 // a doc's knitout links, as plain strings: the .k a .js writes into
 // (target), the .js that last wrote a .k (source) and the code it wrote it
 // from (sourceHash), when it did (builtAt), and the .k a .k is an editable
-// copy of (copyOf), the pinned urls a .k was built from (sources), and the same sorts
+// copy of (copyOf), the pinned urls a .k was built from (sources), what it
+// fetched and when (webSources, see sources.js's webSource), and the same sorts
 // of thing for a .kc (kcode*). read them here, not off the doc, so they compare with
 // === however they're stored (text now, ImmutableString later)
 export function knitoutOf(doc) {
@@ -20,11 +21,13 @@ export function knitoutOf(doc) {
     copyOf: link(doc?.knitoutCopyOf),
     builtAt: typeof doc?.knitoutBuiltAt === "number" ? doc.knitoutBuiltAt : null,
     sources: links(doc?.knitoutSources),
+    webSources: links(doc?.knitoutWebSources),
     kcodeTarget: link(doc?.kcodeTarget),
     kcodeSource: link(doc?.kcodeSource),
     kcodeSourceHash: link(doc?.kcodeSourceHash),
     kcodeBuiltAt: typeof doc?.kcodeBuiltAt === "number" ? doc.kcodeBuiltAt : null,
     kcodeSources: links(doc?.kcodeSources),
+    kcodeWebSources: links(doc?.kcodeWebSources),
   };
 }
 

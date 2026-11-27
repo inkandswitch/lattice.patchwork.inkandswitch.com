@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ImmutableString, Counter } from "@automerge/automerge";
-import { buildGraph, extendGraph, buildRounds, plainValue, NotReady } from "../core/graph.js";
+import { buildGraph, extendGraph, buildRounds, plainValue, NotReady, webSources } from "../core/graph.js";
 import { NotReady as WorkerNotReady } from "../core/modules.js";
 
 const js = (name, content) => ({ name, extension: "js", content });
@@ -42,9 +42,9 @@ function setup(code, docs, options) {
 }
 
 test("the .js comes first, then what it uses", async () => {
-  const code = 'import a from "automerge:a"\nconst c = doc("automerge:c")';
+  const code = 'import {doc} from "lattice"; import a from "automerge:a"\nconst c = doc("automerge:c")';
   const { repo, self } = setup(code, {
-    "automerge:a": js("a.js", 'export default doc("/automerge:b").width'),
+    "automerge:a": js("a.js", 'import {doc} from "lattice"; export default doc("/automerge:b").width'),
     "automerge:b": { width: 20 },
     "automerge:c": { rows: 6 },
   });
@@ -56,7 +56,7 @@ test("the .js comes first, then what it uses", async () => {
     "automerge:c#h",
   ]);
   assert.deepEqual(graph.modules, [
-    { pinned: "automerge:a#h", code: 'export default doc("automerge:b#h").width' },
+    { pinned: "automerge:a#h", code: 'import {doc} from "lattice"; export default doc("automerge:b#h").width' },
   ]);
   assert.deepEqual(Object.keys(graph.snapshots).sort(), ["automerge:b#h", "automerge:c#h"]);
   assert.deepEqual(graph.snapshots["automerge:b#h"], { width: 20 });
@@ -123,7 +123,7 @@ test("a module importing the pattern is a cycle", async () => {
 });
 
 test("an unfindable doc fails the build with its url and line", async () => {
-  const code = '// one\n// two\n// three\nconst z = doc("automerge:zzz")';
+  const code = 'import {doc} from "lattice"; // one\n// two\n// three\nconst z = doc("automerge:zzz")';
   const { repo, self } = setup(code, {}, { reject: ["automerge:zzz"] });
   await assert.rejects(buildGraph(code, repo, { self }), {
     message: "couldn't find automerge:zzz (line 4)",
@@ -144,7 +144,7 @@ test("a doc that never comes fails after the timeout", async () => {
 
 test("an unfindable doc inside a module points at the pattern's import", async () => {
   const code = '\n\nimport a from "automerge:a"';
-  const { repo, self } = setup(code, { "automerge:a": js("a.js", '\ndoc("automerge:zzz")') });
+  const { repo, self } = setup(code, { "automerge:a": js("a.js", 'import {doc} from "lattice"; \ndoc("automerge:zzz")') });
   await assert.rejects(buildGraph(code, repo, { self }), {
     message: "couldn't find automerge:zzz (line 2 of a.js)",
     line: 3,
@@ -152,7 +152,7 @@ test("an unfindable doc inside a module points at the pattern's import", async (
 });
 
 test("a url written with heads is used at those heads", async () => {
-  const code = 'const b = doc("automerge:b#x|y")';
+  const code = 'import {doc} from "lattice"; const b = doc("automerge:b#x|y")';
   const { repo, self } = setup(code, { "automerge:b": { width: 3 } });
   const graph = await buildGraph(code, repo, { self });
   assert.deepEqual(repo.calls.find, ["automerge:b"]);
@@ -182,10 +182,10 @@ test("graph.js hands on the worker's NotReady", () => {
 });
 
 test("extendGraph adds a doc and keeps what's there", async () => {
-  const code = 'const c = doc("automerge:c")';
+  const code = 'import {doc} from "lattice"; const c = doc("automerge:c")';
   const { repo, self } = setup(code, {
     "automerge:c": { rows: 6 },
-    "automerge:d": js("d.js", 'export default doc("automerge:e")'),
+    "automerge:d": js("d.js", 'import {doc} from "lattice"; export default doc("automerge:e")'),
     "automerge:e": { width: 1 },
   });
   const graph = await buildGraph(code, repo, { self });
@@ -194,7 +194,7 @@ test("extendGraph adds a doc and keeps what's there", async () => {
   assert.deepEqual(graph, before);
   assert.deepEqual(next.sources, ["automerge:pat#h", "automerge:c#h", "automerge:d#h", "automerge:e#h"]);
   assert.equal(next.snapshots["automerge:c#h"], graph.snapshots["automerge:c#h"]);
-  assert.deepEqual(next.modules, [{ pinned: "automerge:d#h", code: 'export default doc("automerge:e#h")' }]);
+  assert.deepEqual(next.modules, [{ pinned: "automerge:d#h", code: 'import {doc} from "lattice"; export default doc("automerge:e#h")' }]);
 });
 
 test("a run asking for its own pattern gets its value, not a cycle", async () => {
@@ -207,7 +207,7 @@ test("a run asking for its own pattern gets its value, not a cycle", async () =>
 });
 
 test("a computed url suspends and runs again", async () => {
-  const code = 'const c = doc("automerge:c")';
+  const code = 'import {doc} from "lattice"; const c = doc("automerge:c")';
   const { repo, self } = setup(code, { "automerge:c": { rows: 6 }, "automerge:d": { width: 2 } });
   const graph = await buildGraph(code, repo, { self });
   const seen = [];
@@ -257,7 +257,7 @@ test("a doc a later run asks for that can't be found points at the run's line", 
 });
 
 test("a run asking again for a doc it was given fails at once", async () => {
-  const code = 'const c = doc("automerge:c")';
+  const code = 'import {doc} from "lattice"; const c = doc("automerge:c")';
   const { repo, self } = setup(code, { "automerge:c": { rows: 6 } });
   const graph = await buildGraph(code, repo, { self });
   let runs = 0;
@@ -270,7 +270,7 @@ test("a run asking again for a doc it was given fails at once", async () => {
 });
 
 test("a .js read with doc() and then imported is added as a module", async () => {
-  const code = 'const d = doc("automerge:d")';
+  const code = 'import {doc} from "lattice"; const d = doc("automerge:d")';
   const { repo, self } = setup(code, { "automerge:d": js("d.js", "export default 1") });
   const graph = await buildGraph(code, repo, { self });
   assert.deepEqual(graph.modules, []);
@@ -285,4 +285,56 @@ test("buildGraph reads the pattern at the heads it's given", async () => {
   const graph = await buildGraph("", repo, { self, heads: ["old"] });
   assert.deepEqual(graph.sources, ["automerge:pat#old"]);
   assert.equal(repo.calls.heads.includes(SELF), false);
+});
+
+test("a get() of a written url is fetched before the first run, and kept as the graph grows", async () => {
+  const code = 'import {get, doc} from "lattice"\nconst p = get("https://x.test/p.png")\nconst t = get("t.txt", "text")';
+  const { repo, self } = setup(code, { "automerge:c": { rows: 6 } });
+  const fetched = [];
+  const fetch = async (url, as) => (fetched.push([url, as]), { value: `${as} of ${url}` });
+  const graph = await buildGraph(code, repo, { self, fetch });
+  assert.deepEqual(fetched, [["https://x.test/p.png", "clever"], ["t.txt", "text"]]);
+  assert.deepEqual(graph.gets, {
+    "clever https://x.test/p.png": { value: "clever of https://x.test/p.png" },
+    "text t.txt": { value: "text of t.txt" },
+  });
+  assert.deepEqual(graph.sources, ["automerge:pat#h"]);
+  const next = await extendGraph(graph, "automerge:c", repo);
+  assert.deepEqual(next.gets, graph.gets);
+});
+
+test("a get() a run asks for is fetched, and it runs again", async () => {
+  const code = 'import {get} from "lattice"\nconst u = "https://x.test/" + "a"\nget(u, "json")';
+  const { repo, self } = setup(code, {});
+  const graph = await buildGraph(code, repo, { self, fetch: () => assert.fail("nothing's written out to fetch") });
+  assert.deepEqual(graph.gets, {});
+  const fetched = [];
+  const fetch = async (url, as) => (fetched.push([url, as]), { error: `get("${url}"): 404` });
+  const runs = [];
+  const run = async (graph) => {
+    runs.push(graph.gets);
+    return Object.keys(graph.gets).length ? { knitout: "ok" } : { notReady: "https://x.test/a", kind: "get", as: "json", line: 3 };
+  };
+  const out = await buildRounds(run, graph, repo, { fetch });
+  assert.deepEqual(out.result, { knitout: "ok" });
+  assert.deepEqual(fetched, [["https://x.test/a", "json"]]);
+  assert.deepEqual(out.graph.gets, { "json https://x.test/a": { error: 'get("https://x.test/a"): 404' } });
+  assert.equal(runs.length, 2);
+});
+
+test("what the gets fetched are web sources, each url once, but not one that failed or a data: url", () => {
+  const graph = {
+    gets: {
+      "clever p.png": { value: 1, url: "https://x.test/p.png", fetchedAt: 0 },
+      "bytes https://x.test/p.png": { value: 2, url: "https://x.test/p.png", fetchedAt: 5 },
+      "text https://x.test/gone": { error: "404" },
+      "text data:,hi": { value: "hi", url: "data:,hi", fetchedAt: 0 },
+      "json https://x.test/a": { value: {}, url: "https://x.test/a", fetchedAt: 1000 },
+    },
+  };
+  assert.deepEqual(webSources(graph), [
+    "https://x.test/p.png@1970-01-01T00:00:00.000Z",
+    "https://x.test/a@1970-01-01T00:00:01.000Z",
+  ]);
+  assert.deepEqual(webSources({}), []);
 });

@@ -1,4 +1,5 @@
 import { parser } from "./vendor/lezer-javascript.js";
+import { isSourcesLine } from "./sources.js";
 
 // what a name in a pattern was at a moment of its run: the name (or a
 // `crab.height`, a chain of fields off one) is looked at from a place it's
@@ -174,12 +175,12 @@ export function probeTarget(code, pos, tree = parser.parse(code)) {
 
 // an op's place among those the pattern wrote, from its line in the .k: the
 // lines before it, less the ones that aren't ops (the header, and the
-// sources line just after it)
+// sources lines just after it)
 export function opPlace(kText, kLine) {
   const lines = kText.split("\n");
   let top = 0;
   while (top < lines.length && (lines[top].startsWith(";;") || (top === 0 && lines[top].startsWith(";!")) ||
-    lines[top].startsWith("x-patchwork-sources"))) top++;
+    isSourcesLine(lines[top]))) top++;
   return kLine - 1 - top;
 }
 
