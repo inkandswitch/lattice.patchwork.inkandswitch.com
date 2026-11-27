@@ -6,6 +6,7 @@
 // here touches a handle, so it can be tested in node
 import { docIdOf } from "./sources.js";
 import { KNITOUT_TYPES } from "./knitout-types.js";
+import { LATTICE_ALIASES } from "./instrument.js";
 
 // a doc's value (made plain, as graph.js's plainValue does) as a typescript
 // type. a list is the type of its first element; a map's keys are quoted.
@@ -76,7 +77,8 @@ export function docDeclarations(url, value) {
   ].join("\n");
 }
 
-// lattice's own, as `import {doc, get} from "lattice"` has them (get.js)
+// lattice's own, as `import {doc, get} from "lattice"` has them (get.js), and
+// the kniterate helpers (kniterate.js). its aliases are the same module
 const LATTICE_TYPES = `/** every doc a pattern's editor knows of: its url, and what's in it (each
  * doc's own .d.ts adds itself) */
 interface LatticeDocs {}
@@ -127,9 +129,54 @@ declare module "lattice" {
     power(seconds: number, hz: number, window?: number): number;
   }
 
-  const lattice: { doc: typeof doc; get: typeof get };
+  /** bind off the front bed, from min to max (dir "+") or max to min ("-"),
+   * knitting each loop onto the next along with carrier */
+  export function bindoff(
+    k: import("knitout").Writer,
+    dir: import("knitout").Direction,
+    min: number,
+    max: number,
+    carrier: string,
+  ): void;
+
+  /** a kniterate waste section from min to max: brings in each of carriers
+   * (the main yarns), the waste yarn and the draw thread, and casts on with
+   * castOnCarrier (one of carriers) */
+  export function addWasteSection(
+    k: import("knitout").Writer,
+    carriers: string[],
+    castOnCarrier: string,
+    min: number,
+    max: number,
+    options?: {
+      /** "6" */
+      wasteCarrier?: string;
+      /** "1" */
+      drawCarrier?: string;
+      /** 450 */
+      rollerAdvance?: number;
+      /** 5 */
+      stitchNumber?: number;
+      /** 400 */
+      speedNumber?: number;
+    },
+  ): void;
+
+  const lattice: {
+    doc: typeof doc;
+    get: typeof get;
+    bindoff: typeof bindoff;
+    addWasteSection: typeof addWasteSection;
+  };
   export default lattice;
-}`;
+}
+${LATTICE_ALIASES.map(
+  (alias) => `declare module ${JSON.stringify(alias)} {
+  export * from "lattice";
+  import lattice from "lattice";
+  export default lattice;
+}`,
+).join("\n")}`;
 
 // what every pattern can use: `repo` without importing it, and lattice's doc()
 // and get() and the knitout library (by import, or require for knitout)

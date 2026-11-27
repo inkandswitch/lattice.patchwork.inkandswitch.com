@@ -2,6 +2,7 @@ import { evalJS } from "./vendor/evalJS.js";
 import { linkGraph, runState } from "./modules.js";
 import { readLog, watched, withReadDocs } from "./reads.js";
 import { preview } from "./probe.js";
+import { isLattice } from "./instrument.js";
 
 // runs one knitout.js pattern off the page's thread, so a pattern that never
 // ends can't freeze anything: the page just stops this worker.
@@ -158,7 +159,7 @@ onmessage = async ({ data }) => {
   // anything else found from the page's address
   const __import = async (at, specifier) => {
     line = at;
-    if (specifier === "lattice") return { ...graph.lattice, default: graph.lattice };
+    if (isLattice(specifier)) return { ...graph.lattice, default: graph.lattice };
     const blob = graph.module(specifier);
     // what a module reads as it's loaded (its exports) isn't any stitch's
     if (blob) return import(blob).finally(() => reads.forget());

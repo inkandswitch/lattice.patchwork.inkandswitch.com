@@ -57,12 +57,15 @@ export function groupNames(group) {
 }
 
 // lattice's own: `doc(url)`, a doc's value, and `get(url, as)`, what's at a
-// url. a pattern (or a .js it imports) has them by importing them, as
-// `import {doc, get} from "lattice"`, `import * as lattice from "lattice"` or
-// `import lattice from "lattice"`. there's no such module: a pattern's import
-// is swapped for the object the run hands it (`__lattice`, see instrument),
-// and a module's for a little one that hands that on (modules.js)
+// url, and the kniterate helpers (kniterate.js). a pattern (or a .js it
+// imports) has them by importing them, as `import {doc, get} from "lattice"`,
+// `import * as lattice from "lattice"` or `import lattice from "lattice"`.
+// there's no such module: a pattern's import is swapped for the object the
+// run hands it (`__lattice`, see instrument), and a module's for a little one
+// that hands that on (modules.js). LATTICE_ALIASES are other names for it
 export const LATTICE = "lattice";
+export const LATTICE_ALIASES = ["knitout-utilities/kniterate", "kniterate-utilities"];
+export const isLattice = (specifier) => specifier === LATTICE || LATTICE_ALIASES.includes(specifier);
 const LATTICE_FIELDS = ["doc", "get"];
 
 // the names `code` gives lattice's doc and get (`doc`, `get`), and the
@@ -72,7 +75,7 @@ export function latticeNames(code, tree = parser.parse(code)) {
   for (let node = tree.topNode.firstChild; node; node = node.nextSibling) {
     if (node.name !== "ImportDeclaration") continue;
     const parts = importParts(code, node);
-    if (!parts || stringValue(code, parts.string) !== LATTICE) continue;
+    if (!parts || !isLattice(stringValue(code, parts.string))) continue;
     if (parts.def) names.ns.add(parts.def);
     if (parts.ns) names.ns.add(parts.ns);
     for (const [field, local] of groupNames(parts.group)) {
@@ -247,7 +250,7 @@ export function instrument(code, { pins = {}, probe = null } = {}) {
       const { def, ns, group } = use.decl;
       // knitout's and lattice's are on hand already, and their default is
       // the library itself; a doc's is its `default`
-      const builtin = use.text === "knitout" ? 'require("knitout")' : use.text === LATTICE ? "__lattice" : null;
+      const builtin = use.text === "knitout" ? 'require("knitout")' : isLattice(use.text) ? "__lattice" : null;
       const source = builtin ?? (use.url && `await __import(${use.line}, ${pinned(use.url)})`);
       if (!source) continue;
       const dflt = builtin ? "" : ".default";

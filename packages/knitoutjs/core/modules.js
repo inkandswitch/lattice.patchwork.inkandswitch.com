@@ -3,9 +3,10 @@
 // and the signal a run throws when it asks for a doc it hasn't got. so it
 // imports nothing a worker (or node) can't load
 import { parser } from "./vendor/lezer-javascript.js";
-import { docCallString, isDocUrl, latticeNames } from "./instrument.js";
+import { docCallString, isDocUrl, LATTICE, LATTICE_ALIASES, latticeNames } from "./instrument.js";
 import { fileExtension } from "./files.js";
 import { getArgs, getKey, madeOf } from "./get.js";
+import { addWasteSection, bindoff } from "./kniterate.js";
 
 // thrown by `doc(x)` or `import(x)` when x is a doc the run wasn't given (or
 // `get(x)` when it wasn't given what's at x). the page pins it (or fetches
@@ -145,10 +146,11 @@ export function deepFreeze(value) {
 // puts it on globalThis before the pattern runs
 export const KNITOUT_SHIM = "export const Writer = globalThis.__knitout.Writer; export default globalThis.__knitout;";
 
-// lattice's doc() and get(), for modules that `import … from "lattice"`
-// (instrument.js's LATTICE). the run puts them on globalThis.__lattice
+// lattice's doc() and get() and the kniterate helpers, for modules that
+// `import … from "lattice"` (instrument.js's LATTICE, or one of its aliases).
+// the run puts them on globalThis.__lattice
 export const LATTICE_SHIM =
-  "const lattice = globalThis.__lattice; export const doc = lattice.doc; export const get = lattice.get; export default lattice;";
+  "const lattice = globalThis.__lattice; export const {doc, get, bindoff, addWasteSection} = lattice; export default lattice;";
 
 // a graph made ready to run: every doc that isn't code and every module gets
 // a url of its own (`makeUrl(text)`, a blob url in the worker), modules
@@ -161,13 +163,15 @@ export const LATTICE_SHIM =
 // `watch(pinned, value)`, if given, is what the pattern's handed for each
 // frozen doc (reads.js's watched, to see what it reads). `get(url, as)` is
 // what's at a url, from the graph's `gets` (get.js), and one it hasn't got
-// throws `suspend(url, "get", {as})`. `lattice` is the two together, as
-// `import … from "lattice"` has them
+// throws `suspend(url, "get", {as})`. `lattice` is the two together, with
+// the kniterate helpers, as `import … from "lattice"` has them
 export function linkGraph({ pins = {}, modules = [], snapshots = {}, gets = {} }, { makeUrl, suspend, watch = null }) {
   const docs = {};
   const urls = {};
   const made = new Map();
-  const map = { knitout: makeUrl(KNITOUT_SHIM), lattice: makeUrl(LATTICE_SHIM) };
+  const latticeUrl = makeUrl(LATTICE_SHIM);
+  const map = { knitout: makeUrl(KNITOUT_SHIM) };
+  for (const name of [LATTICE, ...LATTICE_ALIASES]) map[name] = latticeUrl;
   // a .js read with `doc()` is a value, not a module: importing it asks for it
   // again, as a module
   for (const [pinned, value] of Object.entries(snapshots)) {
@@ -204,7 +208,7 @@ export function linkGraph({ pins = {}, modules = [], snapshots = {}, gets = {} }
     docs,
     doc,
     get,
-    lattice: Object.freeze({ doc, get }),
+    lattice: Object.freeze({ doc, get, bindoff, addWasteSection }),
     module(asked) {
       const key = isDocUrl(asked);
       if (!key) return null;
